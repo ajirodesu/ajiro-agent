@@ -1,6 +1,7 @@
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { Image } from "expo-image";
+import * as IntentLauncher from "expo-intent-launcher";
 import type { PasteEventPayload } from "expo-paste-input";
 import { useRouter, useFocusEffect } from "expo-router";
 import {
@@ -9,9 +10,7 @@ import {
   Brain,
   Check,
   ChevronLeft,
-  ClipboardList,
   FolderOpen,
-  Gauge,
   Paperclip,
   Server,
   Trash2,
@@ -64,6 +63,7 @@ import { Button } from "@/components/ui/button";
 import { ChatErrorBoundary } from "@/components/ui/chat-error-boundary";
 import { ChatMessage } from "@/components/ui/chat-message";
 import { ComposerCapsule } from "@/components/ui/composer-capsule";
+import { ComposerContextSheet } from "@/components/ui/composer-context-sheet";
 import {
   Drawer,
   DrawerBody,
@@ -94,22 +94,32 @@ import { isFolderPickerCancellation } from "@/core/services/external-folder/exte
 import { resolveWorkspaceFile } from "@/core/services/workspace-file-service";
 import type {
   AgentConfig,
+  Conversation,
   ExternalFolderSession,
   McpServerConfig,
   ModelRef,
   ReasoningEffort,
   SavedPrompt,
   SkillConfig,
+  SkillMode,
   StoredMessage,
+  ToolApprovalMode,
+  WebSearchMode,
   WorkspaceFile,
 } from "@/core/types/app-state";
 import { listPrimaryAgents, resolveAgent } from "@/modules/agents/registry";
 import { cn } from "@/core/utils";
 import { useAppState } from "@/hooks/use-app-state";
 import { useChat } from "@/hooks/use-chat";
+import { useIdeWorkspace } from "@/providers/ide-workspace";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
 import { detectFolderIntent } from "@/modules/chat/folder-intent";
+import {
+  buildCaptureFileName,
+  capturePhoto,
+  IMAGE_CAPTURE_ACTION,
+} from "@/modules/device/camera-capture";
 import { partitionSelectedFiles } from "@/modules/runtime/message-conversion";
 
 const REASONING_EFFORT_OPTIONS: {  value: ReasoningEffort;
@@ -352,6 +362,7 @@ export default function Screen() {
     currentSelectedAgentId,
     conversationAgentName,
     setConversationAgent,
+    updateConversationModes,
   } = useChat();
   const currentConversationBusy =
     currentConversationRunStatus === "queued" ||
@@ -728,7 +739,9 @@ export default function Screen() {
               currentSelectedAgentId={currentSelectedAgentId}
               conversationAgentName={conversationAgentName}
               setConversationAgent={setConversationAgent}
+              currentConversation={currentConversation}
               currentConversationId={currentConversation?.id ?? null}
+              updateConversationModes={updateConversationModes}
               onOpenAgentSettings={() =>
                 router.push("/settings/agents" as never)
               }
@@ -932,7 +945,9 @@ const ChatInput = memo(function ChatInput({
   currentSelectedAgentId,
   conversationAgentName,
   setConversationAgent,
+  currentConversation,
   currentConversationId,
+  updateConversationModes,
   onOpenAgentSettings,
 }: {
   activeModels: {
@@ -984,8 +999,8 @@ const ChatInput = memo(function ChatInput({
   reasoningEffort: ReasoningEffort;
   savedPrompts: SavedPrompt[];
   setReasoningEffort: (effort: ReasoningEffort) => Promise<void>;
-  toolApprovalMode: "ask" | "auto";
-  updateToolApprovalMode: (mode: "ask" | "auto") => Promise<void>;
+  toolApprovalMode: ToolApprovalMode;
+  updateToolApprovalMode: (mode: ToolApprovalMode) => Promise<void>;
   workspaceFiles: WorkspaceFile[];
   agents: AgentConfig[];
   currentSelectedAgentId: string | null;
@@ -994,12 +1009,18 @@ const ChatInput = memo(function ChatInput({
     conversationId: string,
     agentIdOrName: string | null,
   ) => Promise<void>;
+  currentConversation: Conversation | null;
   currentConversationId: string | null;
+  updateConversationModes: (
+    conversationId: string,
+    input: { skillMode?: SkillMode; webSearchMode?: WebSearchMode },
+  ) => Promise<void>;
   onOpenAgentSettings: () => void;
 }) {
   const theme = useTheme();
   const { height: screenHeight } = useWindowDimensions();
   const composerSelection = useSyncedComposerSelection();
+  const ideWorkspace = useIdeWorkspace();
   const { scrollToEnd } = useMessageScrollerActions();
   const sendingRef = useRef(false);
   const composerRef = useRef<TextInput>(null);
@@ -1010,7 +1031,6 @@ const ChatInput = memo(function ChatInput({
   const [filesDrawerOpen, setFilesDrawerOpen] = useState(false);
   const [plusMenuDrawerOpen, setPlusMenuDrawerOpen] = useState(false);
   const [modelsDrawerOpen, setModelsDrawerOpen] = useState(false);
-  const [reasoningDrawerOpen, setReasoningDrawerOpen] = useState(false);
   const [agentsDrawerOpen, setAgentsDrawerOpen] = useState(false);
   const [skillsDrawerOpen, setSkillsDrawerOpen] = useState(false);
   const [skillImportOpen, setSkillImportOpen] = useState(false);
@@ -1021,7 +1041,6 @@ const ChatInput = memo(function ChatInput({
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const [folderNotice, setFolderNotice] = useState<string | null>(null);
-  const [approvalModeDrawerOpen, setApprovalModeDrawerOpen] = useState(false);
   const [slashMenuView, setSlashMenuView] = useState<
     "commands" | "saved-prompts"
   >("commands");
@@ -1383,6 +1402,65 @@ const ChatInput = memo(function ChatInput({
     }
   };
 
+  const runCameraCapture = async () => {
+    if (busyAction) {
+      return;
+    }
+
+    setBusyAction("import");
+
+    try {
+      const result = await capturePhoto({
+        startCameraActivity: async () => {
+          const launched = await IntentLauncher.startActivityAsync(
+            IMAGE_CAPTURE_ACTION,
+          );
+          return {
+            resultCode: launched.resultCode as number,
+            data: launched.data ?? undefined,
+          };
+        },
+      });
+
+      if (!result.ok) {
+        if (result.reason === "failed") {
+          setFolderNotice(result.message);
+        }
+        return;
+      }
+
+      const fileName = buildCaptureFileName(Date.now());
+      const imported = await importFiles([
+        {
+          uri: result.photoUri,
+          name: fileName,
+          mimeType: "image/jpeg",
+          lastModified: Date.now(),
+        },
+      ]);
+
+      setLocalWorkspaceFiles((current) => {
+        const map = new Map(current.map((file) => [file.id, file]));
+
+        for (const file of imported) {
+          map.set(file.id, file);
+        }
+
+        return [...map.values()];
+      });
+      await setSelectedFileIds([
+        ...selectedFileIds,
+        ...imported
+          .map((file) => file.id)
+          .filter((id) => !selectedFileIds.includes(id)),
+      ]);
+      setPrompt((current) => clearComposerTrigger(current));
+      setFolderNotice("Photo attached to this chat.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const handlePaste = async (payload: PasteEventPayload) => {
     if (payload.type !== "images" || payload.uris.length === 0) return;
 
@@ -1606,7 +1684,7 @@ const ChatInput = memo(function ChatInput({
         label: "Effort",
         onPress: () => {
           clearTriggerText();
-          setReasoningDrawerOpen(true);
+          setPlusMenuDrawerOpen(true);
         },
         subtitle: getReasoningEffortLabel(reasoningEffort) + " for this chat",
       },
@@ -1835,7 +1913,7 @@ const ChatInput = memo(function ChatInput({
         <ComposerCapsule
           value={prompt}
           onChangeText={setPrompt}
-          placeholder="Message"
+          placeholder="Message Ajiro Agent"
           inputRef={composerRef}
           selection={composerSelection.selectionProp}
           onSelectionChange={composerSelection.onSelectionChange}
@@ -1853,111 +1931,124 @@ const ChatInput = memo(function ChatInput({
         />
       </View>
 
-      <Drawer
-        onOpenChange={setPlusMenuDrawerOpen}
+      <ComposerContextSheet
         open={plusMenuDrawerOpen}
-      >
-        <DrawerContent showCloseButton showHandle>
-          <DrawerHeader>
-            <DrawerTitle>Add context and tools</DrawerTitle>
-            <DrawerDescription>
-              Attachments, files, folders, models, and modes for this chat.
-            </DrawerDescription>
-          </DrawerHeader>
-          <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-            <ComposerMenuRow
-              icon={<Paperclip color={theme.text} size={16} />}
-              label="Attach file"
-              onPress={() => {
-                setPlusMenuDrawerOpen(false);
-                setFilesDrawerOpen(true);
-              }}
-              subtitle="Choose an uploaded file or upload a new one"
-            />
-            {Platform.OS === "android" ? (
-              <ComposerMenuRow
-                icon={<FolderOpen color={theme.text} size={16} />}
-                disabled={!supportsTools}
-                label={activeFolderLabel ? "Switch project folder" : "Open project folder"}
-                onPress={() => {
-                  setPlusMenuDrawerOpen(false);
-                  setBusyAction("folder");
-                  pickConversationFolder()
-                    .then((session) => {
-                      setFolderNotice(`Using ${session.displayName} for this chat.`);
-                    })
-                    .catch((error) => {
-                      if (!isFolderPickerCancellation(error)) {
-                        setFolderNotice(
-                          error instanceof Error
-                            ? error.message
-                            : "Could not select folder.",
-                        );
-                      }
-                    })
-                    .finally(() => {
-                      setBusyAction(null);
-                    });
-                }}
-                subtitle={
-                  supportsTools
-                    ? (activeFolderLabel ?? "Use an external folder for this chat")
-                    : "Requires a tool-capable model"
-                }
-              />
-            ) : null}
-            <ComposerMenuRow
-              icon={<ClipboardList color={theme.text} size={16} />}
-              label={
-                conversationAgentName === "build"
-                  ? "Select agent · Build"
-                  : `Select agent · ${conversationAgentName}`
+        onOpenChange={setPlusMenuDrawerOpen}
+        onUploadFile={() => {
+          setFilesDrawerOpen(true);
+        }}
+        onTakePhoto={() => {
+          if (busyAction) return;
+          // Permission step: the user explicitly allows opening the
+          // device camera app before anything leaves this screen.
+          Alert.alert(
+            "Open camera?",
+            "Allow Ajiro Agent to open the device camera app to take a photo for this chat?",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Open camera",
+                onPress: () => {
+                  void runCameraCapture();
+                },
+              },
+            ],
+          );
+        }}
+        onGallery={() => {
+          setFilesDrawerOpen(true);
+        }}
+        onOpenProject={() => {
+          setBusyAction("folder");
+          pickConversationFolder()
+            .then(async (session) => {
+              // Single authority: the picked folder becomes the IDE active
+              // project too, so Files/Editor/Terminal/Git share it.
+              try {
+                await ideWorkspace.openProject({
+                  name: session.displayName,
+                  uri: session.uri,
+                  displayName: session.displayName,
+                });
+              } catch {
+                // workspace registration is best-effort here
               }
-              onPress={() => {
-                setPlusMenuDrawerOpen(false);
-                setAgentsDrawerOpen(true);
-              }}
-              subtitle="Choose the agent that runs this chat"
-            />
-            <ComposerMenuRow
-              icon={<Check color={theme.text} size={16} />}
-              label="Select model"
-              onPress={() => {
-                setPlusMenuDrawerOpen(false);
-                setModelsDrawerOpen(true);
-              }}
-              subtitle={currentModelLabel ?? "Choose the current chat model"}
-            />
-            <ComposerMenuRow
-              icon={<Server color={theme.text} size={16} />}
-              label="MCP servers"
-              onPress={() => {
-                setPlusMenuDrawerOpen(false);
-                setMcpServersDrawerOpen(true);
-              }}
-              subtitle={`${activeMcpServerIds.size} active in this chat`}
-            />
-            <ComposerMenuRow
-              icon={<Gauge color={theme.text} size={16} />}
-              label={`Effort · ${getReasoningEffortLabel(reasoningEffort)}`}
-              onPress={() => {
-                setPlusMenuDrawerOpen(false);
-                setReasoningDrawerOpen(true);
-              }}
-              subtitle="Low, Medium, High, Extra, or Max for this chat"
-            />
-            <ComposerMenuRow
-              icon={<Brain color={theme.text} size={16} />}
-              label={`Tool approval · ${toolApprovalMode === "ask" ? "Ask" : "Allow"}`}
-              onPress={() => {
-                setPlusMenuDrawerOpen(false);
-                setApprovalModeDrawerOpen(true);
-              }}
-              subtitle="Review each tool action, or run tools automatically"
-            />
-          </DrawerBody>
-        </DrawerContent>
-      </Drawer>
+              setFolderNotice(`Using ${session.displayName} for this chat.`);
+            })
+            .catch((error) => {
+              if (!isFolderPickerCancellation(error)) {
+                setFolderNotice(
+                  error instanceof Error
+                    ? error.message
+                    : "Could not select folder.",
+                );
+              }
+            })
+            .finally(() => {
+              setBusyAction(null);
+            });
+        }}
+        onSelectModel={() => {
+          setModelsDrawerOpen(true);
+        }}
+        onMcpServers={() => {
+          setMcpServersDrawerOpen(true);
+        }}
+        skillMode={currentConversation?.skillMode ?? "auto"}
+        onSkillModeChange={(mode) => {
+          if (!currentConversationId) return;
+          updateConversationModes(currentConversationId, {
+            skillMode: mode,
+          }).catch(console.error);
+        }}
+        pinnedSkills={skills
+          .filter((skill) => skill.enabled && skill.autoMatch)
+          .slice(0, 3)
+          .map((skill, index) => ({
+            id: skill.id,
+            title: skill.title,
+            description: skill.description,
+            selected: selectedSkillIds.includes(skill.id),
+            linked: index === 1,
+          }))}
+        onToggleSkill={(id) => {
+          const selected = selectedSkillIds.includes(id);
+          setSelectedSkillIds(
+            selected
+              ? selectedSkillIds.filter((entry) => entry !== id)
+              : [...selectedSkillIds, id],
+          ).catch(console.error);
+        }}
+        onAddSkills={() => {
+          setSkillsDrawerOpen(true);
+        }}
+        webSearchMode={currentConversation?.webSearchMode ?? "smart"}
+        onWebSearchModeChange={(mode) => {
+          if (!currentConversationId) return;
+          updateConversationModes(currentConversationId, {
+            webSearchMode: mode,
+          }).catch(console.error);
+        }}
+        effort={reasoningEffort}
+        onEffortChange={(effort) => {
+          setReasoningEffort(effort).catch(console.error);
+        }}
+        thinking={reasoningEffort !== "none"}
+        onThinkingChange={(enabled) => {
+          setReasoningEffort(enabled ? "medium" : "none").catch(console.error);
+        }}
+        agentName={conversationAgentName}
+        onAgentChange={(name) => {
+          if (!currentConversationId) return;
+          setConversationAgent(currentConversationId, name).catch(
+            console.error,
+          );
+        }}
+        approvalMode={toolApprovalMode}
+        onApprovalModeChange={(mode) => {
+          updateToolApprovalMode(mode).catch(console.error);
+        }}
+      />
 
       <Drawer onOpenChange={setFilesDrawerOpen} open={filesDrawerOpen}>
         <DrawerContent showCloseButton showHandle size={filesDrawerSize}>
@@ -2087,35 +2178,6 @@ const ChatInput = memo(function ChatInput({
               Cancel
             </Button>
           </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-
-      <Drawer onOpenChange={setReasoningDrawerOpen} open={reasoningDrawerOpen}>
-        <DrawerContent showCloseButton showHandle>
-          <DrawerHeader>
-            <DrawerTitle>Effort</DrawerTitle>
-            <DrawerDescription>
-              Choose how much effort the model should use for this chat.
-              Higher effort reasons longer.
-            </DrawerDescription>
-          </DrawerHeader>
-          <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-            {EFFORT_OPTIONS.map((option) => (
-              <DrawerSelectRow
-                key={option.value}
-                onPress={() => {
-                  setReasoningEffort(option.value)
-                    .then(() => {
-                      setReasoningDrawerOpen(false);
-                    })
-                    .catch(console.error);
-                }}
-                selected={reasoningEffort === option.value}
-                subtitle={option.description}
-                title={option.label}
-              />
-            ))}
-          </DrawerBody>
         </DrawerContent>
       </Drawer>
 
@@ -2326,46 +2388,6 @@ const ChatInput = memo(function ChatInput({
               Manage MCP servers
             </Button>
           </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-
-      <Drawer
-        onOpenChange={setApprovalModeDrawerOpen}
-        open={approvalModeDrawerOpen}
-      >
-        <DrawerContent showCloseButton showHandle>
-          <DrawerHeader>
-            <DrawerTitle>Tool approval</DrawerTitle>
-            <DrawerDescription>
-              Controls when the agent asks before running a tool.
-            </DrawerDescription>
-          </DrawerHeader>
-          <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-            <DrawerSelectRow
-              onPress={() => {
-                updateToolApprovalMode("ask")
-                  .then(() => {
-                    setApprovalModeDrawerOpen(false);
-                  })
-                  .catch(console.error);
-              }}
-              selected={toolApprovalMode === "ask"}
-              subtitle="Show a confirmation for each tool action before it runs"
-              title="Ask every time"
-            />
-            <DrawerSelectRow
-              onPress={() => {
-                updateToolApprovalMode("auto")
-                  .then(() => {
-                    setApprovalModeDrawerOpen(false);
-                  })
-                  .catch(console.error);
-              }}
-              selected={toolApprovalMode === "auto"}
-              subtitle="Run tool actions immediately without confirmation"
-              title="Allow automatically"
-            />
-          </DrawerBody>
         </DrawerContent>
       </Drawer>
     </Animated.View>

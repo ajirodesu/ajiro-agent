@@ -25,7 +25,7 @@ export type ModelTransport =
   | "openaiChat"
   | "openaiCompatible"
   | "openaiResponses";
-export type ToolApprovalMode = "ask" | "auto";
+export type ToolApprovalMode = "ask" | "auto" | "allowList";
 export type AgentMode = "plan" | "build";
 export type AgentVisibilityMode = "primary" | "subagent" | "all";
 export type AgentToolPermissions = {
@@ -242,6 +242,9 @@ export type ProvenanceEvent = {
   createdAt: string;
 };
 
+export type SkillMode = "auto" | "manual";
+export type WebSearchMode = "offline" | "smart";
+
 export type PromptArtifact = {
   id: string;
   category: "model" | "tool";
@@ -431,6 +434,8 @@ export type Conversation = {
   selectedFileIds: string[];
   selectedMcpServerIds: string[] | null;
   selectedSkillIds: string[];
+  skillMode: SkillMode;
+  webSearchMode: WebSearchMode;
   externalFolderSession: ExternalFolderSession | null;
   pinnedAt: string | null;
   createdAt: string;
@@ -481,6 +486,8 @@ export type AppSettings = {
   schedulingEnabled: boolean;
   themeMode: ThemeMode;
   toolApprovalMode: ToolApprovalMode;
+  /** Persisted allow-list for approval mode "allowList" (tool names). */
+  toolAllowList: string[];
   notificationSettings: NotificationSettings;
 };
 

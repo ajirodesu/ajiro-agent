@@ -22,7 +22,7 @@ module.exports = {
         card: Colors.light.backgroundElement,
         "card-dark": Colors.dark.backgroundElement,
         popover: Colors.light.background,
-        "popover-dark": Colors.dark.input,
+        "popover-dark": "#212121",
         muted: Colors.light.backgroundSelected,
         "muted-dark": Colors.dark.backgroundSelected,
         sidebar: Colors.light.sidebar,

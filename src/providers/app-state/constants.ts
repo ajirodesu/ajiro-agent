@@ -67,6 +67,7 @@ export const EMPTY_SETTINGS: AppSettings = {
     schedulingEnabled: true,
     themeMode: "system",
     toolApprovalMode: "ask",
+    toolAllowList: [],
     notificationSettings: {
         approvalRequests: true,
         runFinished: true,

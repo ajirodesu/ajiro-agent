@@ -31,9 +31,16 @@ function createApprovalId(toolName: string) {
 export function wrapToolsWithApproval<T extends ToolSet>(
   tools: T,
   input: {
+    /** Persisted allow-list for mode "allowList": these tools skip prompts. */
+    allowListedTools?: ReadonlySet<string> | readonly string[];
     getRequestSummary?: (toolName: string, toolInput: unknown) => string;
     mode: ToolApprovalMode;
     onRecord?: (record: ToolExecutionRecord) => void;
+    /**
+     * Called when the user approves for the session while in "allowList"
+     * mode, so the tool joins the persisted allow-list.
+     */
+    onRememberApproval?: (toolName: string) => void;
     shouldRequireApproval?: (toolName: string, toolInput: unknown) => boolean;
     /** Session-approved tool names: "Approve for this session" adds to this. */
     sessionApprovedTools?: Set<string>;
@@ -43,6 +50,7 @@ export function wrapToolsWithApproval<T extends ToolSet>(
   },
 ) {
   const sessionApproved = input.sessionApprovedTools ?? new Set<string>();
+  const allowListed = new Set(input.allowListedTools ?? []);
 
   return Object.fromEntries(
     Object.entries(tools).map(([toolName, toolDefinition]) => {
@@ -65,10 +73,13 @@ export function wrapToolsWithApproval<T extends ToolSet>(
               summarizeValue(toolInput);
             const needsApproval =
               input.shouldRequireApproval?.(toolName, toolInput) ?? true;
+            // "allowList": only remembered tools skip the prompt; everything
+            // else asks exactly like "ask" mode.
             const requiresPrompt =
-              input.mode === "ask" &&
+              (input.mode === "ask" || input.mode === "allowList") &&
               needsApproval &&
-              !sessionApproved.has(toolName);
+              !sessionApproved.has(toolName) &&
+              !(input.mode === "allowList" && allowListed.has(toolName));
 
             if (requiresPrompt) {
               const decision = await input.requestApproval({
@@ -83,6 +94,10 @@ export function wrapToolsWithApproval<T extends ToolSet>(
 
               if (decision === "approve_session") {
                 sessionApproved.add(toolName);
+                if (input.mode === "allowList") {
+                  allowListed.add(toolName);
+                  input.onRememberApproval?.(toolName);
+                }
               } else if (decision === "deny") {
                 input.onRecord?.(
                   createRecord({

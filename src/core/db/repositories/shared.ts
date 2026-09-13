@@ -95,6 +95,20 @@ export function buildSettings(rows: AppSettingRow[]): AppSettings {
     toolApprovalMode:
       (settingsMap.get("tool_approval_mode") as ToolApprovalMode | null) ??
       "ask",
+    toolAllowList: (() => {
+      const raw = settingsMap.get("tool_allow_list_json");
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        return Array.isArray(parsed)
+          ? parsed.filter(
+              (entry): entry is string => typeof entry === "string",
+            )
+          : [];
+      } catch {
+        return [];
+      }
+    })(),
     notificationSettings: parsedNotificationSettings ?? {
       approvalRequests: true,
       runFinished: true,

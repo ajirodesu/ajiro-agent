@@ -5,6 +5,7 @@ import {
   forwardRef,
   isValidElement,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ComponentPropsWithoutRef,
@@ -21,11 +22,17 @@ import {
   useWindowDimensions,
   type GestureResponderEvent,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   FadeIn,
   FadeInLeft,
   FadeInRight,
+  runOnJS,
+  useAnimatedStyle,
   useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -238,11 +245,51 @@ export const Sidebar = forwardRef<ComponentRef<typeof View>, SidebarProps>(
     const theme = useTheme();
     const { width: viewportWidth } = useWindowDimensions();
 
+    // Fullscreen page: the panel spans the viewport. Swipe-left to close
+    // tracks the finger on the UI thread (vsync) with native touch
+    // sampling via the gesture handler — no JS-thread involvement.
+    // (Hooks stay above the early return so open/close never reorders them.)
+    const dragX = useSharedValue(0);
+
+    // Fullscreen: the sidebar is a page, not a peeking drawer.
+    const panelWidth = viewportWidth;
+    void width;
+
+    const close = () => {
+      setOpen(false);
+    };
+
+    const pan = Gesture.Pan()
+      .activeOffsetX([-14, 14])
+      .failOffsetY([-14, 14])
+      .onUpdate((event) => {
+        // Only leftward motion moves the page; rightward stays pinned.
+        dragX.value = Math.min(0, event.translationX);
+      })
+      .onEnd((event) => {
+        const width = panelWidth;
+        const flingLeft = event.velocityX < -900;
+        if (flingLeft || dragX.value < -width * 0.28) {
+          dragX.value = withTiming(-width, { duration: 140 }, (finished) => {
+            if (finished) runOnJS(close)();
+          });
+        } else {
+          dragX.value = withSpring(0, { stiffness: 320, damping: 30 });
+        }
+      });
+
+    const dragStyle = useAnimatedStyle(() => ({
+      transform: [{ translateX: dragX.value }],
+    }));
+
+    // A gesture-dismiss leaves the offset off-screen; reset for next open.
+    useEffect(() => {
+      if (open) dragX.value = 0;
+    }, [open, dragX]);
+
     if (!open) {
       return null;
     }
-
-    const panelWidth = Math.round(viewportWidth * 0.87);
 
     return (
       <ReactNativeModal
@@ -313,7 +360,11 @@ export const Sidebar = forwardRef<ComponentRef<typeof View>, SidebarProps>(
                 </Pressable>
               </View>
             ) : null}
-            <View className="flex-1 gap-sp-2">{children}</View>
+            <GestureDetector gesture={pan}>
+              <Animated.View style={[{ flex: 1 }, dragStyle]}>
+                <View className="flex-1 gap-sp-2">{children}</View>
+              </Animated.View>
+            </GestureDetector>
           </Animated.View>
         </View>
       </ReactNativeModal>

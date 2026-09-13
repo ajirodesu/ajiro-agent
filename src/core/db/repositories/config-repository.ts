@@ -192,6 +192,10 @@ export function createConfigRepository(db: AppDatabase): ConfigRepository {
     async setToolApprovalMode(mode) {
       await this.setSetting("tool_approval_mode", mode);
     },
+    async setToolAllowList(toolNames) {
+      const unique = [...new Set(toolNames.filter((name) => name.trim()))];
+      await this.setSetting("tool_allow_list_json", JSON.stringify(unique));
+    },
     async setMaxToolSteps(maxToolSteps) {
       const normalized = Math.max(1, Math.min(100, Math.round(maxToolSteps)));
       await this.setSetting("max_tool_steps", String(normalized));

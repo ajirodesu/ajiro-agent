@@ -108,7 +108,9 @@ import type {
     Schedule,
     SendMessageInput,
     SkillConfig,
+    SkillMode,
     StoredMessage,
+    WebSearchMode,
     WorkspaceFile,
 } from "@/core/types/app-state";
 import { createModelRef } from "@/core/types/app-state";
@@ -324,6 +326,9 @@ type AppStateContextValue = {
     retryRun: (runId: string) => Promise<void>;
     runStatusByConversation: Record<string, AgentRun["status"] | null>;
     pickConversationFolder: () => Promise<ExternalFolderSession>;
+    adoptExternalFolderSession: (
+        session: ExternalFolderSession,
+    ) => Promise<void>;
     clearConversationFolder: () => Promise<void>;
     ready: boolean;
     refresh: () => Promise<void>;
@@ -392,6 +397,11 @@ type AppStateContextValue = {
     updateMemoryEnabled: (enabled: boolean) => Promise<void>;
     updateToolApprovalMode: (
         mode: AppSettings["toolApprovalMode"],
+    ) => Promise<void>;
+    updateToolAllowList: (toolNames: string[]) => Promise<void>;
+    updateConversationModes: (
+        conversationId: string,
+        input: { skillMode?: SkillMode; webSearchMode?: WebSearchMode },
     ) => Promise<void>;
     updateCodingSettings: (
         input: Partial<AppSettings["codingSettings"]>,
@@ -2104,6 +2114,25 @@ Your output must be:
         [hydrate],
     );
 
+    const updateToolAllowList = useCallback(
+        async (toolNames: string[]) => {
+            await repositoriesRef.current.configRepository.setToolAllowList(toolNames);
+            await hydrate();
+        },
+        [hydrate],
+    );
+
+    async function updateConversationModes(
+        conversationId: string,
+        input: { skillMode?: SkillMode; webSearchMode?: WebSearchMode },
+    ) {
+        await repositoriesRef.current.conversationRepository.updateMetadata(
+            conversationId,
+            input,
+        );
+        await hydrate();
+    }
+
     async function updateMaxToolSteps(maxToolSteps: number) {
         await repositoriesRef.current.configRepository.setMaxToolSteps(
             maxToolSteps,
@@ -2354,6 +2383,8 @@ Your output must be:
             selectedFileIds: [],
             selectedMcpServerIds: null,
             selectedSkillIds: [],
+            skillMode: "auto",
+            webSearchMode: "smart",
             title: "New chat",
             updatedAt: now,
         };
@@ -2806,6 +2837,44 @@ Your output must be:
                     : current.currentConversation,
         }));
     }, []);
+
+    /**
+     * Adopts an already-granted folder session (e.g. the IDE active project)
+     * as the current conversation's folder without re-prompting the picker.
+     */
+    const adoptExternalFolderSession = useCallback(
+        async (session: ExternalFolderSession) => {
+            const currentConversation = snapshotRef.current.currentConversation;
+
+            if (!currentConversation) {
+                throw new Error("No active conversation available.");
+            }
+
+            await repositoriesRef.current.conversationRepository.updateMetadata(
+                currentConversation.id,
+                {
+                    externalFolderSession: session,
+                },
+            );
+
+            setSnapshot((current) => ({
+                ...current,
+                conversations: current.conversations.map((conversation) =>
+                    conversation.id === currentConversation.id
+                        ? { ...conversation, externalFolderSession: session }
+                        : conversation,
+                ),
+                currentConversation:
+                    current.currentConversation?.id === currentConversation.id
+                        ? {
+                              ...current.currentConversation,
+                              externalFolderSession: session,
+                          }
+                        : current.currentConversation,
+            }));
+        },
+        [],
+    );
 
     async function selectConversation(conversationId: string) {
         const repositories = repositoriesRef.current;
@@ -3899,6 +3968,7 @@ Your output must be:
                 clearProviderApiKey,
                 clearWorkspaceFiles,
                 clearConversationFolder,
+                adoptExternalFolderSession,
                 connectMcpServerOAuth,
                 connectOpenAIOAuth,
                 createMcpServer,
@@ -4010,6 +4080,8 @@ Your output must be:
                 updateSchedulingEnabled,
                 updateSkill,
                 addSkillFiles,
+                updateToolAllowList,
+                updateConversationModes,
                 updateToolApprovalMode,
                 updateThemeMode,
                 updateMaxToolSteps,
@@ -4114,6 +4186,8 @@ export function useConfig() {
         updateSkill: context.updateSkill,
         addSkillFiles: context.addSkillFiles,
         updateToolApprovalMode: context.updateToolApprovalMode,
+        updateToolAllowList: context.updateToolAllowList,
+        updateConversationModes: context.updateConversationModes,
         updateThemeMode: context.updateThemeMode,
         notificationSettings: context.settings.notificationSettings,
         updateNotificationSettings: context.updateNotificationSettings,
@@ -4159,6 +4233,7 @@ export function useChat() {
         createSavedPrompt: context.createSavedPrompt,
         createWorkspaceFile: context.createWorkspaceFile,
         clearConversationFolder: context.clearConversationFolder,
+        adoptExternalFolderSession: context.adoptExternalFolderSession,
         clearWorkspaceFiles: context.clearWorkspaceFiles,
         deleteWorkspaceFile: context.deleteWorkspaceFile,
         currentSelectedFileIds: context.currentSelectedFileIds,
@@ -4201,5 +4276,6 @@ export function useChat() {
         deleteConversation: context.deleteConversation,
         forkConversation: context.forkConversation,
         archiveConversation: context.archiveConversation,
+        updateConversationModes: context.updateConversationModes,
     };
 }

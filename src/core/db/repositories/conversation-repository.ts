@@ -27,6 +27,8 @@ export function createConversationRepository(
         agentId: input.agentId ?? null,
         selectedFileIds: [],
         selectedSkillIds: [],
+        skillMode: "auto",
+        webSearchMode: "smart",
         externalFolderSession: null,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -107,6 +109,8 @@ export function createConversationRepository(
         selectedFileIds: source.selectedFileIds,
         selectedMcpServerIds: source.selectedMcpServerIds,
         selectedSkillIds: source.selectedSkillIds,
+        skillMode: source.skillMode,
+        webSearchMode: source.webSearchMode,
         externalFolderSession: source.externalFolderSession,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -175,6 +179,8 @@ export function createConversationRepository(
               ? input.selectedMcpServerIds
               : current.selectedMcpServerIds,
           selectedSkillIds: input.selectedSkillIds ?? current.selectedSkillIds,
+          skillMode: input.skillMode ?? current.skillMode,
+          webSearchMode: input.webSearchMode ?? current.webSearchMode,
           externalFolderSession:
             input.externalFolderSession !== undefined
               ? input.externalFolderSession

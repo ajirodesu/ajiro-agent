@@ -30,7 +30,8 @@ const bubbleVariants = cva("self-start max-w-[80%]", {
 const bubbleContentVariants = cva("rounded-card px-sp-4 py-sp-3", {
   variants: {
     variant: {
-      default: "bg-foreground dark:bg-foreground-dark",
+      default:
+        "rounded-2xl rounded-br bg-[#2c2c2e] dark:bg-[#2c2c2e]",
       secondary: "bg-secondary dark:bg-secondary-dark",
       muted: "bg-card dark:bg-card-dark",
       tinted:
@@ -48,7 +49,7 @@ const bubbleContentVariants = cva("rounded-card px-sp-4 py-sp-3", {
 const bubbleTextVariants = cva("font-sans text-base", {
   variants: {
     variant: {
-      default: "text-background dark:text-background-dark",
+      default: "text-[#f0f0f0] dark:text-[#f0f0f0]",
       secondary: "text-foreground dark:text-foreground-dark",
       muted: "text-foreground dark:text-foreground-dark",
       tinted: "text-foreground dark:text-foreground-dark",

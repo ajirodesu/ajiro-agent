@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 
 import { serializeSkillToMarkdown } from "@/modules/skills/skill-markdown";
 
-const DATABASE_VERSION = 26;
+const DATABASE_VERSION = 27;
 
 const CORE_SCHEMA_REPAIR_SQL = `
   PRAGMA journal_mode = WAL;
@@ -233,6 +233,22 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
       `);
     }
 
+    if (!conversationColumns.some((column) => column.name === "skill_mode")) {
+      await db.execAsync(`
+        ALTER TABLE conversations
+        ADD COLUMN skill_mode TEXT NOT NULL DEFAULT 'auto';
+      `);
+    }
+
+    if (
+      !conversationColumns.some((column) => column.name === "web_search_mode")
+    ) {
+      await db.execAsync(`
+        ALTER TABLE conversations
+        ADD COLUMN web_search_mode TEXT NOT NULL DEFAULT 'smart';
+      `);
+    }
+
     const runColumns = await db.getAllAsync<{ name: string }>(
       "PRAGMA table_info(agent_runs)",
     );
@@ -273,6 +289,8 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
         selected_file_ids_json TEXT NOT NULL DEFAULT '[]',
         selected_mcp_server_ids_json TEXT,
         selected_skill_ids_json TEXT NOT NULL DEFAULT '[]',
+        skill_mode TEXT NOT NULL DEFAULT 'auto',
+        web_search_mode TEXT NOT NULL DEFAULT 'smart',
         external_folder_session_json TEXT,
         pinned_at TEXT,
         created_at TEXT NOT NULL,
@@ -1065,6 +1083,23 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
     `);
 
     currentVersion = 26;
+  }
+
+  if (currentVersion === 26) {
+    await ensureColumn(
+      db,
+      "conversations",
+      "skill_mode",
+      "skill_mode TEXT NOT NULL DEFAULT 'auto'",
+    );
+    await ensureColumn(
+      db,
+      "conversations",
+      "web_search_mode",
+      "web_search_mode TEXT NOT NULL DEFAULT 'smart'",
+    );
+
+    currentVersion = 27;
   }
 
   await db.execAsync(`PRAGMA user_version = ${currentVersion}`);

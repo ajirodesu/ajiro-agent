@@ -14,7 +14,7 @@
  * Real editable TextInput throughout (cursor, selection, IME, paste).
  * Colors/typography are reference-sampled; see COMPOSER_COLORS.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import {
   Modal,
@@ -27,10 +27,12 @@ import Animated, {
   Easing,
   Extrapolation,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { ArrowUp, Maximize2, Mic, Plus, StopCircle } from "lucide-react-native";
 
 import { TextInputWrapper, type PasteEventPayload } from "expo-paste-input";
@@ -74,11 +76,17 @@ function IconButton({
   children,
   onPress,
   background,
+  flashOnPress,
 }: {
   accessibilityLabel: string;
   children: ReactNode;
   onPress: () => void;
   background?: string;
+  /**
+   * When true the container stays invisible until touched (pressed state
+   * flashes a subtle container). Used for the + control.
+   */
+  flashOnPress?: boolean;
 }) {
   return (
     <Pressable
@@ -88,9 +96,11 @@ function IconButton({
       onPress={onPress}
       className="items-center justify-center rounded-full"
       style={({ pressed }) => ({
-        backgroundColor: background ?? "transparent",
+        backgroundColor:
+          background ??
+          (flashOnPress && pressed ? "rgba(255, 255, 255, 0.14)" : "transparent"),
         height: CONTROL_SIZE,
-        opacity: pressed ? 0.7 : 1,
+        opacity: !background && !flashOnPress && pressed ? 0.7 : 1,
         width: CONTROL_SIZE,
       })}
     >
@@ -102,7 +112,7 @@ function IconButton({
 export function ComposerCapsule({
   value,
   onChangeText,
-  placeholder = "Message",
+  placeholder = "Message Ajiro Agent",
   inputRef,
   selection,
   onSelectionChange,
@@ -160,6 +170,21 @@ export function ComposerCapsule({
     ),
   }));
 
+  const expandFling = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([28, 400])
+        .failOffsetX([-24, 24])
+        .onEnd((event) => {
+          if (event.translationY > 64 || event.velocityY > 650) {
+            runOnJS(() => {
+              setExpandOpen(false);
+            })();
+          }
+        }),
+    [],
+  );
+
   const handleMic = () => {
     // No on-device speech engine is bundled: say so instead of faking it.
     setMicNotice(true);
@@ -211,6 +236,7 @@ export function ComposerCapsule({
     </TextInputWrapper>
   );
 
+  const sendActive = hasText || loading;
   const sendButton = (
     <Pressable
       accessibilityLabel={loading ? "Stop generating" : "Send message"}
@@ -221,9 +247,12 @@ export function ComposerCapsule({
       onPress={onSendPress}
       className="items-center justify-center rounded-full"
       style={({ pressed }) => ({
-        backgroundColor: COMPOSER_COLORS.send,
+        // Inside the capsule: grey while empty, app accent once active.
+        backgroundColor: sendActive
+          ? COMPOSER_COLORS.send
+          : COMPOSER_COLORS.sendInactive,
         height: CONTROL_SIZE,
-        opacity: sendDisabled ? 0.45 : pressed ? 0.85 : 1,
+        opacity: pressed ? 0.85 : 1,
         width: CONTROL_SIZE,
       })}
     >
@@ -252,7 +281,11 @@ export function ComposerCapsule({
       >
         {layout.singleRow ? (
           <View className="flex-row items-center px-2 py-1.5">
-            <IconButton accessibilityLabel="Attachments and tools" onPress={onPlusPress}>
+            <IconButton
+              accessibilityLabel="Attachments and tools"
+              onPress={onPlusPress}
+              flashOnPress
+            >
               <Plus color={COMPOSER_COLORS.icon} size={GLYPH_PLUS} strokeWidth={2} />
             </IconButton>
             <View className="min-w-0 flex-1 px-2">{inputElement}</View>
@@ -276,7 +309,11 @@ export function ComposerCapsule({
               </Animated.View>
             </View>
             <View className="flex-row items-center px-2 pb-2">
-              <IconButton accessibilityLabel="Attachments and tools" onPress={onPlusPress}>
+              <IconButton
+                accessibilityLabel="Attachments and tools"
+                onPress={onPlusPress}
+                flashOnPress
+              >
                 <Plus color={COMPOSER_COLORS.icon} size={GLYPH_PLUS} strokeWidth={2} />
               </IconButton>
               <View className="flex-1" />
@@ -319,7 +356,8 @@ export function ComposerCapsule({
         visible={expandOpen}
       >
         <View className="flex-1 bg-background px-sp-4 pb-sp-4 pt-sp-12 dark:bg-background-dark">
-          <View className="flex-row items-center justify-between pb-sp-2">
+          <GestureDetector gesture={expandFling}>
+            <View className="flex-row items-center justify-between pb-sp-2">
             <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
               Message
             </Text>
@@ -336,7 +374,8 @@ export function ComposerCapsule({
                 Done
               </Text>
             </Pressable>
-          </View>
+            </View>
+          </GestureDetector>
           <TextInput
             autoFocus
             className="flex-1 font-sans text-foreground dark:text-foreground-dark"

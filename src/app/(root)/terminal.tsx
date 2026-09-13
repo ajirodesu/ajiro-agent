@@ -13,6 +13,7 @@ import {
   PermissionStore,
   policyFromApprovalMode,
 } from "@/modules/permissions/engine";
+import { useIdeWorkspace } from "@/providers/ide-workspace";
 import { TerminalController } from "@/modules/terminal/controller";
 import { InProcessAdapter } from "@/modules/terminal/process-adapter";
 import {
@@ -47,6 +48,9 @@ export default function TerminalScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const { toolApprovalMode } = useConfig();
+  const ide = useIdeWorkspace();
+  const ideRef = useRef(ide);
+  ideRef.current = ide;
   const { command, output, pending } = useLocalSearchParams<{
     command?: string;
     output?: string;
@@ -76,10 +80,27 @@ export default function TerminalScreen() {
     (session: TerminalSession) => {
       const existing = runtimesRef.current.get(session.id);
       if (existing?.processId) return;
+      const ideState = ideRef.current;
+      const projectSession = ideState.activeSession ?? undefined;
+      const project = ideState.activeProject;
+      const cwd = project
+        ? (ideState.getProjectUiState(project.id).terminalCwd ?? "")
+        : "";
       const adapter = new InProcessAdapter({
         policy: policyFromApprovalMode(approvalRef.current),
         permissions: { store: storeRef.current! },
         sessionId: session.id,
+        projectSession,
+        defaultPath: cwd || undefined,
+        onCommandComplete: (command) => {
+          if (project) {
+            ideState.emit({
+              type: "TERMINAL_COMMAND_COMPLETED",
+              projectId: project.id,
+              command,
+            });
+          }
+        },
       });
       const runtime: TabRuntime = {
         adapter,
@@ -94,10 +115,13 @@ export default function TerminalScreen() {
           session.attachProcessWriter((data) =>
             adapter.write(started.id, data),
           );
-          session.pushOutput(
-            "Ajiro terminal — on-device, allow-listed commands only.\r\n" +
-              "Type 'help' to list commands.\r\n",
-          );
+        session.pushOutput(
+          "Ajiro terminal — on-device, allow-listed commands only.\r\n" +
+            (project
+              ? `Project: ${project.displayName}${cwd ? ` · ${cwd}` : ""}\r\n`
+              : "No project active — open one in Files to run checks.\r\n") +
+            "Type 'help' to list commands.\r\n",
+        );
           runtime.unsubscribers.push(
             session.onEvent((event) => {
               if (event.type === "resize") {

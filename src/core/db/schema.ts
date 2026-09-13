@@ -18,6 +18,8 @@ import type {
   ReasoningEffort,
   BuiltInToolKey,
   ScheduleRunStatus,
+  SkillMode,
+  WebSearchMode,
   WorkspaceFileSourceKind,
 } from "@/core/types/app-state";
 
@@ -45,6 +47,11 @@ export const conversations = sqliteTable(
       .$type<string[]>()
       .notNull()
       .default([]),
+    skillMode: text("skill_mode").$type<SkillMode>().notNull().default("auto"),
+    webSearchMode: text("web_search_mode")
+      .$type<WebSearchMode>()
+      .notNull()
+      .default("smart"),
     externalFolderSession: text("external_folder_session_json", { mode: "json" })
       .$type<ExternalFolderSession | null>(),
     pinnedAt: text("pinned_at"),

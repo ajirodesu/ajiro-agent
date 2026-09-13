@@ -96,4 +96,27 @@ describe("permission engine", () => {
     expect(isPreAuthorized("ask")).toBe(false);
     expect(isPreAuthorized("deny")).toBe(false);
   });
+
+  it("treats allow-list mode as ask-first at the engine layer", () => {
+    const policy = policyFromApprovalMode("allowList");
+    const store = new PermissionStore();
+    expect(
+      evaluatePermission(
+        policy,
+        {
+          id: "fs.write",
+          actionClass: "filesystem-write",
+          description: "write",
+        },
+        { store },
+      ),
+    ).toBe("ask");
+    expect(
+      evaluatePermission(
+        policy,
+        { id: "fs.read", actionClass: "read-only", description: "read" },
+        { store },
+      ),
+    ).toBe("allow_once");
+  });
 });

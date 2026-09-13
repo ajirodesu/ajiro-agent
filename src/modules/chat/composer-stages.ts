@@ -42,7 +42,8 @@ export const COMPOSER_COLORS = {
   placeholder: "#8E8E93",
   cursor: "#3A9BFF",
   selection: "#0A84FF",
-  send: "#1F8FFF",
+  send: "#0A84FF",
+  sendInactive: "#48484A",
   icon: "#FFFFFF",
 } as const;
 

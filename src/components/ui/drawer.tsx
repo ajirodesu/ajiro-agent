@@ -25,6 +25,14 @@ import {
   useWindowDimensions,
   type GestureResponderEvent,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Reanimated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import {
   KeyboardAwareScrollView,
   type KeyboardAwareScrollViewRef,
@@ -244,6 +252,43 @@ export const DrawerContent = forwardRef<
     const [mounted, setMounted] = useState(open);
     const progress = useRef(new Animated.Value(open ? 1 : 0)).current;
     const isVertical = direction === "top" || direction === "bottom";
+
+    // Handle drag: finger-following dismiss on the UI thread (vsync) with
+    // native touch sampling. Non-dismissible drawers (blocking approvals)
+    // never get the gesture. Reset whenever the drawer opens.
+    const dragY = useSharedValue(0);
+    useEffect(() => {
+      if (open) dragY.value = 0;
+    }, [open, dragY]);
+
+    const handleDismissGesture = () => {
+      if (!dismissible) return;
+      setOpen(false);
+    };
+
+    const handlePan = Gesture.Pan()
+      .activeOffsetY([-10, 10])
+      .failOffsetX([-10, 10])
+      .onUpdate((event) => {
+        dragY.value = Math.max(0, event.translationY);
+      })
+      .onEnd((event) => {
+        if (!dismissible) {
+          dragY.value = withSpring(0, { stiffness: 320, damping: 30 });
+          return;
+        }
+        if (event.translationY > 110 || event.velocityY > 750) {
+          dragY.value = withTiming(height, { duration: 150 }, (finished) => {
+            if (finished) runOnJS(handleDismissGesture)();
+          });
+        } else {
+          dragY.value = withSpring(0, { stiffness: 320, damping: 30 });
+        }
+      });
+
+    const dragStyle = useAnimatedStyle(() => ({
+      transform: [{ translateY: dragY.value }],
+    }));
     const maxHeight = Math.max(Math.floor(height * 0.9), 220);
     const maxWidth = Math.max(width - 24, 280);
     const resolvedVerticalSize =
@@ -374,7 +419,11 @@ export const DrawerContent = forwardRef<
           {...props}
         >
           <Pressable
-            className={cn("absolute inset-0 bg-transparent", overlayClassName)}
+            className={cn(
+              "absolute inset-0",
+              direction === "bottom" ? "bg-black/50" : "bg-transparent",
+              overlayClassName,
+            )}
             onPress={
               closeOnOverlayPress && dismissible
                 ? () => setOpen(false)
@@ -382,12 +431,13 @@ export const DrawerContent = forwardRef<
             }
           />
           <Animated.View ref={ref} style={translateStyle}>
+            <Reanimated.View style={dragStyle}>
             <View
               className={cn(
                 "overflow-hidden bg-popover dark:bg-popover-dark",
                 direction !== "bottom" &&
                   "border border-border shadow-lg dark:border-border-dark",
-                direction === "bottom" && "rounded-t-[28px] shadow-lg",
+                direction === "bottom" && "rounded-t-[26px] shadow-lg",
                 direction === "top" && "rounded-b-[28px]",
                 direction === "left" && "rounded-r-[28px]",
                 direction === "right" && "rounded-l-[28px]",
@@ -402,9 +452,31 @@ export const DrawerContent = forwardRef<
               ]}
             >
               {showHandle && isVertical ? (
-                <View className="items-center pt-sp-3">
-                  <View className="h-1.5 w-12 rounded-full bg-border dark:bg-border-dark" />
-                </View>
+                dismissible ? (
+                  <GestureDetector gesture={handlePan}>
+                    <View className="items-center pt-sp-3">
+                      <View
+                        className="rounded-full"
+                        style={{
+                          width: 36,
+                          height: 4,
+                          backgroundColor: "#5a5a5e",
+                        }}
+                      />
+                    </View>
+                  </GestureDetector>
+                ) : (
+                  <View className="items-center pt-sp-3">
+                    <View
+                      className="rounded-full"
+                      style={{
+                        width: 36,
+                        height: 4,
+                        backgroundColor: "#5a5a5e",
+                      }}
+                    />
+                  </View>
+                )
               ) : null}
               {showCloseButton ? (
                 <View className="absolute right-sp-3 top-sp-3 z-10">
@@ -428,6 +500,7 @@ export const DrawerContent = forwardRef<
                 </View>
               </DrawerLayoutContext.Provider>
             </View>
+            </Reanimated.View>
           </Animated.View>
         </View>
       </ReactNativeModal>

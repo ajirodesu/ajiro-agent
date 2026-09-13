@@ -1220,6 +1220,7 @@ export async function executeClaimedAgentRun(
     ]);
     const approvedRuntimeTools = unapprovedRuntimeTools
       ? wrapToolsWithApproval(unapprovedRuntimeTools, {
+          allowListedTools: snapshotRef.current.settings.toolAllowList,
           getRequestSummary: (toolName, toolInput) => {
             const mcpDisplayName = mcpRuntime?.getToolDisplayName(toolName);
 
@@ -1252,6 +1253,13 @@ export async function executeClaimedAgentRun(
             ? ("auto" as const)
             : snapshotRef.current.settings.toolApprovalMode,
           onRecord: handleToolExecutionRecord,
+          onRememberApproval: (toolName) => {
+            const current = snapshotRef.current.settings.toolAllowList;
+            if (current.includes(toolName)) return;
+            repositories.configRepository
+              .setToolAllowList([...current, toolName])
+              .catch(console.error);
+          },
           sessionApprovedTools: sessionApprovedToolNames,
           shouldRequireApproval: (toolName) =>
             !autoApprovedToolNames.has(toolName),
@@ -1319,9 +1327,15 @@ export async function executeClaimedAgentRun(
     if (selectedFilesContext) {
       appendContextToLatestUserMessage(runtimeMessages, selectedFilesContext);
     }
-    const skillsForPrompt = snapshotRef.current.skills.filter(
-      (skill) => skill.enabled,
-    );
+    const skillsForPrompt = snapshotRef.current.skills.filter((skill) => {
+      if (!skill.enabled) return false;
+      // Manual skill mode: only explicitly selected skills attach. Auto
+      // mode attaches every enabled skill (auto-match happens by relevance).
+      if (conversation.skillMode === "manual") {
+        return conversation.selectedSkillIds.includes(skill.id);
+      }
+      return true;
+    });
     const skillsRuntimeSystem = buildSkillsSystemPrompt({
       builtInToolSettings: snapshotRef.current.settings.builtInToolSettings,
       mcpServers: runMcpServers,
@@ -1339,6 +1353,10 @@ export async function executeClaimedAgentRun(
     const agentModeRuntimeSystem = isPlanMode
       ? agent.prompt?.trim() || buildPlanModeSystemPrompt()
       : undefined;
+    const webSearchRuntimeSystem =
+      conversation.webSearchMode === "offline"
+        ? "Web Search is OFFLINE for this chat: do not use web search or fetch remote pages. Answer only from the model's own knowledge and the local project context."
+        : undefined;
     const subagentRuntimeSystem = isSubagentRun
       ? [
           `You are the "${agent.name}" subagent, spawned by the primary agent to complete a delegated task.`,
@@ -1373,6 +1391,7 @@ export async function executeClaimedAgentRun(
         agent.prompt?.trim() || BASE_AGENT_SYSTEM_PROMPT,
         buildAutonomySystemPrompt(),
         agentModeRuntimeSystem,
+        webSearchRuntimeSystem,
         subagentRuntimeSystem,
         buildCurrentDateTimeSystemPrompt(),
         builtInRuntimeSystem,

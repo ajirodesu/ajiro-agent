@@ -56,14 +56,19 @@ export const DEFAULT_DENY_POLICY: PermissionPolicy = {
 };
 
 /**
- * Adapter over Ajiro's existing tool-approval setting ("ask" | "auto").
+ * Adapter over Ajiro's tool-approval setting ("ask" | "auto" | "allowList").
  * "ask"  -> ask for everything except read-only/safe observations.
  * "auto" -> run tools automatically, still denying destructive/privileged
  *           without an explicit rule (secure-by-default floor).
+ * "allowList" -> ask-first like "ask" here; the remembered allow-list is
+ *           enforced by the agent runtime's approval wrapper.
  */
 export function policyFromApprovalMode(
-  mode: "ask" | "auto",
+  mode: "ask" | "auto" | "allowList",
 ): PermissionPolicy {
+  if (mode === "allowList") {
+    return policyFromApprovalMode("ask");
+  }
   if (mode === "auto") {
     return {
       defaultDecision: "allow_once",

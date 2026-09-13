@@ -1,9 +1,8 @@
 /**
- * Ajiro Agent sidebar — slide-out navigation drawer styled after the ChatGPT
- * mobile app: solid black panel, fixed header (wordmark left, bordered
- * circular search + new-chat buttons right), scrollable nav rows and
- * conversation lists (Pinned / Recents, no divider lines), and a fixed bottom
- * bar with a blue "New Chat" pill and a circular settings button.
+ * Ajiro Agent sidebar — port of sidebar.html: solid black panel, 26px
+ * semibold wordmark, 38px bordered search circle, 22px nav icons with
+ * 16px medium labels, pinned rows with chat icons, plain recent rows, and a
+ * #3b82f6 Chat pill + 44px settings circle pinned to the bottom.
  *
  * Author: AjiroDesu
  */
@@ -13,10 +12,13 @@ import {
   Archive,
   Clock,
   EllipsisVertical,
+  FolderGit,
   FolderOpen,
+  GitBranch,
   GitFork,
   Images,
   Library,
+  MessageCircle,
   Pencil,
   Pin,
   PinOff,
@@ -27,7 +29,7 @@ import {
   Trash2,
   X,
 } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal as ReactNativeModal,
@@ -36,6 +38,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useElapsedSeconds } from "@/components/ui/processing-status";
@@ -57,13 +61,33 @@ import { cn } from "@/core/utils";
 import { useAppState } from "@/hooks/use-app-state";
 import { useChat } from "@/hooks/use-chat";
 import { useTheme } from "@/hooks/use-theme";
+import { useIdeWorkspace } from "@/providers/ide-workspace";
 import {
   markSidebarReturnPending,
 } from "@/modules/navigation/sidebar-return";
 import { ACTIVE_AGENT_RUN_STATUSES } from "@/modules/runtime/run-manager";
 
-/** Accent used by the New Chat pill, matching the reference app. */
-const ACCENT_BLUE = "#0A84FF";
+/** Accent used by the Chat pill, matching sidebar.html. */
+const ACCENT_BLUE = "#3B82F6";
+
+/**
+ * Downward header fling dismisses a fullscreen modal. Native-rate velocity
+ * from the gesture handler; no JS-thread tracking involved.
+ */
+function useDismissFling(onDismiss: () => void) {
+  return useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([28, 400])
+        .failOffsetX([-24, 24])
+        .onEnd((event) => {
+          if (event.translationY > 64 || event.velocityY > 650) {
+            runOnJS(onDismiss)();
+          }
+        }),
+    [onDismiss],
+  );
+}
 
 /**
  * Shared icon size for primary chrome icons (search, settings, sidebar
@@ -74,11 +98,15 @@ export const PRIMARY_ICON_SIZE = 20;
 /**
  * Primary nav rows. "Images" and "Projects" map to real app destinations:
  * Images -> Library filtered to image files, Projects -> coding settings
- * (project folder/sandbox management).
+ * (project folder/sandbox management). Files + Git are the IDE workspace
+ * (§§27-30): Files is the unified File Manager + Code Editor, Git binds to
+ * the active project.
  */
 const NAV_ITEMS: { label: string; route: string; icon: typeof Library }[] = [
   { label: "Images", route: "/library?category=images", icon: Images },
   { label: "Library", route: "/library", icon: Library },
+  { label: "Files", route: "/files", icon: FolderGit },
+  { label: "Git", route: "/git", icon: GitBranch },
   { label: "Projects", route: "/settings/coding", icon: FolderOpen },
   { label: "Terminal", route: "/terminal", icon: Terminal },
   { label: "Scheduled", route: "/settings/jobs", icon: Clock },
@@ -102,10 +130,53 @@ export function AppSidebar() {
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [gitHeadline, setGitHeadline] = useState<string | null>(null);
+  const ide = useIdeWorkspace();
+
+  // Git subtitle for the nav (§30): branch + change count of the active
+  // project, refreshed on open and on every git event. No project → none.
+  useEffect(() => {
+    let cancelled = false;
+    const session = ide.activeSession;
+    if (!session) {
+      setGitHeadline(null);
+      return;
+    }
+    const load = async () => {
+      try {
+        const { getStatus } = await import("@/modules/ide/git-ops");
+        const status = await getStatus(session);
+        if (cancelled) return;
+        if (!status.isRepo || !status.branch) {
+          setGitHeadline("Not a repository");
+          return;
+        }
+        const changes = status.stagedCount + status.unstagedCount;
+        setGitHeadline(
+          changes === 0 ? status.branch : `${status.branch} · ${changes} change${changes === 1 ? "" : "s"}`,
+        );
+      } catch {
+        if (!cancelled) setGitHeadline(null);
+      }
+    };
+    void load();
+    return ide.subscribe((event) => {
+      if (event.type.startsWith("GIT_") || event.type.startsWith("PROJECT_")) {
+        void load();
+      }
+    });
+  }, [ide]);
   const [renameTarget, setRenameTarget] = useState<Conversation | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const dismissSearch = useCallback(() => setSearchOpen(false), []);
+  const dismissRename = useCallback(() => {
+    setRenameTarget(null);
+    setRenameError(null);
+  }, []);
+  const searchFling = useDismissFling(dismissSearch);
+  const renameFling = useDismissFling(dismissRename);
 
   const activeRuns = useMemo(
     () => agentRuns.filter((run) => ACTIVE_AGENT_RUN_STATUSES.includes(run.status)),
@@ -160,6 +231,8 @@ export function AppSidebar() {
   };
 
   const startNewChat = () => {
+    // Fullscreen page: creating a chat returns to the main page.
+    setSidebarOpen(false);
     createConversation().catch(console.error);
   };
 
@@ -196,20 +269,24 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar>
-        {/* Fixed header — matches the main page header height (h-14). */}
+        {/* Fixed header — 26px semibold wordmark + 38px search circle. */}
         <SidebarHeader className="h-14 shrink-0 flex-row items-center justify-between pb-0">
-          <Text className="font-sans text-[28px] font-bold text-foreground dark:text-foreground-dark">
+          <Text
+            className="font-sans font-semibold text-foreground dark:text-foreground-dark"
+            style={{ fontSize: 26, letterSpacing: -0.3 }}
+          >
             Ajiro Agent
           </Text>
           <View className="flex-row items-center gap-sp-2">
             <CircularIconButton
               accessibilityLabel="Search chats"
               onPress={() => setSearchOpen(true)}
+              size={38}
             >
               <Search
                 color={theme.text}
-                size={PRIMARY_ICON_SIZE}
-                strokeWidth={1.8}
+                size={18}
+                strokeWidth={2}
               />
             </CircularIconButton>
           </View>
@@ -219,7 +296,7 @@ export function AppSidebar() {
           contentContainerClassName="gap-sp-4 pb-sp-3"
           style={{ marginTop: 8 }}
         >
-          {/* Nav rows — icon + label pairs, left-aligned, no separators. */}
+          {/* Nav rows — 22px icon + 16px medium label, radius 12. */}
           <View className="gap-sp-1">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
@@ -227,27 +304,51 @@ export function AppSidebar() {
                 pathname === item.route.split("?")[0] ||
                 (item.route.startsWith("/settings/coding") &&
                   pathname.startsWith("/settings/coding"));
+              const subtitle =
+                item.label === "Files"
+                  ? (ide.activeProject?.name ?? null)
+                  : item.label === "Git"
+                    ? gitHeadline
+                    : null;
               return (
                 <Pressable
                   key={item.label}
                   accessibilityRole="button"
-                  className={cn(
-                    "h-11 flex-row items-center gap-sp-3 rounded-ui px-sp-2",
-                    isActive && "bg-secondary dark:bg-secondary-dark",
-                  )}
+                  className="flex-row items-center gap-4 rounded-xl px-3"
+                  style={({ pressed }) => ({
+                    paddingVertical: 11,
+                    backgroundColor: pressed
+                      ? "rgba(255,255,255,0.06)"
+                      : isActive
+                        ? "rgba(255,255,255,0.06)"
+                        : "transparent",
+                  })}
                   onPress={() => {
                     openRoute(item.route);
                   }}
-                  style={({ pressed }) => (pressed ? { opacity: 0.85 } : null)}
                 >
                   <Icon
                     color={theme.text}
-                    size={PRIMARY_ICON_SIZE}
-                    strokeWidth={1.8}
+                    size={22}
+                    strokeWidth={2}
                   />
-                  <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-                    {item.label}
-                  </Text>
+                  <View className="min-w-0 flex-1">
+                    <Text
+                      className="font-sans text-foreground dark:text-foreground-dark"
+                      style={{ fontSize: 16, fontWeight: "500" }}
+                    >
+                      {item.label}
+                    </Text>
+                    {subtitle ? (
+                      <Text
+                        numberOfLines={1}
+                        className="font-sans text-muted-foreground dark:text-muted-foreground-dark"
+                        style={{ fontSize: 13 }}
+                      >
+                        {subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
                 </Pressable>
               );
             })}
@@ -265,6 +366,7 @@ export function AppSidebar() {
                     pathname === "/"
                   }
                   conversation={conversation}
+                  leadingIcon
                   run={runByConversation.get(conversation.id)}
                   onSelect={() => {
                     openChat(conversation.id);
@@ -316,7 +418,7 @@ export function AppSidebar() {
           </View>
         </SidebarContent>
 
-        {/* Fixed bottom bar — blue Chat pill + settings, never scroll away. */}
+        {/* Fixed bottom bar — Chat pill + settings circle, never scroll away. */}
         <SidebarFooter
           className="flex-row items-center justify-between gap-sp-3"
           style={{
@@ -327,20 +429,27 @@ export function AppSidebar() {
           <Pressable
             accessibilityLabel="Chat"
             accessibilityRole="button"
-            className="h-[52px] flex-row items-center gap-sp-2 rounded-full px-6"
+            className="flex-row items-center rounded-3xl"
             onPress={startNewChat}
             style={({ pressed }) => ({
               backgroundColor: ACCENT_BLUE,
+              gap: 10,
               opacity: pressed ? 0.85 : 1,
+              paddingHorizontal: 22,
+              paddingVertical: 12,
             })}
           >
-            <SquarePen color="#FFFFFF" size={18} strokeWidth={2} />
-            <Text className="font-sans text-base font-semibold text-white">
+            <SquarePen color="#FFFFFF" size={19} strokeWidth={2} />
+            <Text
+              className="font-sans text-white"
+              style={{ fontSize: 16, fontWeight: "500" }}
+            >
               Chat
             </Text>
           </Pressable>
           <CircularIconButton
             accessibilityLabel="Settings"
+            size={44}
             onPress={() => {
               setSearchOpen(false);
               openRoute("/settings");
@@ -348,8 +457,8 @@ export function AppSidebar() {
           >
             <Settings
               color={theme.text}
-              size={PRIMARY_ICON_SIZE}
-              strokeWidth={1.8}
+              size={20}
+              strokeWidth={2}
             />
           </CircularIconButton>
         </SidebarFooter>
@@ -366,7 +475,8 @@ export function AppSidebar() {
           className="flex-1 bg-background dark:bg-background-dark"
           style={{ paddingTop: insets.top + 12 }}
         >
-          <View className="flex-row items-center gap-sp-3 px-sp-4">
+          <GestureDetector gesture={searchFling}>
+            <View className="flex-row items-center gap-sp-3 px-sp-4">
             <Pressable
               accessibilityLabel="Close search"
               accessibilityRole="button"
@@ -384,7 +494,8 @@ export function AppSidebar() {
               placeholderTextColor={theme.textSecondary}
               value={searchQuery}
             />
-          </View>
+            </View>
+          </GestureDetector>
 
           <View className="mt-sp-4 flex-1 px-sp-4">
             {searchResults.map((conversation) => (
@@ -425,7 +536,8 @@ export function AppSidebar() {
         visible={renameTarget !== null}
       >
         <View className="flex-1 items-center justify-center bg-black/60 px-sp-6">
-          <View className="w-full max-w-sm rounded-card bg-card p-sp-4 dark:bg-card-dark">
+          <GestureDetector gesture={renameFling}>
+            <View className="w-full max-w-sm rounded-card bg-card p-sp-4 dark:bg-card-dark">
             <Text className="mb-sp-3 font-sans text-lg font-semibold text-foreground dark:text-foreground-dark">
               Rename chat
             </Text>
@@ -472,9 +584,10 @@ export function AppSidebar() {
                     Save
                   </Text>
                 )}
-              </Pressable>
+                </Pressable>
+              </View>
             </View>
-          </View>
+          </GestureDetector>
         </View>
       </ReactNativeModal>
     </>
@@ -483,7 +596,10 @@ export function AppSidebar() {
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <Text className="px-sp-2 pb-sp-1 font-sans text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground dark:text-muted-foreground-dark">
+    <Text
+      className="font-sans text-foreground dark:text-foreground-dark"
+      style={{ fontSize: 16, fontWeight: "500", marginBottom: 6 }}
+    >
       {children}
     </Text>
   );
@@ -493,18 +609,27 @@ function CircularIconButton({
   accessibilityLabel,
   children,
   onPress,
+  size = 38,
 }: {
   accessibilityLabel: string;
   children: React.ReactNode;
   onPress: () => void;
+  size?: number;
 }) {
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="h-10 w-10 items-center justify-center rounded-full border border-border dark:border-border-dark"
+      className="items-center justify-center rounded-full"
+      style={({ pressed }) => ({
+        width: size,
+        height: size,
+        backgroundColor: "#1A1A1A",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.12)",
+        opacity: pressed ? 0.7 : 1,
+      })}
       onPress={onPress}
-      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
     >
       {children}
     </Pressable>
@@ -514,35 +639,50 @@ function CircularIconButton({
 function ConversationRow({
   active,
   conversation,
+  leadingIcon,
   onRename,
   onSelect,
   run,
 }: {
   active: boolean;
   conversation: Conversation;
+  leadingIcon?: boolean;
   onRename: () => void;
   onSelect: () => void;
   run?: { startedAt: string };
 }) {
+  const theme = useTheme();
   const elapsed = useElapsedSeconds(
     run?.startedAt ?? conversation.createdAt,
     Boolean(run),
   );
 
   return (
-    <View className="flex-row items-center">
+    <View className="flex-row items-center" style={{ gap: 14 }}>
       <Pressable
         accessibilityRole="button"
         className={cn(
-          "h-11 min-w-0 flex-1 flex-row items-center rounded-ui px-sp-2",
+          "min-w-0 flex-1 flex-row items-center rounded-xl",
           active && "bg-secondary dark:bg-secondary-dark",
         )}
+        style={({ pressed }) => ({
+          paddingVertical: 9,
+          opacity: pressed ? 0.85 : 1,
+        })}
         onPress={onSelect}
-        style={({ pressed }) => (pressed ? { opacity: 0.85 } : null)}
       >
+        {leadingIcon ? (
+          <MessageCircle
+            color={theme.text}
+            size={22}
+            strokeWidth={2}
+            style={{ marginRight: 14 }}
+          />
+        ) : null}
         <Text
           numberOfLines={1}
-          className="flex-1 font-sans text-base text-foreground dark:text-foreground-dark"
+          className="flex-1 font-sans text-foreground dark:text-foreground-dark"
+          style={{ fontSize: 16, fontWeight: "400" }}
         >
           {conversation.title}
         </Text>

@@ -9,6 +9,7 @@ import {
 } from "@/modules/notifications/run-notifications";
 import { AppStateProvider } from "@/providers/app-state";
 import { UpdateProvider, useUpdate } from "@/providers/check-for-updates";
+import { IdeWorkspaceProvider } from "@/providers/ide-workspace";
 import { AppQueryProvider } from "@/providers/query-provider";
 import * as Notifications from "expo-notifications";
 import {
@@ -285,13 +286,15 @@ export default function MainLayout() {
               onInit={migrateAppDatabase}
             >
               <AppStateProvider>
-                <UpdateProvider>
-                  <SplashScreenController />
-                  <NotificationObserver />
-                  <InAppNotificationBanner />
-                  <ReleaseUpdateBanner />
-                  <Slot />
-                </UpdateProvider>
+                <IdeWorkspaceProvider>
+                  <UpdateProvider>
+                    <SplashScreenController />
+                    <NotificationObserver />
+                    <InAppNotificationBanner />
+                    <ReleaseUpdateBanner />
+                    <Slot />
+                  </UpdateProvider>
+                </IdeWorkspaceProvider>
               </AppStateProvider>
             </SQLiteProvider>
           </AppQueryProvider>

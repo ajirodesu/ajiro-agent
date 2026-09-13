@@ -30,9 +30,11 @@ import type {
   ScheduleRun,
   ScheduleRunStatus,
   SkillConfig,
+  SkillMode,
   StoredMessage,
   ToolApprovalMode,
   ThemeMode,
+  WebSearchMode,
   WorkspaceFile,
   WorkspaceFileSourceKind,
 } from "@/core/types/app-state";
@@ -105,6 +107,8 @@ export interface ConversationRepository {
       selectedFileIds?: string[];
       selectedMcpServerIds?: string[] | null;
       selectedSkillIds?: string[];
+      skillMode?: SkillMode;
+      webSearchMode?: WebSearchMode;
       title?: string;
       updatedAt?: string;
     },
@@ -416,6 +420,7 @@ export interface ConfigRepository {
   setSchedulingEnabled(enabled: boolean): Promise<void>;
   setThemeMode(mode: ThemeMode): Promise<void>;
   setToolApprovalMode(mode: ToolApprovalMode): Promise<void>;
+  setToolAllowList(toolNames: string[]): Promise<void>;
   setMaxToolSteps(maxToolSteps: number): Promise<void>;
   setNotificationSettings(input: Partial<NotificationSettings>): Promise<void>;
   setCodingSettings(

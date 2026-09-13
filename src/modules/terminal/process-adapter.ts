@@ -31,6 +31,10 @@ export type InProcessAdapterDeps = {
   agentId?: string;
   sessionId?: string;
   projectSession?: ExternalFolderSession;
+  /** Default relative path for `run` when none is given (terminal cwd). */
+  defaultPath?: string;
+  /** Fires after each completed command line (IDE refresh hook). */
+  onCommandComplete?: (command: string) => void;
 };
 
 type Listener = (event: TerminalEvent) => void;
@@ -84,6 +88,11 @@ class InProcess implements TerminalProcess {
       const line = raw.replace(/\r$/, "");
       if (!line.trim()) continue;
       const done = await this.runLine(line.trim());
+      try {
+        this.deps.onCommandComplete?.(line.trim().split(/\s+/)[0] ?? "");
+      } catch {
+        // Completion hooks must not break the session.
+      }
       if (done) return;
     }
   }
@@ -155,7 +164,7 @@ class InProcess implements TerminalProcess {
       agentId: this.deps.agentId,
       sessionId: this.deps.sessionId,
       projectSession: this.deps.projectSession,
-      execInput: { commandId, path },
+      execInput: { commandId, path: path ?? this.deps.defaultPath },
     });
     if (result.output) this.print(`${result.output}\r\n`);
     if (result.error) this.print(`[error] ${result.error}\r\n`);
