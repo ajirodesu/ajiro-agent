@@ -9,6 +9,7 @@ import { createMoveEntryTool } from "@/modules/tools/built-in/external-folder/mo
 import { buildExternalFolderSystemPrompt } from "@/modules/tools/built-in/external-folder/prompts";
 import { createExternalReadTool } from "@/modules/tools/built-in/external-folder/read";
 import { createRenameEntryTool } from "@/modules/tools/built-in/external-folder/rename-entry";
+import { createUndoTool } from "@/modules/tools/built-in/external-folder/undo";
 import type { ExternalFolderToolFactoryParams } from "@/modules/tools/built-in/external-folder/types";
 import { createExternalWriteTool } from "@/modules/tools/built-in/external-folder/write";
 
@@ -25,6 +26,7 @@ export function createExternalFolderTools(params: ExternalFolderToolFactoryParam
       moveEntry: createMoveEntryTool(params),
       read: createExternalReadTool(params),
       renameEntry: createRenameEntryTool(params),
+      undo: createUndoTool(params),
       write: createExternalWriteTool(params),
     },
   };

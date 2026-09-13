@@ -22,6 +22,7 @@ import type {
   MessageMetadata,
   ModelPreset,
   NotificationSettings,
+  ProvenanceEvent,
   ProviderConfig,
   ReasoningEffort,
   SavedPrompt,
@@ -75,6 +76,12 @@ export interface AgentRepository {
 
 export interface ConversationRepository {
   deleteById(id: string): Promise<void>;
+  fork(
+    id: string,
+    options?: { title?: string; upToSequence?: number },
+  ): Promise<Conversation>;
+  search(query: string): Promise<Conversation[]>;
+  setArchived(id: string, archivedAt: string | null): Promise<void>;
   create(input: {
     id?: string;
     agentId?: string | null;
@@ -431,6 +438,28 @@ export interface ConfigRepository {
   setSetting(key: string, value: string | null): Promise<void>;
 }
 
+export interface ProvenanceRepository {
+  record(input: {
+    action: string;
+    agentId?: string | null;
+    id?: string;
+    input?: string | null;
+    ok: boolean;
+    permission: string;
+    result?: string | null;
+    runtime?: string | null;
+    sessionId?: string | null;
+    tool?: string | null;
+  }): Promise<ProvenanceEvent>;
+  getById(id: string): Promise<ProvenanceEvent | null>;
+  list(input: {
+    action?: string;
+    limit?: number;
+    sessionId?: string | null;
+  }): Promise<ProvenanceEvent[]>;
+  prune(beforeIso: string): Promise<void>;
+}
+
 export type Repositories = {
   agentRepository: AgentRepository;
   agentRunRepository: AgentRunRepository;
@@ -440,6 +469,7 @@ export type Repositories = {
   memoryStore: MemoryStore;
   mcpServerRepository: McpServerRepository;
   messageRepository: MessageRepository;
+  provenanceRepository: ProvenanceRepository;
   savedPromptRepository: SavedPromptRepository;
   scheduleRepository: ScheduleRepository;
   scheduleRunRepository: ScheduleRunRepository;

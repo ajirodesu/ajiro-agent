@@ -6,6 +6,7 @@ import { createRecord, summarizeValue } from "@/modules/tools/built-in/shared";
 import type { ExternalFolderToolFactoryParams } from "@/modules/tools/built-in/external-folder/types";
 
 export function createMoveEntryTool({
+  checkpoints,
   onRecord,
   session,
 }: ExternalFolderToolFactoryParams) {
@@ -21,7 +22,10 @@ export function createMoveEntryTool({
       const inputSummary = summarizeValue({ fromPath, toPath });
 
       try {
+        await checkpoints?.snapshotBeforeWrite(fromPath);
+        await checkpoints?.snapshotBeforeWrite(toPath);
         const output = await service.moveEntry(session, fromPath, toPath);
+        await checkpoints?.commitCheckpoint(`moveEntry ${fromPath} -> ${toPath}`);
 
         onRecord?.(
           createRecord({

@@ -6,6 +6,7 @@ import { createRecord, summarizeValue } from "@/modules/tools/built-in/shared";
 import type { ExternalFolderToolFactoryParams } from "@/modules/tools/built-in/external-folder/types";
 
 export function createExternalWriteTool({
+  checkpoints,
   onRecord,
   session,
 }: ExternalFolderToolFactoryParams) {
@@ -26,7 +27,9 @@ export function createExternalWriteTool({
       });
 
       try {
+        await checkpoints?.snapshotBeforeWrite(path);
         const output = await service.writeTextFile(session, path, content, mode);
+        await checkpoints?.commitCheckpoint(`write ${path}`);
 
         onRecord?.(
           createRecord({

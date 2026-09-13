@@ -219,6 +219,11 @@ type AppStateContextValue = {
     createConversation: () => Promise<void>;
     deleteProvider: (providerId: string) => Promise<void>;
     deleteConversation: (conversationId: string) => Promise<void>;
+    forkConversation: (conversationId: string) => Promise<void>;
+    archiveConversation: (
+        conversationId: string,
+        archived: boolean,
+    ) => Promise<void>;
     createWorkspaceFile: (input: {
         content: string;
         name: string;
@@ -2386,6 +2391,23 @@ Your output must be:
         await hydrate();
     }
 
+    async function forkConversation(conversationId: string) {
+        const forked =
+            await repositoriesRef.current.conversationRepository.fork(
+                conversationId,
+            );
+        await hydrate();
+        await selectConversation(forked.id);
+    }
+
+    async function archiveConversation(conversationId: string, archived: boolean) {
+        await repositoriesRef.current.conversationRepository.setArchived(
+            conversationId,
+            archived ? new Date().toISOString() : null,
+        );
+        await hydrate();
+    }
+
     async function compactConversation(
         conversationId?: string,
     ): Promise<CompactConversationResult> {
@@ -3899,6 +3921,8 @@ Your output must be:
                 deleteConversation,
                 deleteSchedule,
                 dismissInAppNotification,
+                forkConversation,
+                archiveConversation,
                 pendingToolApproval,
                 denyPendingToolApproval: () => {
                     if (pendingToolApproval) {
@@ -4175,5 +4199,7 @@ export function useChat() {
         refreshWorkspaceFiles: context.refreshWorkspaceFiles,
         workspaceFiles: context.workspaceFiles,
         deleteConversation: context.deleteConversation,
+        forkConversation: context.forkConversation,
+        archiveConversation: context.archiveConversation,
     };
 }

@@ -6,6 +6,7 @@ import { createRecord, summarizeValue } from "@/modules/tools/built-in/shared";
 import type { ExternalFolderToolFactoryParams } from "@/modules/tools/built-in/external-folder/types";
 
 export function createRenameEntryTool({
+  checkpoints,
   onRecord,
   session,
 }: ExternalFolderToolFactoryParams) {
@@ -21,7 +22,9 @@ export function createRenameEntryTool({
       const inputSummary = summarizeValue({ newName, path });
 
       try {
+        await checkpoints?.snapshotBeforeWrite(path);
         const output = await service.renameEntry(session, path, newName);
+        await checkpoints?.commitCheckpoint(`renameEntry ${path} -> ${newName}`);
 
         onRecord?.(
           createRecord({

@@ -1,11 +1,10 @@
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { Image } from "expo-image";
-import { TextInputWrapper, type PasteEventPayload } from "expo-paste-input";
+import type { PasteEventPayload } from "expo-paste-input";
 import { useRouter, useFocusEffect } from "expo-router";
 import {
   ArrowDown,
-  ArrowUp,
   Bookmark,
   Brain,
   Check,
@@ -14,17 +13,13 @@ import {
   FolderOpen,
   Gauge,
   Paperclip,
-  Plus,
   Server,
-  StopCircle,
   Trash2,
   Upload,
   X,
 } from "lucide-react-native";
 import Animated, {
   Easing,
-  Extrapolation,
-  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -68,6 +63,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ChatErrorBoundary } from "@/components/ui/chat-error-boundary";
 import { ChatMessage } from "@/components/ui/chat-message";
+import { ComposerCapsule } from "@/components/ui/composer-capsule";
 import {
   Drawer,
   DrawerBody,
@@ -93,7 +89,6 @@ import {
   useContextUsage,
 } from "@/components/ui/context-usage";
 import type { CompactConversationResult } from "@/providers/app-state";
-import { Textarea } from "@/components/ui/textarea";
 import { consumeSidebarReturnPending } from "@/modules/navigation/sidebar-return";
 import { isFolderPickerCancellation } from "@/core/services/external-folder/external-folder-service";
 import { resolveWorkspaceFile } from "@/core/services/workspace-file-service";
@@ -240,38 +235,12 @@ function logComposerDebug(label: string, data: Record<string, unknown>) {
 }
 
 /**
- * Pill input geometry (ChatGPT-style auto-resize).
- *
- * The constants below are *derived from*, not hardcoded around, the control
- * and text dimensions. `COMPOSER_EMPTY_HEIGHT` (52) is the initial reference:
- * it equals max(control, single-line text) + vertical row padding * 2, i.e.
- * max(40, 24) + 6 * 2 = 52. Calibrate by editing the *_SIZE / *_PADDING
- * values, not EMPTY_HEIGHT itself.
- *
- * States:
- * 1. empty — compact bar (textarea collapses, the 40dp buttons define height)
- * 2. typing — single line, same bar height as empty
- * 3. wrapping — grows one 24dp line at a time, radius softening 26 -> 20
- * 4. cap reached — textarea locks at the cap and scrolls internally.
+ * Composer width behavior (measured): keyboard closed -> 36px screen-edge
+ * margins (309 wide, centered); keyboard open -> 12px margins (~356 wide).
+ * The capsule itself (heights, radius, controls) lives in
+ * components/ui/composer-capsule.tsx, reverse-engineered from the 13-stage
+ * reference (see modules/chat/composer-stages.ts).
  */
-const COMPOSER_CONTROL_SIZE = 40;
-const COMPOSER_TEXT_LINE_HEIGHT = 24;
-const COMPOSER_PADDING_VERTICAL = 6;
-const COMPOSER_EMPTY_HEIGHT =
-  Math.max(COMPOSER_CONTROL_SIZE, COMPOSER_TEXT_LINE_HEIGHT) +
-  COMPOSER_PADDING_VERTICAL * 2; // 52
-const COMPOSER_CORNER_RADIUS = COMPOSER_EMPTY_HEIGHT / 2; // 26
-const COMPOSER_EXPANDED_CORNER_RADIUS = 20;
-// Single configurable 10-line design cap (bar level), additionally clamped to
-// a viewport ratio at runtime so the bar never covers the chat on short
-// screens or with the keyboard open.
-const COMPOSER_DESIGN_MAX_HEIGHT = COMPOSER_TEXT_LINE_HEIGHT * 10 + 4;
-const COMPOSER_MAX_VIEWPORT_RATIO = 0.45;
-// Reference-measured horizontal margins (381px-wide reference screenshot,
-// screen-edge to capsule-edge): keyboard closed -> 36px margins (309 wide,
-// centered); keyboard open -> 12px margins (~356 wide). The chat column
-// already pads 16px per side, so these are the *additional* margins applied
-// to the composer wrapper (negative pulls back into the column padding).
 const CHAT_COLUMN_PADDING = 16;
 const COMPOSER_MARGIN_KEYBOARD_HIDDEN = 36 - CHAT_COLUMN_PADDING; // 20
 const COMPOSER_MARGIN_KEYBOARD_VISIBLE = 12 - CHAT_COLUMN_PADDING; // -4
@@ -1035,7 +1004,6 @@ const ChatInput = memo(function ChatInput({
   const sendingRef = useRef(false);
   const composerRef = useRef<TextInput>(null);
   const [prompt, setPrompt] = useState("");
-  const [composerContentHeight, setComposerContentHeight] = useState(0);
   // Visible keyboard height so the growth cap tracks the space actually left
   // on screen (short devices, landscape, floating keyboards).
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -1088,13 +1056,10 @@ const ChatInput = memo(function ChatInput({
     setPrompt("");
   }, [editDraft, editNonce]);
 
-  // Auto-resize: compact when empty, same bar height on the first typed
-  // line, grows line-by-line while wrapping, then locks at the cap and
-  // scrolls internally. Shrinks back down as text is removed, and all height
-  // changes animate via reanimated — no snapping.
-  //
-  // Note the animated value drives the *inner text-area wrapper*; the 40dp
-  // buttons plus row padding floor the outer bar at COMPOSER_EMPTY_HEIGHT.
+  // Keyboard height drives the width margins (36px closed / 12px open) and
+  // the capsule's own viewport cap (inside ComposerCapsule). Cursor and
+  // draft live in React state (prompt + selection sync), so resizing never
+  // disturbs them.
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
       "keyboardDidShow",
@@ -1112,69 +1077,6 @@ const ChatInput = memo(function ChatInput({
     };
   }, []);
 
-  // Bar-level cap: the 10-line design max, further clamped to a viewport
-  // ratio of the space left above the keyboard so the bar never swallows the
-  // chat on short screens. Recomputed on rotation via useWindowDimensions and
-  // whenever keyboard insets change via keyboardHeight below.
-  const composerBarMaxHeight = Math.min(
-    COMPOSER_DESIGN_MAX_HEIGHT,
-    Math.floor(
-      Math.max(0, screenHeight - keyboardHeight) * COMPOSER_MAX_VIEWPORT_RATIO,
-    ),
-  );
-  const composerTextMaxHeight = Math.max(
-    COMPOSER_TEXT_LINE_HEIGHT,
-    composerBarMaxHeight - COMPOSER_PADDING_VERTICAL * 2,
-  );
-  const hasComposerText = prompt.trim().length > 0;
-  // Measured text height (falls back to one line before the first measure).
-  // Width, keyboard, and font-scale changes reflow the text, which fires
-  // onContentSizeChange and feeds back in here — no line-count presets.
-  const composerMeasuredTextHeight =
-    composerContentHeight > 0
-      ? composerContentHeight
-      : COMPOSER_TEXT_LINE_HEIGHT;
-  // requiredHeight = measuredTextHeight + internalPadding (+ controlArea is
-  // covered: the 40dp buttons floor the outer bar at 52 via flex layout).
-  // finalHeight = clamp(requiredHeight, 52, maximumAvailableHeight).
-  const composerTargetHeight = !hasComposerText
-    ? COMPOSER_TEXT_LINE_HEIGHT
-    : Math.min(
-        composerTextMaxHeight,
-        Math.max(COMPOSER_CONTROL_SIZE, composerMeasuredTextHeight),
-      );
-  const composerScrollEnabled =
-    hasComposerText && composerContentHeight > composerTextMaxHeight;
-  // The capsule interpolates from a full pill to a rounded rectangle as
-  // the animated height grows; see composerCapsuleStyle below.
-  const composerAnimatedHeight = useSharedValue(COMPOSER_TEXT_LINE_HEIGHT);
-
-  useEffect(() => {
-    composerAnimatedHeight.value = withTiming(composerTargetHeight, {
-      duration: 130,
-      easing: Easing.inOut(Easing.quad),
-    });
-  }, [composerAnimatedHeight, composerTargetHeight]);
-
-  const composerAnimatedStyle = useAnimatedStyle(() => ({
-    height: composerAnimatedHeight.value,
-  }));
-
-  // Corner-radius interpolation: full pill at single-line height, softening
-  // to a rounded rectangle as the capsule grows (matches the reference).
-  const composerCapsuleStyle = useAnimatedStyle(() => ({
-    borderRadius: interpolate(
-      composerAnimatedHeight.value,
-      [COMPOSER_TEXT_LINE_HEIGHT, composerTextMaxHeight],
-      [COMPOSER_CORNER_RADIUS, COMPOSER_EXPANDED_CORNER_RADIUS],
-      Extrapolation.CLAMP,
-    ),
-  }));
-
-  // Reference-measured width: 36px screen-edge margins while the keyboard is
-  // closed (309 wide, centered), 12px once it opens (~356 wide). Animated so
-  // the capsule breathes wider instead of snapping. Cursor and draft live in
-  // React state (prompt + selection sync), so resizing never disturbs them.
   const keyboardVisible = keyboardHeight > 0;
   const composerMargin = useSharedValue(COMPOSER_MARGIN_KEYBOARD_HIDDEN);
 
@@ -1373,7 +1275,6 @@ const ChatInput = memo(function ChatInput({
 
     sendingRef.current = true;
     setPrompt("");
-    setComposerContentHeight(0);
     KeyboardController.dismiss();
     composerRef.current?.blur();
 
@@ -1815,6 +1716,23 @@ const ChatInput = memo(function ChatInput({
     slashMenuView,
   ]);
 
+  const handleComposerSendPress = () => {
+    if (sendDisabled) return;
+    if (loading) {
+      onStop().catch(console.error);
+      return;
+    }
+    if (editDraft !== null) {
+      const cleanEditPrompt = prompt.trim();
+      if (!cleanEditPrompt) return;
+      KeyboardController.dismiss();
+      composerRef.current?.blur();
+      onEditSend(cleanEditPrompt).catch(console.error);
+      return;
+    }
+    handleGenerate().catch(console.error);
+  };
+
   return (
     <Animated.View className="relative" style={[composerWidthStyle]}>
       <View className="gap-sp-3">
@@ -1914,100 +1832,25 @@ const ChatInput = memo(function ChatInput({
           </View>
         ) : null}
 
-        <Animated.View
-          className="border border-border bg-input dark:border-border-dark dark:bg-input-dark"
-          style={[composerCapsuleStyle]}
-        >
-          {/* The + and send buttons anchor to the bottom row while the text
-              area grows upward; feedback is isolated to the icon buttons. */}
-          <View className="flex-row items-end px-2 py-1.5">
-            <Pressable
-              accessibilityLabel="Attachments and tools"
-              accessibilityRole="button"
-              className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary dark:bg-secondary-dark"
-              hitSlop={4}
-              onPress={() => {
-                setPlusMenuDrawerOpen(true);
-              }}
-              style={({ pressed }) => (pressed ? { opacity: 0.82 } : null)}
-            >
-              <Plus color={theme.text} size={22} />
-            </Pressable>
-
-            <TextInputWrapper
-              className="min-w-0 flex-1 px-1"
-              style={{ width: "100%" }}
-              onPaste={(payload) => {
-                handlePaste(payload).catch(console.error);
-              }}
-            >
-              <Animated.View style={[composerAnimatedStyle]}>
-                <Textarea
-                  ref={composerRef}
-                  className="h-full w-full min-h-0 rounded-pill border-0 bg-transparent px-0 py-0 leading-6 text-base dark:bg-transparent"
-                  cursorColor="#0A84FF"
-                  onChangeText={setPrompt}
-                  onContentSizeChange={(event) => {
-                    const nextHeight = event.nativeEvent.contentSize.height;
-                    // Guard: only re-render when the measured height actually
-                    // changed, so typing never loops through setState.
-                    setComposerContentHeight((current) =>
-                      current === nextHeight ? current : nextHeight,
-                    );
-                  }}
-                  onSelectionChange={composerSelection.onSelectionChange}
-                  placeholder="Ask Ajiro Agent"
-                  returnKeyType="default"
-                  scrollEnabled={composerScrollEnabled}
-                  selection={composerSelection.selectionProp}
-                  selectionColor="#0A84FF"
-                  submitBehavior="newline"
-                  textAlignVertical="center"
-                  value={prompt}
-                />
-              </Animated.View>
-            </TextInputWrapper>
-
-            <Pressable
-              accessibilityLabel={loading ? "Stop generating" : "Send message"}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: sendDisabled }}
-              className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0A84FF]"
-              disabled={sendDisabled}
-              hitSlop={8}
-              onPress={() => {
-                if (sendDisabled) return;
-                if (loading) {
-                  onStop().catch(console.error);
-                  return;
-                }
-                if (editDraft !== null) {
-                  const cleanEditPrompt = prompt.trim();
-                  if (!cleanEditPrompt) return;
-                  KeyboardController.dismiss();
-                  composerRef.current?.blur();
-                  onEditSend(cleanEditPrompt).catch(console.error);
-                  return;
-                }
-                handleGenerate().catch(console.error);
-              }}
-              style={({ pressed }) => ({
-                elevation: 5,
-                opacity: sendDisabled ? 0.4 : pressed ? 0.85 : 1,
-                shadowColor: "#000000",
-                shadowOffset: { height: 3, width: 0 },
-                shadowOpacity: 0.45,
-                shadowRadius: 6,
-              })}
-            >
-              {loading ? (
-                <StopCircle color="#FFFFFF" size={20} />
-              ) : (
-                <ArrowUp color="#FFFFFF" size={22} strokeWidth={2.5} />
-              )}
-            </Pressable>
-          </View>
-        </Animated.View>
+        <ComposerCapsule
+          value={prompt}
+          onChangeText={setPrompt}
+          placeholder="Message"
+          inputRef={composerRef}
+          selection={composerSelection.selectionProp}
+          onSelectionChange={composerSelection.onSelectionChange}
+          onPaste={(payload) => {
+            handlePaste(payload).catch(console.error);
+          }}
+          sendDisabled={sendDisabled}
+          loading={loading}
+          onSendPress={handleComposerSendPress}
+          onPlusPress={() => {
+            setPlusMenuDrawerOpen(true);
+          }}
+          screenHeight={screenHeight}
+          keyboardHeight={keyboardHeight}
+        />
       </View>
 
       <Drawer

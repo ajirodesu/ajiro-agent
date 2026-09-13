@@ -7,7 +7,7 @@
  */
 import { useRouter } from "expo-router";
 import { Check, ChevronLeft } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
 
 import { Container } from "@/components/shared/container";
@@ -17,6 +17,10 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/core/utils";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
+import {
+  stockAndroidLinuxPlan,
+  type LinuxProvisioningPlan,
+} from "@/modules/runtime/linux-provision";
 import {
   EXEC_COMMAND_DESCRIPTIONS,
   EXEC_COMMAND_IDS,
@@ -71,6 +75,21 @@ export default function CodingSettingsScreen() {
   const theme = useTheme();
   const { codingSettings, updateCodingSettings } = useConfig();
   const [saving, setSaving] = useState(false);
+  const [linuxPlan, setLinuxPlan] = useState<LinuxProvisioningPlan | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    stockAndroidLinuxPlan()
+      .then((plan) => {
+        if (!cancelled) setLinuxPlan(plan);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const apply = (input: Partial<typeof codingSettings>) => {
     setSaving(true);
@@ -201,6 +220,29 @@ export default function CodingSettingsScreen() {
             providers and connected MCP servers. Destructive tool actions honor
             the tool approval setting on the chat screen.
           </Text>
+        </View>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <View className="px-sp-4 py-sp-3">
+          <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
+            Linux runtime
+          </Text>
+          <Text className="mt-1 font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+            {linuxPlan
+              ? linuxPlan.guidance
+              : "Checking on-device Linux status…"}
+          </Text>
+          {linuxPlan && linuxPlan.missing.length > 0 ? (
+            <Text className="mt-2 font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
+              Missing: {linuxPlan.missing.join(", ")}
+            </Text>
+          ) : null}
+          {linuxPlan?.provisioned ? (
+            <Text className="mt-2 font-sans text-xs text-foreground dark:text-foreground-dark">
+              Status: ready
+            </Text>
+          ) : null}
         </View>
       </Card>
     </Container>

@@ -1,6 +1,7 @@
 import type { AgentConfig, BuiltInToolKey } from "@/core/types/app-state";
 
 import { PLAN_AGENT_NAME } from "@/modules/agents/registry";
+import { isReadOnlyModeName } from "@/modules/agents/modes";
 
 export const MUTATING_BUILT_IN_TOOL_NAMES = new Set([
   "createDirectory",
@@ -15,6 +16,7 @@ export const MUTATING_BUILT_IN_TOOL_NAMES = new Set([
   "moveEntry",
   "renameEntry",
   "task",
+  "undo",
   "write",
 ]);
 
@@ -36,6 +38,18 @@ export function isPlanAgent(agent: AgentConfig): boolean {
   return agent.id === PLAN_AGENT_NAME || agent.name === PLAN_AGENT_NAME;
 }
 
+/**
+ * Read-only agents (plan, explore, and read-only subagents): mutating tools
+ * are dropped regardless of row permissions. Plan detection stays intact;
+ * this extends the same gate to every read-only mode.
+ */
+export function isReadOnlyAgent(agent: AgentConfig): boolean {
+  if (isPlanAgent(agent)) return true;
+  return (
+    isReadOnlyModeName(agent.name) || isReadOnlyModeName(agent.id)
+  );
+}
+
 /** Whether the agent's toolPermissions explicitly allow a built-in tool key. */
 export function agentAllowsBuiltInKey(
   agent: AgentConfig,
@@ -55,11 +69,11 @@ export function filterToolsByAgentPermissions(
   agent: AgentConfig,
   toolNameToKey: Record<string, BuiltInToolKey>,
 ): Record<string, unknown> {
-  const plan = isPlanAgent(agent);
+  const readOnly = isReadOnlyAgent(agent);
 
   return Object.fromEntries(
     Object.entries(tools).filter(([name]) => {
-      if (plan && MUTATING_BUILT_IN_TOOL_NAMES.has(name)) {
+      if (readOnly && MUTATING_BUILT_IN_TOOL_NAMES.has(name)) {
         return false;
       }
 

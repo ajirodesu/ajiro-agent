@@ -13,7 +13,6 @@ export function createRecord(input: {
   inputSummary: string;
   outputSummary?: string | null;
   status: ToolExecutionRecord["status"];
-  termux?: ToolExecutionRecord["termux"];
   toolName: string;
 }) {
   return {
@@ -23,7 +22,6 @@ export function createRecord(input: {
     inputSummary: input.inputSummary,
     outputSummary: input.outputSummary ?? null,
     error: input.error ?? null,
-    ...(input.termux ? { termux: input.termux } : {}),
     createdAt: new Date().toISOString(),
   } satisfies ToolExecutionRecord;
 }

@@ -1,4 +1,4 @@
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, eq, isNull, like } from "drizzle-orm";
 import * as Crypto from "expo-crypto";
 
 import { nowIso } from "@/core/db/repositories/shared";
@@ -6,7 +6,7 @@ import type {
   AppDatabase,
   ConversationRepository,
 } from "@/core/db/repositories/types";
-import { conversations } from "@/core/db/schema";
+import { conversations, messages } from "@/core/db/schema";
 
 export function createConversationRepository(
   db: AppDatabase,
@@ -67,6 +67,83 @@ export function createConversationRepository(
         .from(conversations)
         .where(isNull(conversations.archivedAt))
         .orderBy(desc(conversations.pinnedAt), desc(conversations.updatedAt));
+    },
+    async search(query) {
+      const needle = `%${query.trim().replace(/[%_]/g, "")}%`;
+      if (!query.trim()) return this.list();
+      return db
+        .select()
+        .from(conversations)
+        .where(like(conversations.title, needle))
+        .orderBy(desc(conversations.updatedAt));
+    },
+    async setArchived(id, archivedAt) {
+      await db
+        .update(conversations)
+        .set({ archivedAt, updatedAt: nowIso() })
+        .where(eq(conversations.id, id));
+    },
+    /**
+     * Fork/branch a conversation (§§66-68): duplicate the row plus its
+     * messages (optionally only up to a sequence for branch-from-message).
+     * In-flight streaming messages settle as failed on the copy.
+     */
+    async fork(id, options) {
+      const source = await this.getById(id);
+      if (!source) {
+        throw new Error(`Conversation not found: ${id}.`);
+      }
+      const timestamp = nowIso();
+      const forkId = Crypto.randomUUID();
+      await db.insert(conversations).values({
+        id: forkId,
+        title: options?.title?.trim() || `${source.title} (branch)`,
+        providerId: source.providerId,
+        modelId: source.modelId,
+        pinnedAt: null,
+        reasoningEffort: source.reasoningEffort,
+        agentMode: source.agentMode,
+        agentId: source.agentId,
+        selectedFileIds: source.selectedFileIds,
+        selectedMcpServerIds: source.selectedMcpServerIds,
+        selectedSkillIds: source.selectedSkillIds,
+        externalFolderSession: source.externalFolderSession,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        archivedAt: null,
+      });
+      const sourceMessages = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.conversationId, id))
+        .orderBy(messages.sequence);
+      let sequence = 1;
+      for (const message of sourceMessages) {
+        if (
+          options?.upToSequence !== undefined &&
+          message.sequence > options.upToSequence
+        ) {
+          break;
+        }
+        await db.insert(messages).values({
+          id: Crypto.randomUUID(),
+          conversationId: forkId,
+          content: message.content,
+          error: message.error,
+          metadata: message.metadata,
+          role: message.role,
+          sequence,
+          status: message.status === "streaming" ? "failed" : message.status,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        });
+        sequence += 1;
+      }
+      const row = await this.getById(forkId);
+      if (!row) {
+        throw new Error("Failed to fork conversation");
+      }
+      return row;
     },
     async updateMetadata(id, input) {
       const current = (

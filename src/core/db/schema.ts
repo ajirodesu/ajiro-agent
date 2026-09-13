@@ -393,6 +393,30 @@ export const codingCheckpoints = sqliteTable(
   ],
 );
 
+export const provenanceEvents = sqliteTable(
+  "provenance_events",
+  {
+    id: text("id").primaryKey().notNull(),
+    action: text("action").notNull(),
+    agentId: text("agent_id"),
+    tool: text("tool"),
+    runtime: text("runtime"),
+    permission: text("permission").notNull(),
+    input: text("input"),
+    result: text("result"),
+    ok: integer("ok", { mode: "boolean" }).notNull().default(false),
+    sessionId: text("session_id"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_provenance_events_session_created_at").on(
+      table.sessionId,
+      table.createdAt,
+    ),
+    index("idx_provenance_events_created_at").on(table.createdAt),
+  ],
+);
+
 export const schema = {
   agentRuns,
   agents,
@@ -403,6 +427,7 @@ export const schema = {
   messages,
   mcpServers,
   modelPresets,
+  provenanceEvents,
   providerConfigs,
   savedPrompts,
   scheduleRuns,

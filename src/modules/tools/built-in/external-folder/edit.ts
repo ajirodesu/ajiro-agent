@@ -7,6 +7,7 @@ import { applyTextEdits } from "@/modules/tools/built-in/edits";
 import type { ExternalFolderToolFactoryParams } from "@/modules/tools/built-in/external-folder/types";
 
 export function createExternalEditTool({
+  checkpoints,
   onRecord,
   session,
 }: ExternalFolderToolFactoryParams) {
@@ -38,9 +39,11 @@ export function createExternalEditTool({
       });
 
       try {
+        await checkpoints?.snapshotBeforeWrite(path);
         const current = await service.readTextFile(session, path);
         const result = applyTextEdits(current, edits);
         await service.writeTextFile(session, path, result.content);
+        await checkpoints?.commitCheckpoint(`edit ${path}`);
 
         const output = {
           editsApplied: result.appliedCount,

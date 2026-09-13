@@ -2,6 +2,7 @@ import type {
   AgentConfig,
   AppStateSnapshot,
 } from "@/core/types/app-state";
+import { AGENT_MODES } from "@/modules/agents/modes";
 
 export const DEFAULT_AGENT_NAME = "build";
 export const PLAN_AGENT_NAME = "plan";
@@ -67,6 +68,33 @@ export const NATIVE_AGENTS: AgentConfig[] = [
     mode: "subagent",
     name: GENERAL_SUBAGENT_NAME,
   }),
+  ...(
+    [
+      "explore",
+      "review",
+      "debug",
+      "test",
+      "android",
+      "git",
+      "security",
+      "documentation",
+      "explorer",
+      "planner",
+      "code-analyst",
+      "test-agent",
+      "security-reviewer",
+      "android-agent",
+      "documentation-agent",
+    ] as const
+  ).map((name) =>
+    nativeAgent({
+      description: AGENT_MODES[name].description,
+      mode:
+        AGENT_MODES[name].persona === "primary" ? "primary" : "subagent",
+      name,
+      prompt: AGENT_MODES[name].instructions,
+    }),
+  ),
 ];
 
 export function getNativeAgentByName(

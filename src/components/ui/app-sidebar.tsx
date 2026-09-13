@@ -10,9 +10,11 @@
 import { usePathname, useRouter } from "expo-router";
 import {
   AtSign,
+  Archive,
   Clock,
   EllipsisVertical,
   FolderOpen,
+  GitFork,
   Images,
   Library,
   Pencil,
@@ -21,6 +23,7 @@ import {
   Search,
   Settings,
   SquarePen,
+  Terminal,
   Trash2,
   X,
 } from "lucide-react-native";
@@ -77,6 +80,7 @@ const NAV_ITEMS: { label: string; route: string; icon: typeof Library }[] = [
   { label: "Images", route: "/library?category=images", icon: Images },
   { label: "Library", route: "/library", icon: Library },
   { label: "Projects", route: "/settings/coding", icon: FolderOpen },
+  { label: "Terminal", route: "/terminal", icon: Terminal },
   { label: "Scheduled", route: "/settings/jobs", icon: Clock },
   { label: "Plugins", route: "/settings/mcp", icon: AtSign },
 ];
@@ -569,7 +573,12 @@ function ChatOptions({
   pinned: boolean;
   pinnedCount: number;
 }) {
-  const { deleteConversation, setConversationPinned } = useChat();
+  const {
+    archiveConversation,
+    deleteConversation,
+    forkConversation,
+    setConversationPinned,
+  } = useChat();
   const theme = useTheme();
   return (
     <DropdownMenu>
@@ -606,6 +615,30 @@ function ChatOptions({
                 : pinnedCount >= 3
                   ? "Pin limit reached"
                   : "Pin"}
+            </Text>
+          </View>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onPress={() => {
+            forkConversation(conversationId).catch(console.error);
+          }}
+        >
+          <View className="flex-row items-center gap-sp-2">
+            <GitFork color={theme.text} size={16} />
+            <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
+              Fork
+            </Text>
+          </View>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onPress={() => {
+            archiveConversation(conversationId, true).catch(console.error);
+          }}
+        >
+          <View className="flex-row items-center gap-sp-2">
+            <Archive color={theme.text} size={16} />
+            <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
+              Archive
             </Text>
           </View>
         </DropdownMenuItem>

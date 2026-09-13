@@ -51,6 +51,7 @@ import {
 } from "@/modules/tools/built-in/external-folder/transfer";
 import { createCodingTools } from "@/modules/tools/coding/coding-tools";
 import { buildCodingSystemPrompt } from "@/modules/tools/coding/coding-prompt";
+import { createCheckpointService } from "@/core/services/coding/checkpoint-service";
 import {
   buildRepoMap,
   formatRepoMap,
@@ -63,7 +64,9 @@ import {
   agentAllowsBuiltInKey,
   filterMcpServerIdsByAgentPermissions,
   isPlanAgent,
+  isReadOnlyAgent,
 } from "@/modules/agents/permissions";
+import { resolveMaxIterations } from "@/modules/agents/modes";
 import { createAgentTools } from "@/modules/tools/built-in/agent-tools";
 import {
   createTaskTool,
@@ -130,6 +133,7 @@ const MUTATING_BUILT_IN_TOOL_NAMES = new Set([
   "manageSkill",
   "moveEntry",
   "renameEntry",
+  "undo",
   "write",
   "git-add",
   "git-commit",
@@ -505,8 +509,13 @@ export async function executeClaimedAgentRun(
     snapshotRef.current.agents,
     run.agentId ?? conversation.agentId,
   );
-  const isPlanMode = isPlanAgent(agent);
+  const isPlanMode = isReadOnlyAgent(agent);
+  const isPlanPersona = isPlanAgent(agent);
   const isSubagentRun = agent.mode === "subagent";
+  const maxToolSteps = resolveMaxIterations(
+    agent.name,
+    snapshotRef.current.settings.maxToolSteps,
+  );
 
   if (imageFiles.length > 0 && !resolvedModel.supportsImageInput) {
     await safeUpdateRunRecord(run.id, {
@@ -929,7 +938,7 @@ export async function executeClaimedAgentRun(
             "Only read-only tools are available. The agent will research and present a plan without making changes.",
           kind: "run",
           status: "info",
-          title: "Plan mode",
+          title: isPlanPersona ? "Plan mode" : `${agent.name} mode`,
           createdAt: new Date().toISOString(),
         }),
       );
@@ -944,9 +953,16 @@ export async function executeClaimedAgentRun(
             toolSettings[key] && agentAllowsBuiltInKey(agent, key);
 
           if (run.fileContextSource === "external-folder") {
+            const folderCheckpointService = createCheckpointService({
+              conversationId: conversation.id,
+              repository: repositories.checkpointRepository,
+              runId: run.id,
+              session: externalFolderSession as ExternalFolderSession,
+            });
             const folderTools = createExternalFolderTools({
               session: externalFolderSession as ExternalFolderSession,
               onRecord: handleToolExecutionRecord,
+              checkpoints: folderCheckpointService,
             }).tools;
 
             Object.assign(
@@ -962,6 +978,7 @@ export async function executeClaimedAgentRun(
                 ["moveEntry", enabledFor("folderMoveEntry")],
                 ["read", enabledFor("folderRead")],
                 ["renameEntry", enabledFor("folderRenameEntry")],
+                ["undo", enabledFor("folderEdit")],
                 ["write", enabledFor("folderWrite")],
               ]),
             );
@@ -1521,7 +1538,7 @@ export async function executeClaimedAgentRun(
 
     const runtimeResultPromise = modelRuntime.generateTextStream({
       abortSignal: abortController.signal,
-      maxToolSteps: snapshotRef.current.settings.maxToolSteps,
+      maxToolSteps,
       messages: runtimeMessages,
       model: resolvedModel,
       onDelta: (delta) => {
@@ -1678,7 +1695,7 @@ export async function executeClaimedAgentRun(
 
     if (!assistantText.trim()) {
       assistantText = runtimeResult.stepLimitReached
-        ? `Stopped after ${snapshotRef.current.settings.maxToolSteps} tool steps. You can raise the limit in Tool settings or ask me to continue.`
+        ? `Stopped after ${maxToolSteps} tool steps. You can raise the limit in Tool settings or ask me to continue.`
         : toolExecutions.length > 0
           ? "The requested tool actions completed, but the model did not provide a final response. Please ask me to continue."
           : "The model completed without returning text.";

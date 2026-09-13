@@ -221,11 +221,25 @@ export type ToolExecutionRecord = {
   inputSummary: string;
   outputSummary: string | null;
   error: string | null;
-  termux?: {
-    command: string;
-    output: string | null;
-    taskId: string | null;
-  };
+};
+
+/**
+ * Provenance record (§98): what ran, who ran it, where, under which
+ * permission, with what result. Written by the execution broker callers
+ * for plugins, MCP, terminal, GitHub, builds, and filesystem writes.
+ */
+export type ProvenanceEvent = {
+  id: string;
+  action: string;
+  agentId: string | null;
+  tool: string | null;
+  runtime: string | null;
+  permission: string;
+  input: string | null;
+  result: string | null;
+  ok: boolean;
+  sessionId: string | null;
+  createdAt: string;
 };
 
 export type PromptArtifact = {

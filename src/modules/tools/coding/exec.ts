@@ -26,27 +26,12 @@ import type { ExternalFolderSession } from "@/core/types/app-state";
 import { createExternalFolderService } from "@/core/services/external-folder/external-folder-service";
 
 import type { CodingExecCommandId } from "@/core/services/coding/coding-settings";
+import {
+  EXEC_COMMAND_DESCRIPTIONS,
+  EXEC_COMMAND_IDS,
+} from "@/modules/tools/coding/exec-commands";
 
-export const EXEC_COMMAND_IDS: CodingExecCommandId[] = [
-  "typecheck-js",
-  "lint-js",
-  "grep-count",
-  "file-stats",
-  "git-status",
-];
-
-export const EXEC_COMMAND_DESCRIPTIONS: Record<CodingExecCommandId, string> = {
-  "typecheck-js":
-    "Parse every JS/TS/JSX/TSX file under a path with @babel/parser (TypeScript + JSX plugins) and report syntax errors. Not a full type checker ? it catches syntax-level breakage.",
-  "lint-js":
-    "Basic structural lint over JS/TS files under a path: unused imports, `var` usage, `debugger`/`console.log` statements, empty catch blocks.",
-  "grep-count":
-    "Count regex matches per file under a path. In-process ripgrep-style check.",
-  "file-stats":
-    "Report file/dir sizes and line counts under a path.",
-  "git-status":
-    "Report isomorphic-git status (added/modified/deleted files) for the project.",
-};
+export { EXEC_COMMAND_DESCRIPTIONS, EXEC_COMMAND_IDS };
 
 export const MAX_EXEC_OUTPUT_CHARS = 8000;
 export const EXEC_TIMEOUT_MS = 60_000;

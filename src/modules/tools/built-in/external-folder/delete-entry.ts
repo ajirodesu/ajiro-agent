@@ -6,6 +6,7 @@ import { createRecord, summarizeValue } from "@/modules/tools/built-in/shared";
 import type { ExternalFolderToolFactoryParams } from "@/modules/tools/built-in/external-folder/types";
 
 export function createDeleteEntryTool({
+  checkpoints,
   onRecord,
   session,
 }: ExternalFolderToolFactoryParams) {
@@ -21,7 +22,9 @@ export function createDeleteEntryTool({
       const inputSummary = summarizeValue({ path, recursive });
 
       try {
+        await checkpoints?.snapshotBeforeWrite(path);
         const output = await service.deleteEntry(session, path, recursive);
+        await checkpoints?.commitCheckpoint(`deleteEntry ${path}`);
 
         onRecord?.(
           createRecord({

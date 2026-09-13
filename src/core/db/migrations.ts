@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 
 import { serializeSkillToMarkdown } from "@/modules/skills/skill-markdown";
 
-const DATABASE_VERSION = 25;
+const DATABASE_VERSION = 26;
 
 const CORE_SCHEMA_REPAIR_SQL = `
   PRAGMA journal_mode = WAL;
@@ -58,16 +58,30 @@ const CORE_SCHEMA_REPAIR_SQL = `
     updated_at TEXT NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS schedule_runs (
-    id TEXT PRIMARY KEY NOT NULL,
-    schedule_id TEXT NOT NULL,
-    run_id TEXT,
-    status TEXT NOT NULL,
-    error TEXT,
-    started_at TEXT NOT NULL,
-    completed_at TEXT,
-    FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE
-  );
+      CREATE TABLE IF NOT EXISTS schedule_runs (
+        id TEXT PRIMARY KEY NOT NULL,
+        schedule_id TEXT NOT NULL,
+        run_id TEXT,
+        status TEXT NOT NULL,
+        error TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS provenance_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        action TEXT NOT NULL,
+        agent_id TEXT,
+        tool TEXT,
+        runtime TEXT,
+        permission TEXT NOT NULL,
+        input TEXT,
+        result TEXT,
+        ok INTEGER NOT NULL DEFAULT 0,
+        session_id TEXT,
+        created_at TEXT NOT NULL
+      );
 
   CREATE INDEX IF NOT EXISTS idx_schedules_enabled_next_run_at
   ON schedules(enabled, next_run_at);
@@ -128,6 +142,25 @@ const CORE_SCHEMA_REPAIR_SQL = `
   ON skill_files(skill_id, path);
   CREATE INDEX IF NOT EXISTS idx_skill_files_skill_id
   ON skill_files(skill_id);
+
+  CREATE TABLE IF NOT EXISTS provenance_events (
+    id TEXT PRIMARY KEY NOT NULL,
+    action TEXT NOT NULL,
+    agent_id TEXT,
+    tool TEXT,
+    runtime TEXT,
+    permission TEXT NOT NULL,
+    input TEXT,
+    result TEXT,
+    ok INTEGER NOT NULL DEFAULT 0,
+    session_id TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_provenance_events_session_created_at
+  ON provenance_events(session_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_provenance_events_created_at
+  ON provenance_events(created_at);
 `;
 
 /**
@@ -447,6 +480,12 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
 
       CREATE INDEX IF NOT EXISTS idx_schedule_runs_schedule_started_at
       ON schedule_runs(schedule_id, started_at);
+
+      CREATE INDEX IF NOT EXISTS idx_provenance_events_session_created_at
+      ON provenance_events(session_id, created_at);
+
+      CREATE INDEX IF NOT EXISTS idx_provenance_events_created_at
+      ON provenance_events(created_at);
     `);
 
     currentVersion = DATABASE_VERSION;
@@ -1001,6 +1040,31 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
     `);
 
     currentVersion = 25;
+  }
+
+  if (currentVersion === 25) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS provenance_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        action TEXT NOT NULL,
+        agent_id TEXT,
+        tool TEXT,
+        runtime TEXT,
+        permission TEXT NOT NULL,
+        input TEXT,
+        result TEXT,
+        ok INTEGER NOT NULL DEFAULT 0,
+        session_id TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_provenance_events_session_created_at
+      ON provenance_events(session_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_provenance_events_created_at
+      ON provenance_events(created_at);
+    `);
+
+    currentVersion = 26;
   }
 
   await db.execAsync(`PRAGMA user_version = ${currentVersion}`);
