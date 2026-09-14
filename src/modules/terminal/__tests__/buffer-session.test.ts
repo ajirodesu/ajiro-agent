@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { TerminalBuffer } from "@/modules/terminal/buffer";
 import { nextMatchIndex, searchTerminalLines } from "@/modules/terminal/search";
-import { TerminalSession } from "@/modules/terminal/session";
 
 function text(buffer: TerminalBuffer, y: number): string {
   return (buffer.viewportRuns()[y] ?? [])
@@ -70,53 +69,6 @@ describe("terminal buffer", () => {
     expect(buffer.cols).toBe(10);
     const kept = buffer.scrollback.map((line) => line.text).join(" ");
     expect(kept).toContain("hello-resize");
-  });
-});
-
-describe("terminal session", () => {
-  it("echoes submitted lines and records history", async () => {
-    const session = new TerminalSession(40, 10);
-    const written: string[] = [];
-    session.attachProcessWriter(async (data) => {
-      written.push(data);
-    });
-    await session.submitLine("hello");
-    await session.submitLine("hello");
-    await session.submitLine("world");
-    expect(session.history.all()).toEqual(["hello", "world"]);
-    expect(written).toEqual(["hello\n", "hello\n", "world\n"]);
-    const snap = session.snapshot();
-    // Echoed lines live on the viewport rows (scrollback only collects
-    // rows scrolled off the top).
-    expect(
-      snap.lines.map((runs) => runs.map((run) => run.text).join("")).join(" "),
-    ).toContain("hello");
-  });
-
-  it("emits resize and exit events", () => {
-    const session = new TerminalSession(40, 10);
-    const types: string[] = [];
-    session.onEvent((event) => {
-      types.push(event.type);
-    });
-    session.resize(80, 24);
-    session.handleExit(0);
-    expect(types).toContain("resize");
-    expect(types).toContain("exit");
-    expect(session.exitCode).toBe(0);
-  });
-
-  it("recalls history with up/down", async () => {
-    const session = new TerminalSession(40, 10);
-    session.attachProcessWriter(async () => {});
-    await session.submitLine("first");
-    await session.submitLine("second");
-    await session.sendControl("up");
-    const snap = session.snapshot();
-    const viewportText = snap.lines
-      .map((runs) => runs.map((run) => run.text).join(""))
-      .join(" ");
-    expect(viewportText).toContain("second");
   });
 });
 

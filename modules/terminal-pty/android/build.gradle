@@ -29,3 +29,10 @@ android {
     }
   }
 }
+
+dependencies {
+  // Pure-Java tar parsing (no NDK dependency).
+  implementation("org.apache.commons:commons-compress:1.26.0")
+  // Pure-Java XZ decoder (Tukaani) for .tar.xz rootfs archives.
+  implementation("org.tukaani:xz:1.9")
+}

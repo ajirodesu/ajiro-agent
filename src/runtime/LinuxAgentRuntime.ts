@@ -94,6 +94,20 @@ export class LinuxAgentRuntime {
         "Linux runtime cannot start: native TerminalPty module is missing. Rebuild with the terminal-pty module.",
       );
     }
+    // End-to-end smoke check: proves the proot binary is executable, the
+    // rootfs is readable, and `/bin/bash` actually runs (covers the
+    // "verify permissions / verify /bin/bash" startup steps where the
+    // expo-file-system API exposes no Unix mode bits to query). Runs once
+    // per process; startup fails closed here instead of at first use.
+    try {
+      await terminalBridge.executeHeadless("true", 15_000);
+    } catch (error) {
+      throw new LinuxRuntimeError(
+        "spawn-failed",
+        "Linux runtime smoke check failed: proot or /bin/bash is not runnable. Reinstall the rootfs.",
+        { cause: error },
+      );
+    }
     this.installExitRouting();
     this.started = true;
   }

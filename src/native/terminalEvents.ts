@@ -9,6 +9,7 @@
 import { DeviceEventEmitter } from "react-native";
 
 import {
+  ROOTFS_PROGRESS_EVENT,
   TERMINAL_DATA_EVENT,
   TERMINAL_EXIT_EVENT,
 } from "@/native/nativeTypes";
@@ -24,6 +25,12 @@ export interface TerminalDataEvent {
 export interface TerminalExitEvent {
   sessionId: string;
   exitCode: number;
+}
+
+/** Rootfs extraction progress (compressed-stream bytes, monotonic). */
+export interface RootfsProgressEvent {
+  bytesTransferred: number;
+  totalBytes: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -76,6 +83,27 @@ export function subscribeToTerminalExit(
       if (event && event.sessionId === sessionId) {
         listener(event.exitCode);
       }
+    },
+  );
+  return () => subscription.remove();
+}
+
+/** Subscribe to rootfs extraction progress (global, not per-session). */
+export function subscribeToRootfsProgress(
+  listener: (progress: RootfsProgressEvent) => void,
+): () => void {
+  const subscription = DeviceEventEmitter.addListener(
+    ROOTFS_PROGRESS_EVENT,
+    (payload: unknown) => {
+      if (!isRecord(payload)) return;
+      const { bytesTransferred, totalBytes } = payload;
+      if (
+        typeof bytesTransferred !== "number" ||
+        typeof totalBytes !== "number"
+      ) {
+        return;
+      }
+      listener({ bytesTransferred, totalBytes });
     },
   );
   return () => subscription.remove();

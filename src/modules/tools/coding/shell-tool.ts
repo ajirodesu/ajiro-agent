@@ -13,6 +13,12 @@
  * runtime routing + provenance receipts, not a second prompt. When the Linux
  * runtime is not provisioned the broker fails closed with its honest
  * limitation message.
+ *
+ * Project ↔ `/workspace` sync: agent file tools operate on SAF storage while
+ * the shell sees `<rootfs>/workspace`. When a project session is attached
+ * (and the runtime is started), files sync in before execution and back
+ * after, so both sides observe the same tree. Sync failures fail closed —
+ * running on a stale tree would produce wrong results silently.
  */
 import { tool } from "ai";
 import { z } from "zod";
@@ -20,6 +26,11 @@ import { z } from "zod";
 import type { ExternalFolderSession, ToolExecutionRecord } from "@/core/types/app-state";
 import { PermissionStore } from "@/modules/permissions/engine";
 import { executePrivileged } from "@/modules/runtime/execution-broker";
+import { linuxAgentRuntime } from "@/runtime/LinuxAgentRuntime";
+import {
+  syncProjectToWorkspace,
+  syncWorkspaceToProject,
+} from "@/runtime/workspaceSyncAdapters";
 import { createRecord, summarizeValue } from "@/modules/tools/built-in/shared";
 
 export type ShellToolParams = {
@@ -48,6 +59,19 @@ export function createShellTool(params: ShellToolParams) {
     execute: async ({ command, timeoutMs }) => {
       const inputSummary = summarizeValue({ command });
       try {
+        if (params.projectSession && linuxAgentRuntime.isStarted()) {
+          try {
+            await syncProjectToWorkspace(params.projectSession);
+          } catch (error) {
+            const message =
+              `Project sync into /workspace failed: ` +
+              (error instanceof Error ? error.message : String(error));
+            params.onRecord?.(
+              createRecord({ toolName: "shell", status: "failed", inputSummary, error: message }),
+            );
+            return { ok: false as const, output: null as string | null, error: message };
+          }
+        }
         const result = await executePrivileged({
           action: {
             id: "shell",
@@ -74,6 +98,23 @@ export function createShellTool(params: ShellToolParams) {
             error: result.error ?? undefined,
           }),
         );
+        if (result.ok && params.projectSession && linuxAgentRuntime.isStarted()) {
+          // Bring shell-created/modified files back to the SAF project.
+          // A failed write-back must not masquerade as a failed command:
+          // surface it as an output warning instead.
+          try {
+            await syncWorkspaceToProject(params.projectSession);
+          } catch (error) {
+            const warning =
+              `Command succeeded, but syncing /workspace back to the project failed: ` +
+              (error instanceof Error ? error.message : String(error));
+            return {
+              ok: result.ok,
+              output: `${result.output ?? ""}\n[warning] ${warning}`,
+              error: result.error,
+            };
+          }
+        }
         return { ok: result.ok, output: result.output, error: result.error };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

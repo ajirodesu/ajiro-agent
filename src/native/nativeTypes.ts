@@ -25,6 +25,14 @@ export interface SpawnSessionArgs {
   rows: number;
 }
 
+/** Result of a native rootfs archive extraction. */
+export interface ExtractRootfsResult {
+  extractedFiles: number;
+  extractedDirs: number;
+  extractedLinks: number;
+  skippedEntries: number;
+}
+
 /** Raw native module surface (untyped at the platform boundary). */
 export interface NativeTerminalPtyModule {
   spawnSession(id: string, initialCmd: string, cols: number, rows: number): Promise<void>;
@@ -32,6 +40,7 @@ export interface NativeTerminalPtyModule {
   resize(id: string, cols: number, rows: number): Promise<void>;
   killSession(id: string): Promise<void>;
   executeHeadless(cmd: string, timeoutMs?: number): Promise<CommandResult>;
+  extractRootfs(archivePath: string, destPath: string): Promise<ExtractRootfsResult>;
   /** Number of live PTY sessions (diagnostics). */
   sessionCount?(): Promise<number>;
 }
@@ -44,3 +53,6 @@ export const TERMINAL_DATA_EVENT = "onTerminalData" as const;
 
 /** DeviceEventEmitter event carrying PTY exit. */
 export const TERMINAL_EXIT_EVENT = "onTerminalExit" as const;
+
+/** DeviceEventEmitter event carrying rootfs extraction progress. */
+export const ROOTFS_PROGRESS_EVENT = "onRootfsProgress" as const;

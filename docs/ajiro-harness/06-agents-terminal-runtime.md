@@ -17,9 +17,19 @@ cancellation, result-as-tool-output. Catalog described to the model
   of truth, locked-accent rules honored). Agent shell tool (`shell`) runs
   headless through the same runtime, independent of mounted terminal UI.
 - Legacy in-process stack (`TerminalView`, `Controller`, old `Session`,
-  `InProcessAdapter`, old terminal themes) is disconnected from all
-  production routes and marked `@deprecated`; its pure-TS parser/buffer
-  units remain covered by tests. Transcript mode is kept.
+  `InProcessAdapter`, old terminal themes, and their dedicated tests) is
+  deleted. The remaining `modules/terminal/` files are the pure ANSI
+  engine (parser/buffer/grid/search) with no production importers.
+  Transcript mode is kept.
+- Rootfs extraction is real: `RootfsExtractor.kt` (commons-compress +
+  Tukaani XZ, symlink/hardlink recreation, exec-bit preservation,
+  path-traversal guard, progress events) via `TerminalBridge.extractRootfs`;
+  `.tar.xz` primary, `.tar.gz`/`.tgz`/`.tar` accepted.
+- Project ↔ `/workspace` sync (`src/runtime/workspaceSync*.ts`): SAF has no
+  POSIX path so PRoot cannot bind-mount it — sync-in runs before shell exec
+  / on terminal open, sync-out after exec / on terminal close. Never
+  deletes; conflicts resolve for the SAF project and are reported; default
+  ignores + size/count caps; FNV-1a manifest for steady-state speed.
 - ANSI/VT: handled by xterm (SGR 16/256/truecolor, alt-screen, OSC titles,
   combining/wide cells). Raw PTY bytes are preserved verbatim to the WebView.
 - Performance: PTY output bypasses React state (event emitter → WebView

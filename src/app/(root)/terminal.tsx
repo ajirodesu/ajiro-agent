@@ -6,8 +6,13 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Container } from "@/components/shared/container";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/use-theme";
+import { useIdeWorkspace } from "@/providers/ide-workspace";
 import { linuxAgentRuntime } from "@/runtime/LinuxAgentRuntime";
 import type { RootfsInitializationProgress } from "@/runtime/runtimeTypes";
+import {
+  syncProjectToWorkspace,
+  syncWorkspaceToProject,
+} from "@/runtime/workspaceSyncAdapters";
 import { LinuxTerminal } from "@/terminal/LinuxTerminal";
 import type { LinuxTerminalRef } from "@/terminal/terminalTypes";
 
@@ -39,6 +44,7 @@ const MAX_TABS = 5;
 export default function TerminalScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const ide = useIdeWorkspace();
   const { command, output, pending } = useLocalSearchParams<{
     command?: string;
     output?: string;
@@ -75,10 +81,13 @@ export default function TerminalScreen() {
   }, [applyTabs]);
 
   // Boot the canonical runtime once (idempotent; agent headless exec shares it).
+  // When a project is active, its SAF files sync into /workspace (background:
+  // tabs open immediately, early `ls` may briefly show a syncing tree).
   useEffect(() => {
     if (transcriptMode) return;
     let cancelled = false;
     setRuntimeStarting(true);
+    const syncSession = ide.activeSession;
     const unsubscribe = linuxAgentRuntime.onProgress(
       (progress: RootfsInitializationProgress) => {
         if (cancelled) return;
@@ -93,6 +102,26 @@ export default function TerminalScreen() {
         if (cancelled) return;
         setRuntimeNotice(null);
         ensureFirstTab();
+        if (syncSession) {
+          setRuntimeNotice("Syncing project files into /workspace…");
+          syncProjectToWorkspace(syncSession)
+            .then((report) => {
+              if (cancelled) return;
+              setRuntimeNotice((current) =>
+                current === "Syncing project files into /workspace…"
+                  ? report.conflicts.length > 0
+                    ? `${report.conflicts.length} sync conflict(s) kept project versions.`
+                    : null
+                  : current,
+              );
+            })
+            .catch((error: unknown) => {
+              if (cancelled) return;
+              setRuntimeNotice(
+                `Project sync failed: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            });
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -109,6 +138,21 @@ export default function TerminalScreen() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcriptMode]);
+
+  // Best-effort write-back: shell-created/modified files return to the SAF
+  // project when leaving the screen. Failures are swallowed here (the files
+  // remain intact in /workspace for the next visit).
+  const syncSessionRef = useRef(ide.activeSession);
+  syncSessionRef.current = ide.activeSession;
+  useEffect(
+    () => () => {
+      const session = syncSessionRef.current;
+      if (session && linuxAgentRuntime.isStarted()) {
+        syncWorkspaceToProject(session).catch(() => {});
+      }
+    },
+    [],
+  );
 
   const openNewTab = useCallback(() => {
     const current = tabsRef.current;

@@ -144,6 +144,25 @@ Java_expo_modules_terminalpty_TerminalPtyModule_nativeKill(
   }
 }
 
+// Reaps sessions orphaned by a dead JS runtime (full reload): OnCreate of a
+// fresh module instance means no live runtime owns these PTYs anymore, so
+// killing them here can never harm a running session. Normal activity
+// recreation does NOT recreate the module, so background sessions survive it.
+JNIEXPORT void JNICALL
+Java_expo_modules_terminalpty_TerminalPtyModule_nativeKillAll(
+    JNIEnv* env, jobject) {
+  std::map<std::string, PtySession*> doomed;
+  {
+    std::lock_guard<std::mutex> lock(gMutex);
+    doomed.swap(gSessions);
+  }
+  for (auto& pair : doomed) {
+    PtyKill(pair.second);
+    env->DeleteGlobalRef(static_cast<jobject>(pair.second->moduleRef));
+    delete pair.second;
+  }
+}
+
 JNIEXPORT jobject JNICALL
 Java_expo_modules_terminalpty_TerminalPtyModule_nativeExecuteHeadless(
     JNIEnv* env, jobject, jstring jProotPath, jstring jRootfsPath,

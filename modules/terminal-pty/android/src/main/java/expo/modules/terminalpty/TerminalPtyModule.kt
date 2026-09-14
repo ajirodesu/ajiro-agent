@@ -40,6 +40,14 @@ class TerminalPtyModule : Module() {
       } catch (e: UnsatisfiedLinkError) {
         Log.e(TAG, "libpty_bridge.so missing — did CMake build run?", e)
       }
+      // A fresh module instance owns no sessions yet: anything still
+      // registered belongs to a dead JS runtime (full reload) and would
+      // otherwise leak a PTY + process pair nobody can reach.
+      try {
+        nativeKillAll()
+      } catch (e: Exception) {
+        Log.w(TAG, "stale session reap failed", e)
+      }
     }
 
     AsyncFunction("spawnSession") { id: String, initialCmd: String, cols: Int, rows: Int ->
@@ -95,6 +103,36 @@ class TerminalPtyModule : Module() {
 
     AsyncFunction("sessionCount") {
       liveSessions.size
+    }
+
+    AsyncFunction("extractRootfs") { archivePath: String, destPath: String ->
+      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+      val archive = File(archivePath)
+      val dest = File(destPath)
+      require(archive.isFile) { "rootfs archive missing: $archivePath" }
+      // Hold the foreground service + wake lock across the (multi-minute)
+      // extraction so backgrounding cannot interrupt it halfway.
+      TerminalPtyService.acquire(context)
+      try {
+        withContext(Dispatchers.IO) {
+          val result = RootfsExtractor.extract(archive, dest) { read, total ->
+            scope.launch(Dispatchers.Main) {
+              sendEvent(
+                "onRootfsProgress",
+                mapOf("bytesTransferred" to read, "totalBytes" to total),
+              )
+            }
+          }
+          mapOf(
+            "extractedFiles" to result.extractedFiles,
+            "extractedDirs" to result.extractedDirs,
+            "extractedLinks" to result.extractedLinks,
+            "skippedEntries" to result.skippedEntries,
+          )
+        }
+      } finally {
+        TerminalPtyService.release(context)
+      }
     }
 
     OnDestroy {
@@ -174,6 +212,7 @@ class TerminalPtyModule : Module() {
   private external fun nativeWrite(id: String, data: String)
   private external fun nativeResize(id: String, cols: Int, rows: Int)
   private external fun nativeKill(id: String)
+  private external fun nativeKillAll()
   private external fun nativeExecuteHeadless(
     prootPath: String,
     rootfsPath: String,

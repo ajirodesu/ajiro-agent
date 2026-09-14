@@ -16,6 +16,7 @@ import { Platform } from "react-native";
 import {
   TERMINAL_PTY_MODULE_NAME,
   type CommandResult,
+  type ExtractRootfsResult,
   type NativeTerminalPtyModule,
 } from "@/native/nativeTypes";
 
@@ -26,6 +27,7 @@ export interface TerminalBridge {
   resize(id: string, cols: number, rows: number): Promise<void>;
   killSession(id: string): Promise<void>;
   executeHeadless(command: string, timeoutMs?: number): Promise<CommandResult>;
+  extractRootfs(archivePath: string, destPath: string): Promise<ExtractRootfsResult>;
 }
 
 export class TerminalBridgeError extends Error {
@@ -36,7 +38,8 @@ export class TerminalBridgeError extends Error {
     | "write-failed"
     | "resize-failed"
     | "kill-failed"
-    | "exec-failed";
+    | "exec-failed"
+    | "extract-failed";
   constructor(
     code: TerminalBridgeError["code"],
     message: string,
@@ -149,6 +152,24 @@ class TerminalBridgeImpl implements TerminalBridge {
     } catch (error) {
       if (error instanceof TerminalBridgeError) throw error;
       throw new TerminalBridgeError("exec-failed", "Headless command execution failed.", { cause: error });
+    }
+  }
+
+  async extractRootfs(archivePath: string, destPath: string): Promise<ExtractRootfsResult> {
+    if (!archivePath || !destPath) {
+      throw new TerminalBridgeError("invalid-args", "extractRootfs requires an archive path and destination.");
+    }
+    try {
+      const result = await this.ensureAvailable().extractRootfs(archivePath, destPath);
+      return {
+        extractedFiles: Number(result.extractedFiles ?? 0),
+        extractedDirs: Number(result.extractedDirs ?? 0),
+        extractedLinks: Number(result.extractedLinks ?? 0),
+        skippedEntries: Number(result.skippedEntries ?? 0),
+      };
+    } catch (error) {
+      if (error instanceof TerminalBridgeError) throw error;
+      throw new TerminalBridgeError("extract-failed", "Rootfs extraction failed.", { cause: error });
     }
   }
 }

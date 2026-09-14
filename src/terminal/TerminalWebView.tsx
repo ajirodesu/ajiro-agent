@@ -78,6 +78,12 @@ function buildDocument(params: BootstrapParams): string {
   #terminal.blurred .xterm-cursor-layer { opacity: 0.55; }
   #terminal.hide-scrollbar .xterm-viewport::-webkit-scrollbar { display: none; }
   #terminal.hide-scrollbar .xterm-viewport { scrollbar-width: none; }
+  .xterm-viewport::-webkit-scrollbar { width: 8px; height: 8px; }
+  .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+  .xterm-viewport::-webkit-scrollbar-thumb {
+    background: var(--sb-thumb, #888888);
+    border-radius: 4px;
+  }
   .xterm { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
   .xterm-screen { touch-action: pan-x pan-y; }
 </style>
@@ -106,6 +112,14 @@ function buildDocument(params: BootstrapParams): string {
 
   var el = document.getElementById("terminal");
   if (!SHOW_SCROLLBAR) el.classList.add("hide-scrollbar");
+  function applyChromeTheme(t) {
+    // Scrollbar thumb follows the selection color so scroll indicators stay
+    // inside the active application theme (live-updated, no reload).
+    try {
+      el.style.setProperty("--sb-thumb", t.selectionBackground || t.foreground);
+    } catch (e) {}
+  }
+  applyChromeTheme(INITIAL.theme);
 
   var term = new window.Terminal({
     fontSize: INITIAL.fontSize,
@@ -186,6 +200,7 @@ function buildDocument(params: BootstrapParams): string {
       term.clear();
     } else if (msg.type === "theme" && msg.theme) {
       try { term.options.theme = msg.theme; CURRENT_THEME = msg.theme; } catch (e) {}
+      applyChromeTheme(msg.theme);
     } else if (msg.type === "find") {
       if (!search || typeof msg.query !== "string" || !msg.query) {
         try { if (search) search.clearDecorations(); } catch (e) {}

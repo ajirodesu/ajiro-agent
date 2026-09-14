@@ -20,6 +20,7 @@ import type {
   RootfsStatus,
 } from "@/runtime/runtimeTypes";
 import { LinuxRuntimeError } from "@/runtime/runtimeTypes";
+import { archiveFormatLabel, detectArchiveFormat } from "@/runtime/rootfsArchive";
 
 export const ROOTFS_DIR_NAME = "rootfs";
 export const ROOTFS_INCOMPLETE_MARKER = ".incomplete";
@@ -42,8 +43,14 @@ const REQUIRED_PATHS = [
 export type RootfsProgressListener = (progress: RootfsInitializationProgress) => void;
 
 export interface RootfsDownloadConfig {
-  /** Optional remote URL for the `.tar.xz` rootfs archive. */
+  /** Optional remote URL for the rootfs archive (downloaded to cache). */
   url?: string;
+  /**
+   * Optional on-device archive URI (`file://…`) — e.g. a bundled
+   * `assets/rootfs/` archive resolved via `expo-asset`, or a user-provided
+   * file. Takes precedence over `url`; no download happens.
+   */
+  archiveUri?: string;
   /** Expected size in bytes (progress display only). */
   totalBytes?: number;
 }
@@ -158,27 +165,46 @@ export class RootfsManager {
       });
     }
 
-    if (!config.url) {
+    if (!config.url && !config.archiveUri) {
       this.emit({ phase: "error", progress: 0, message: "Linux userspace not installed." });
       throw new LinuxRuntimeError(
         "rootfs-missing",
         "On-device Linux is not installed. Provide a Debian Bookworm ARM64 rootfs " +
-          "(.tar.xz) via RootfsManager.initialize({ url }) or bundle it under assets/rootfs/.",
+          "archive (.tar.xz) via RootfsManager.initialize({ url }) or " +
+          "RootfsManager.initialize({ archiveUri }) with a bundled file under assets/rootfs/.",
       );
     }
 
-    await this.download(config.url, config.totalBytes);
-    await this.extract(rootfsPath);
+    let archivePath: string;
+    if (config.archiveUri) {
+      archivePath = uriToFsPath(config.archiveUri);
+    } else {
+      archivePath = await this.download(config.url as string, config.totalBytes);
+    }
+    const format = detectArchiveFormat(archivePath);
+    if (!format) {
+      this.emit({ phase: "error", progress: 0, message: "Unsupported rootfs archive format." });
+      throw new LinuxRuntimeError(
+        "rootfs-invalid",
+        `Unsupported rootfs archive format (need .tar.xz, .tar.gz/.tgz, or .tar): ${archivePath}`,
+      );
+    }
+    await this.extract(rootfsPath, archivePath, archiveFormatLabel(format));
     await this.finalize(rootfsPath);
   }
 
-  private async download(url: string, totalBytes?: number): Promise<void> {
+  /**
+   * Download the archive to app-private cache. Returns the filesystem path
+   * (not a URI) for the native extractor.
+   */
+  private async download(url: string, totalBytes?: number): Promise<string> {
     this.emit({ phase: "downloading", progress: 0, totalBytes, message: "Downloading Linux userspace…" });
     // expo-file-system (SDK 57 class API): DownloadTask streams to
     // app-private cache with progress events.
     const { DownloadTask } = await import("expo-file-system");
+    const fileName = fileNameFromUrl(url);
     const dest = new File(
-      joinPath(Paths.cache.uri, "debian-rootfs.tar.xz"),
+      joinPath(Paths.cache.uri, fileName),
     );
     if (dest.exists) dest.delete();
     const task = new DownloadTask(url, dest);
@@ -198,24 +224,45 @@ export class RootfsManager {
       subscription.remove();
     }
     this.emit({ phase: "downloading", progress: 1, totalBytes, message: "Download complete." });
+    return uriToFsPath(dest.uri);
   }
 
-  private async extract(rootfsPath: string): Promise<void> {
-    this.emit({ phase: "extracting", progress: 0, message: "Extracting Linux userspace…" });
-    // Extraction runs in the native module (tar.xz needs native xz); the
-    // bridge reports typed errors when the module is unavailable.
+  private async extract(rootfsPath: string, archivePath: string, formatLabel: string): Promise<void> {
+    this.emit({ phase: "extracting", progress: 0, message: `Extracting Linux userspace (${formatLabel})…` });
+    // Extraction runs in the native module (commons-compress + Tukaani XZ);
+    // the bridge reports typed errors when the module is unavailable.
     const { terminalBridge } = await import("@/native/TerminalBridge");
+    const { subscribeToRootfsProgress } = await import("@/native/terminalEvents");
     if (!terminalBridge.isAvailable) {
       throw new LinuxRuntimeError(
         "rootfs-missing",
         "Cannot extract the Linux rootfs without the native TerminalPty module.",
       );
     }
-    // The native side exposes extraction through a headless-capable shell
-    // once bootstrapped; before that, extraction is reported honestly as
-    // pending native support. Progress completes when finalize() validates.
-    void rootfsPath;
-    this.emit({ phase: "extracting", progress: 1, message: "Extraction handed to native layer." });
+    const unsubscribe = subscribeToRootfsProgress((event) => {
+      const { bytesTransferred, totalBytes } = event;
+      this.emit({
+        phase: "extracting",
+        progress: totalBytes > 0 ? Math.min(1, bytesTransferred / totalBytes) : 0,
+        bytesTransferred,
+        totalBytes: totalBytes > 0 ? totalBytes : undefined,
+        message: "Extracting Linux userspace…",
+      });
+    });
+    try {
+      const result = await terminalBridge.extractRootfs(archivePath, rootfsPath);
+      this.emit({
+        phase: "extracting",
+        progress: 1,
+        message:
+          `Extracted ${result.extractedFiles} files, ${result.extractedDirs} directories, ` +
+          `${result.extractedLinks} links` +
+          (result.skippedEntries > 0 ? ` (${result.skippedEntries} special entries skipped)` : "") +
+          ".",
+      });
+    } finally {
+      unsubscribe();
+    }
   }
 
   private async finalize(rootfsPath: string): Promise<void> {
@@ -263,6 +310,27 @@ export class RootfsManager {
   private async writeText(file: File, text: string): Promise<void> {
     file.write(text);
   }
+}
+
+/** Native extractors take filesystem paths, not `file://` URIs. */
+function uriToFsPath(uri: string): string {
+  const trimmed = uri.trim();
+  if (trimmed.startsWith("file://")) {
+    try {
+      return decodeURIComponent(trimmed.slice("file://".length));
+    } catch {
+      return trimmed.slice("file://".length);
+    }
+  }
+  return trimmed;
+}
+
+/** Keep the archive's own extension so format detection works after download. */
+function fileNameFromUrl(url: string): string {
+  const clean = url.split("?")[0]?.split("#")[0] ?? "";
+  const last = clean.split("/").pop()?.trim() ?? "";
+  if (/(\\.tar\\.xz|\\.txz|\\.tar\\.gz|\\.tgz|\\.tar)$/i.test(last)) return last;
+  return "debian-rootfs.tar.xz";
 }
 
 /** Application-wide singleton. */
