@@ -50,6 +50,7 @@ import {
   createTransferTools,
 } from "@/modules/tools/built-in/external-folder/transfer";
 import { createCodingTools } from "@/modules/tools/coding/coding-tools";
+import { createShellTool } from "@/modules/tools/coding/shell-tool";
 import { buildCodingSystemPrompt } from "@/modules/tools/coding/coding-prompt";
 import { createCheckpointService } from "@/core/services/coding/checkpoint-service";
 import {
@@ -992,6 +993,16 @@ export async function executeClaimedAgentRun(
             });
 
             Object.assign(tools, codingTools.tools);
+
+            // On-device Linux shell (headless, via LinuxAgentRuntime). Shares
+            // the exec master switch; fails closed when not provisioned.
+            if (codingSettings.execEnabled) {
+              const shellTools = createShellTool({
+                onRecord: handleToolExecutionRecord,
+                projectSession: externalFolderSession as ExternalFolderSession,
+              });
+              Object.assign(tools, shellTools.tools);
+            }
 
             Object.assign(
               tools,

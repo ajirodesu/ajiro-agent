@@ -13,7 +13,7 @@ Keep / Adapt / Reimplement verdicts. Confidence: H(igh)/M(edium)/L(ow).
 | Domain skills/connectors | knowledge-work/financial/tag plugins | skills/lifecycle + engine | Include relevant only | Adapt | mixed | L |
 | Agents Build/Plan/General/Explore | OpenCode | agents/modes + registry | Native definitions | Adapt | MIT | M |
 | Sessions/SQLite persistence | OpenCode | core/db (17 tables, migrations) | expo-sqlite, WAL | Keep | MIT | H |
-| Terminal workflow/tabs/history | OpenCode | modules/terminal (self-contained) | RN+TS only | Reimplement | MIT | H |
+| Terminal workflow/tabs/history | OpenCode + Acode terminal UI (MIT) | src/terminal (LinuxTerminal/WebView) + src/runtime (LinuxAgentRuntime) + TerminalPty native module | xterm (vendored) + PTY/PRoot/Debian | Replaced | MIT | H |
 | Permissions allow/ask/deny+session | OpenCode (verified dialog keys a/A/d) | permissions/engine | Backend, same UI | Adapt | MIT | H |
 | MCP tools/resources/prompts/OAuth | OpenCode + existing Ajiro MCP | modules/mcp (PROTECTED, preserved) | On-device servers kept | Keep/Extend | MIT | H |
 | Provider abstraction/models | OpenCode | modules/runtime/model-runtime + universal providers | Network APIs only | Keep | MIT | H |

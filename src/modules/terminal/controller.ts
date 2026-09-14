@@ -1,4 +1,8 @@
 /**
+ * @deprecated REPLACED by `LinuxAgentRuntime` session management (native PTY
+ * sessions keyed by id, multi-session by design). No production route uses
+ * this controller anymore. Kept for unit-test compatibility.
+ *
  * Terminal controller: owns named sessions (tabs). Sessions are created
  * on demand and destroyed explicitly — nothing initializes at app launch.
  */

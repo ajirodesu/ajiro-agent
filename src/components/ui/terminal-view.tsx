@@ -1,4 +1,13 @@
 /**
+ * @deprecated REPLACED by the canonical terminal stack:
+ * `src/terminal/LinuxTerminal.tsx` + `src/terminal/TerminalWebView.tsx`
+ * (local xterm) over `LinuxAgentRuntime` → native PTY → PRoot → Debian.
+ *
+ * This React-Native-Text renderer + the allow-listed `InProcessAdapter` are
+ * no longer rendered by any production route (see `src/app/(root)/terminal.tsx`).
+ * Kept on disk only so existing unit tests and type imports keep working;
+ * do not use in new code.
+ *
  * Self-contained terminal view: React Native + TypeScript only.
  *
  * Renders whole lines as <Text> (runs grouped, never one component per

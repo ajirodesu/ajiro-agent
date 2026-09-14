@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Foreground-service + wake-lock permissions are declared on the app
+       manifest (app.json); the service itself is declared here so the module
+       stays self-contained. -->
+  <application>
+    <service
+      android:name="expo.modules.terminalpty.TerminalPtyService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync" />
+  </application>
+</manifest>

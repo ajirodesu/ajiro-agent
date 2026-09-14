@@ -52,6 +52,8 @@ export type BrokerRequest = {
   projectSession?: ExternalFolderSession;
   /** Extra input for exec.check (command id + args). */
   execInput?: { args?: Record<string, unknown>; commandId: string; path?: string };
+  /** Extra input for exec.shell / package.install / build (bash command). */
+  shellInput?: { command: string; timeoutMs?: number };
   signal?: AbortSignal;
   /** Optional pipeline trace sink (permission/execution stages). */
   onStage?: (event: PipelineEvent) => void;
@@ -138,6 +140,64 @@ export async function executePrivileged(
   }
 
   const permission = decision;
+
+  // Canonical on-device Linux path: when the LinuxAgentRuntime is started
+  // (rootfs validated, PTY available), shell-class operations execute there.
+  // Otherwise fall through to the capability matrix, which reports the honest
+  // "not provisioned" limitation (existing behavior, pinned by tests).
+  // The import is isolated: environments without the native/RN layer (unit
+  // tests) fall through to the limitation path instead of crashing.
+  try {
+    const { linuxAgentRuntime } = await import("@/runtime/LinuxAgentRuntime");
+    if (
+      linuxAgentRuntime.isStarted() &&
+      (request.operation === "exec.shell" ||
+        request.operation === "package.install" ||
+        request.operation === "build")
+    ) {
+      const command = request.shellInput?.command?.trim() ?? "";
+      if (!command) {
+        return {
+          ok: false,
+          output: null,
+          error: `Operation "${request.operation}" requires a shell command.`,
+          runtime: "linux",
+          receipt: receipt(request, "linux", permission, startedAt, false),
+        };
+      }
+      try {
+        const stdout = await linuxAgentRuntime.runToolCommand(
+          command,
+          request.shellInput?.timeoutMs,
+        );
+        request.onStage?.({
+          stage: "executed",
+          at: new Date().toISOString(),
+          detail: `${request.action.id}:linux`,
+        });
+        return {
+          ok: true,
+          output: stdout,
+          error: null,
+          runtime: "linux",
+          receipt: receipt(request, "linux", permission, startedAt, true),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          ok: false,
+          output: null,
+          error: message,
+          runtime: "linux",
+          receipt: receipt(request, "linux", permission, startedAt, false),
+        };
+      }
+    }
+  } catch {
+    // The runtime module (native/RN layer) is unavailable in this
+    // environment — fall through to the limitation path below.
+  }
+
   const selection = selectRuntimeFor(request.operation);
 
   if (selection.backend === null) {

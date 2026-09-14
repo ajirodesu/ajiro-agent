@@ -38,4 +38,7 @@ Depth note: sandbox-runtime README verified firsthand during this build. Remaini
 
 ## Platform (ANDROID / EXPO)
 - Android: app-private storage, Storage Access Framework, runtime permissions, package installer, notifications, IME/hardware keyboard.
-- React Native + Expo + TypeScript: the only terminal/UI stack (no WebView, no Kotlin/Java/C++/NDK/JNI for the terminal).
+- React Native + Expo + TypeScript for app/UI code; the canonical terminal
+  stack additionally uses react-native-webview (local vendored xterm) and an
+  Android PTY layer (Kotlin + JNI + C++/CMake, openpty/forkpty) under PRoot +
+  Debian — see 06-agents-terminal-runtime.md.

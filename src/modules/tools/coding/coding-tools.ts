@@ -34,7 +34,7 @@ export function createCodingTools(params: CodingToolFactoryParams) {
     ).join("\n");
 
     tools.exec = tool({
-      description: `Run an allow-listed, in-process check against the project. There is no shell on Android; pick one of the fixed commands:\n${descriptionList}\nUse path to scope the check to a subfolder (empty = project root).`,
+      description: `Run an allow-listed, in-process check against the project (fast, always available). Fixed commands:\n${descriptionList}\nUse path to scope the check to a subfolder (empty = project root). For arbitrary bash (builds, tests, installs), use the shell tool when the Linux runtime is provisioned.`,
       inputSchema: z.object({
         args: z.record(z.string(), z.unknown()).optional(),
         command: commandEnum.describe("One of the fixed allow-listed commands"),

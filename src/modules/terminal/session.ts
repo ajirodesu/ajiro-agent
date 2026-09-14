@@ -1,4 +1,9 @@
 /**
+ * @deprecated INTERACTIVE USE REPLACED by `src/runtime/TerminalSession.ts`
+ * (`NativeTerminalSession` over the native PTY). This in-process parser
+ * session is no longer attached to any production UI. Kept for existing
+ * unit tests; do not use in new code.
+ *
  * Terminal session: owns one parser + buffer pair, emits typed events,
  * tracks title, and keeps a bounded command history. Rendering pulls
  * snapshots (lines + version); input is encoded to process bytes here so

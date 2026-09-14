@@ -20,7 +20,7 @@ export function buildCodingSystemPrompt(input: {
 
   if (input.execEnabled) {
     lines.push(
-      "The exec tool runs fixed, allow-listed in-process checks (no shell exists on Android). Use it to verify assumptions before claiming a change works.",
+      "The exec tool runs fixed, allow-listed in-process checks. The shell tool runs arbitrary bash in the on-device Debian userspace when the Linux runtime is provisioned — prefer shell for real builds, tests, git operations, and package installs; fall back to exec checks when Linux is unavailable.",
     );
   }
 

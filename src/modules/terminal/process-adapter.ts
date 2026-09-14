@@ -1,4 +1,13 @@
 /**
+ * @deprecated INTERACTIVE USE REPLACED by the canonical stack:
+ * `LinuxAgentRuntime.attachTerminal()` → native PTY → PRoot → Debian.
+ * The terminal screen no longer uses `InProcessAdapter`.
+ *
+ * The allow-listed exec checks (`run <command-id>`) remain available to the
+ * agent through `runExecCommand` / `execution-broker` (operation
+ * `exec.check`); only the fake interactive shell is retired. Kept so
+ * existing unit tests keep passing; do not wire into new UI.
+ *
  * Runtime-neutral process adapter + the in-process implementation.
  *
  * Every command passes Permission Engine -> Execution Broker ->

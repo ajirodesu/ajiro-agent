@@ -1,3 +1,10 @@
+/**
+ * @deprecated TERMINAL COLOR INTEGRATION REPLACED by
+ * `src/terminal/terminalThemeAdapter.ts`, which derives the terminal palette
+ * from the active Ajiro `AppTheme` (locked-accent rules included).
+ * Kept for existing unit-test compatibility; production terminal rendering
+ * must not use `resolveTerminalTheme`.
+ */
 /** Terminal themes: dark, light, system mapping, custom. */
 import { SYSTEM16 } from "@/modules/terminal/attributes";
 import type { TerminalTheme } from "@/modules/terminal/types";
