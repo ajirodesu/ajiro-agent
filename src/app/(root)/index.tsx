@@ -7,22 +7,24 @@ import { useRouter, useFocusEffect } from "expo-router";
 import {
   ArrowDown,
   Bookmark,
+  Box,
   Brain,
   Check,
   ChevronLeft,
+  ChevronRight,
+  Clock,
   FolderOpen,
+  MessageCircle,
   Paperclip,
   Server,
+  Sparkle,
+  Sun,
   Trash2,
   Upload,
   X,
 } from "lucide-react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import { Path, Svg } from "react-native-svg";
+import Animated from "react-native-reanimated";
 import {
   memo,
   useCallback,
@@ -40,6 +42,7 @@ import {
   Pressable,
   Text,
   TextInput,
+  ScrollView,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -82,7 +85,7 @@ import {
   useMessageScrollerActions,
 } from "@/components/ui/message-scroller";
 import { Separator } from "@/components/ui/separator";
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { useSidebar } from "@/components/ui/sidebar";
 import {
   ContextRingButton,
   ContextUsageDrawer,
@@ -216,12 +219,91 @@ function matchesMenuQuery(
   return haystack.includes(query);
 }
 
-const STARTER_PROMPTS = [
-  "Design a landing page",
-  "Draft a professional email",
-  "Brainstorm ideas for a side project",
-  "Remember that I prefer concise answers",
+const EMPTY_STATE_CARDS: {
+  title: string;
+  desc: string;
+  icon: "chevron" | "clock" | "sun" | "box";
+  prompt: string;
+  action: "send" | "sidebar";
+}[] = [
+  {
+    title: "Start a task",
+    desc: "Give it a goal and let it plan and act",
+    icon: "chevron",
+    prompt: "Start a task",
+    action: "send",
+  },
+  {
+    title: "Resume a session",
+    desc: "Pick up where a past chat left off",
+    icon: "clock",
+    prompt: "Resume a session",
+    action: "sidebar",
+  },
+  {
+    title: "Ask anything",
+    desc: "Research, write, analyze, or explain",
+    icon: "sun",
+    prompt: "Ask anything",
+    action: "send",
+  },
+  {
+    title: "Automate a workflow",
+    desc: "Connect tools and let it run the steps",
+    icon: "box",
+    prompt: "Automate a workflow",
+    action: "send",
+  },
 ];
+
+function SuggestionCard({
+  card,
+  onPress,
+}: {
+  card: (typeof EMPTY_STATE_CARDS)[number];
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      className="flex-col"
+      style={({ pressed }) => ({
+        width: "48%",
+        flexGrow: 1,
+        gap: 4,
+        padding: 14,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "#2A2A2A",
+        backgroundColor: pressed ? "#2A2A2A" : "#212121",
+      })}
+    >
+      {card.icon === "chevron" ? (
+        <ChevronRight color="#8E8E93" size={17} strokeWidth={1.6} />
+      ) : card.icon === "clock" ? (
+        <Clock color="#8E8E93" size={17} strokeWidth={1.6} />
+      ) : card.icon === "sun" ? (
+        <Sun color="#8E8E93" size={17} strokeWidth={1.6} />
+      ) : (
+        <Box color="#8E8E93" size={17} strokeWidth={1.6} />
+      )}
+      <Text
+        className="font-sans"
+        style={{ fontSize: 13, fontWeight: "500", color: "#ECECEC" }}
+      >
+        {card.title}
+      </Text>
+      <Text
+        numberOfLines={2}
+        className="font-sans"
+        style={{ fontSize: 12, color: "#8E8E93", lineHeight: 16 }}
+      >
+        {card.desc}
+      </Text>
+    </Pressable>
+  );
+}
 
 const EMPTY_WORKSPACE_FILES: WorkspaceFile[] = [];
 
@@ -245,15 +327,11 @@ function logComposerDebug(label: string, data: Record<string, unknown>) {
 }
 
 /**
- * Composer width behavior (measured): keyboard closed -> 36px screen-edge
- * margins (309 wide, centered); keyboard open -> 12px margins (~356 wide).
- * The capsule itself (heights, radius, controls) lives in
- * components/ui/composer-capsule.tsx, reverse-engineered from the 13-stage
- * reference (see modules/chat/composer-stages.ts).
+ * Composer width behavior (chat-ui.html proportional spec + reference photo):
+ * horizontal margin = 9.45% of the screen width on each side, keyboard open
+ * or closed. The capsule's own viewport cap lives in ComposerCapsule.
  */
-const CHAT_COLUMN_PADDING = 16;
-const COMPOSER_MARGIN_KEYBOARD_HIDDEN = 36 - CHAT_COLUMN_PADDING; // 20
-const COMPOSER_MARGIN_KEYBOARD_VISIBLE = 12 - CHAT_COLUMN_PADDING; // -4
+const COMPOSER_MARGIN_RATIO = 0.0945;
 
 function useSyncedComposerSelection() {
   const [selection, setSelection] = useState({ end: 0, start: 0 });
@@ -591,11 +669,63 @@ export default function Screen() {
           contentClassName="flex-1 gap-sp-4 !px-4"
           includeBottomTabInset={false}
         >
-          <View className="h-14 flex-row items-center justify-between gap-sp-3">
-            <SidebarTrigger
+          <View className="flex-row items-center" style={{ gap: 12, height: 64 }}>
+            <Pressable
               accessibilityLabel="Open sidebar"
-              className="h-10 w-10"
-            />
+              accessibilityRole="button"
+              onPress={() => {
+                setSidebarOpen(true);
+              }}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: 48,
+                height: 48,
+                backgroundColor: "#212121",
+                borderWidth: 1,
+                borderColor: "#424242",
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Svg
+                width={24}
+                height={24}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#FFFFFF"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <Path d="M3 8H21" />
+                <Path d="M3 16H16" />
+              </Svg>
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Get Plus"
+              accessibilityRole="button"
+              onPress={() => {
+                router.push("/settings/providers");
+              }}
+              className="flex-row items-center rounded-full"
+              style={({ pressed }) => ({
+                height: 46,
+                paddingHorizontal: 22,
+                gap: 8,
+                backgroundColor: "#212121",
+                borderWidth: 1,
+                borderColor: "#424242",
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Sparkle color="#2D9CDB" size={20} strokeWidth={2} />
+              <Text
+                className="font-sans"
+                style={{ fontSize: 17, fontWeight: "600", color: "#2D9CDB" }}
+              >
+                Get Plus
+              </Text>
+            </Pressable>
+            <View className="flex-1" />
             <ContextRingButton
               onPress={() => {
                 setSidebarOpen(false);
@@ -603,6 +733,24 @@ export default function Screen() {
               }}
               percent={contextUsage.percent}
             />
+            <Pressable
+              accessibilityLabel="New chat"
+              accessibilityRole="button"
+              onPress={() => {
+                createConversation().catch(console.error);
+              }}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: 48,
+                height: 48,
+                backgroundColor: "#212121",
+                borderWidth: 1,
+                borderColor: "#424242",
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <MessageCircle color="#FFFFFF" size={24} strokeWidth={2} />
+            </Pressable>
           </View>
 
           <MessageScrollerProvider
@@ -621,30 +769,81 @@ export default function Screen() {
                   </Text>
                 </View>
               ) : visibleMessages.length === 0 && currentModel ? (
-                <View className="flex-1 items-center justify-center gap-sp-6 px-sp-4">
-                  <Text className="text-center font-sans text-[28px] font-semibold leading-tight text-foreground dark:text-foreground-dark">
-                    What can I help with?
-                  </Text>
-                  <View className="flex-row flex-wrap items-center justify-center gap-sp-2">
-                    {STARTER_PROMPTS.map((prompt) => (
-                      <Pressable
-                        key={prompt}
-                        accessibilityRole="button"
-                        className="rounded-full border border-border px-sp-4 py-sp-2 dark:border-border-dark"
-                        onPress={() =>
-                          sendMessage({ content: prompt }).catch(console.error)
-                        }
-                        style={({ pressed }) => ({
-                          opacity: pressed ? 0.8 : 1,
-                        })}
-                      >
-                        <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                          {prompt}
-                        </Text>
-                      </Pressable>
+                <ScrollView
+                  className="flex-1"
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{
+                    flexGrow: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 22,
+                    paddingHorizontal: 30,
+                  }}
+                >
+                  <Image
+                    source={require("../../../assets/images/icon.png")}
+                    contentFit="contain"
+                    style={{
+                      width: 62,
+                      height: 62,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: "rgba(255,255,255,0.08)",
+                      backgroundColor: "#212121",
+                    }}
+                  />
+                  <View className="items-center" style={{ gap: 6 }}>
+                    <Text
+                      className="font-sans"
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "500",
+                        color: "#8E8E93",
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      Ajiro Agent
+                    </Text>
+                    <Text
+                      className="text-center font-sans"
+                      style={{
+                        fontSize: 25,
+                        fontWeight: "500",
+                        color: "#ECECEC",
+                        letterSpacing: -0.25,
+                        lineHeight: 33,
+                      }}
+                    >
+                      What can I help with today?
+                    </Text>
+                    <Text
+                      className="text-center font-sans"
+                      style={{ fontSize: 14, color: "#8E8E93", lineHeight: 20 }}
+                    >
+                      Ask a question, plan something, or hand off a task.
+                    </Text>
+                  </View>
+                  <View
+                    className="w-full flex-row flex-wrap"
+                    style={{ gap: 10, marginTop: 3 }}
+                  >
+                    {EMPTY_STATE_CARDS.map((card) => (
+                      <SuggestionCard
+                        key={card.title}
+                        card={card}
+                        onPress={() => {
+                          if (card.action === "sidebar") {
+                            setSidebarOpen(true);
+                            return;
+                          }
+                          sendMessage({ content: card.prompt }).catch(
+                            console.error,
+                          );
+                        }}
+                      />
                     ))}
                   </View>
-                </View>
+                </ScrollView>
               ) : (
                 <>
                   <MessageScrollerList
@@ -1018,7 +1217,7 @@ const ChatInput = memo(function ChatInput({
   onOpenAgentSettings: () => void;
 }) {
   const theme = useTheme();
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const composerSelection = useSyncedComposerSelection();
   const ideWorkspace = useIdeWorkspace();
   const { scrollToEnd } = useMessageScrollerActions();
@@ -1075,10 +1274,9 @@ const ChatInput = memo(function ChatInput({
     setPrompt("");
   }, [editDraft, editNonce]);
 
-  // Keyboard height drives the width margins (36px closed / 12px open) and
-  // the capsule's own viewport cap (inside ComposerCapsule). Cursor and
-  // draft live in React state (prompt + selection sync), so resizing never
-  // disturbs them.
+  // Keyboard height drives the capsule's own viewport cap (inside
+  // ComposerCapsule). Cursor and draft live in React state (prompt +
+  // selection sync), so resizing never disturbs them.
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
       "keyboardDidShow",
@@ -1096,21 +1294,9 @@ const ChatInput = memo(function ChatInput({
     };
   }, []);
 
-  const keyboardVisible = keyboardHeight > 0;
-  const composerMargin = useSharedValue(COMPOSER_MARGIN_KEYBOARD_HIDDEN);
-
-  useEffect(() => {
-    composerMargin.value = withTiming(
-      keyboardVisible
-        ? COMPOSER_MARGIN_KEYBOARD_VISIBLE
-        : COMPOSER_MARGIN_KEYBOARD_HIDDEN,
-      { duration: 130, easing: Easing.inOut(Easing.quad) },
-    );
-  }, [composerMargin, keyboardVisible]);
-
-  const composerWidthStyle = useAnimatedStyle(() => ({
-    marginHorizontal: composerMargin.value,
-  }));
+  const composerWidthStyle = {
+    marginHorizontal: screenWidth * COMPOSER_MARGIN_RATIO,
+  };
 
   const composerTrigger = useMemo(() => getComposerTrigger(prompt), [prompt]);
   const modelGroups = useMemo(() => {

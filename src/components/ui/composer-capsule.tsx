@@ -1,6 +1,11 @@
 /**
- * ChatGPT-style message capsule, reverse-engineered from the 13 reference
- * screenshots (see modules/chat/composer-stages.ts for the measured spec).
+ * ChatGPT-style message capsule, converted from chat-ui.html (1260x2800
+ * proportional spec) and calibrated to the reference photo.
+ *
+ * Horizontal metrics scale with screen width (canvas 1260 units):
+ * plus/send circles 112, plus glyph 93, mic glyph 84, right gap 83,
+ * capsule padding 26 left / 34 right, middle padding 24. Vertical metrics
+ * stay at the validated 52 / 22 system (single-row pill, 11-line cap).
  *
  * ONE layout system:
  * - single row (+, text, mic, send) while text is short and narrow;
@@ -12,9 +17,8 @@
  * - corner radius interpolates pill (26) -> rounded rect (28) with growth.
  *
  * Real editable TextInput throughout (cursor, selection, IME, paste).
- * Colors/typography are reference-sampled; see COMPOSER_COLORS.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import {
   Modal,
@@ -22,18 +26,18 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import Animated, {
   Easing,
   Extrapolation,
   interpolate,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { ArrowUp, Maximize2, Mic, Plus, StopCircle } from "lucide-react-native";
+import { Maximize2, Mic, Plus, StopCircle } from "lucide-react-native";
+import { Path, Svg } from "react-native-svg";
 
 import { TextInputWrapper, type PasteEventPayload } from "expo-paste-input";
 
@@ -65,11 +69,38 @@ export type ComposerCapsuleProps = {
   keyboardHeight: number;
 };
 
-const CONTROL_SIZE = 40;
-const GLYPH_PLUS = 24;
-const GLYPH_MIC = 22;
-const GLYPH_SEND = 22;
-const GLYPH_EXPAND = 20;
+/** Canvas unit: chat-ui.html is authored on a 1260-wide canvas. */
+const CANVAS_WIDTH = 1260;
+
+/**
+ * Tabler arrow-up, exact geometry from the reference (shaft M12 5l0 14,
+ * wings M18 11l-6-6 / M6 11l6-6), stroke 2 round caps/joins.
+ */
+export function TablerArrowUp({
+  color,
+  size,
+}: {
+  color: string;
+  size: number;
+}) {
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <Path d="M0 0h24v24H0z" stroke="none" fill="none" />
+      <Path d="M12 5l0 14" />
+      <Path d="M18 11l-6 -6" />
+      <Path d="M6 11l6 -6" />
+    </Svg>
+  );
+}
 
 function IconButton({
   accessibilityLabel,
@@ -77,6 +108,7 @@ function IconButton({
   onPress,
   background,
   flashOnPress,
+  size,
 }: {
   accessibilityLabel: string;
   children: ReactNode;
@@ -84,9 +116,11 @@ function IconButton({
   background?: string;
   /**
    * When true the container stays invisible until touched (pressed state
-   * flashes a subtle container). Used for the + control.
+   * flashes the container). Used for the + control, which shares the send
+   * button's circle container.
    */
   flashOnPress?: boolean;
+  size: number;
 }) {
   return (
     <Pressable
@@ -98,10 +132,13 @@ function IconButton({
       style={({ pressed }) => ({
         backgroundColor:
           background ??
-          (flashOnPress && pressed ? "rgba(255, 255, 255, 0.14)" : "transparent"),
-        height: CONTROL_SIZE,
-        opacity: !background && !flashOnPress && pressed ? 0.7 : 1,
-        width: CONTROL_SIZE,
+          (flashOnPress && pressed
+            ? COMPOSER_COLORS.plusActive
+            : "transparent"),
+        height: size,
+        opacity:
+          !background && !flashOnPress && pressed ? 0.7 : 1,
+        width: size,
       })}
     >
       {children}
@@ -124,6 +161,18 @@ export function ComposerCapsule({
   screenHeight,
   keyboardHeight,
 }: ComposerCapsuleProps) {
+  const { width: screenWidth } = useWindowDimensions();
+  const scale = screenWidth / CANVAS_WIDTH;
+  const px = (canvasPx: number) => Math.max(1, Math.round(canvasPx * scale));
+  const controlSize = px(112);
+  const glyphPlus = px(93);
+  const glyphMic = px(84);
+  const glyphSend = 24;
+  const rightGap = px(83);
+  const padLeft = px(26);
+  const padRight = px(34);
+  const padMiddle = px(24);
+
   const [contentWidth, setContentWidth] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
   const [rowWidth, setRowWidth] = useState(0);
@@ -139,9 +188,12 @@ export function ComposerCapsule({
 
   const hasText = value.trim().length > 0;
   const maxTextHeight = composerTextCap(screenHeight, keyboardHeight);
-  // Single-row controls occupy +/mic/send plus gaps (~152dp); the text
-  // budget is whatever row width remains for the input.
-  const textBudget = Math.max(0, rowWidth - 152);
+  // Single-row controls occupy +/mic/send plus gaps; the text budget is
+  // whatever row width remains for the input.
+  const textBudget = Math.max(
+    0,
+    rowWidth - controlSize * 3 - rightGap - padLeft - padRight,
+  );
   const layout = composerLayoutFor(
     contentHeight,
     contentWidth,
@@ -170,21 +222,6 @@ export function ComposerCapsule({
     ),
   }));
 
-  const expandFling = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetY([28, 400])
-        .failOffsetX([-24, 24])
-        .onEnd((event) => {
-          if (event.translationY > 64 || event.velocityY > 650) {
-            runOnJS(() => {
-              setExpandOpen(false);
-            })();
-          }
-        }),
-    [],
-  );
-
   const handleMic = () => {
     // No on-device speech engine is bundled: say so instead of faking it.
     setMicNotice(true);
@@ -193,6 +230,8 @@ export function ComposerCapsule({
       setMicNotice(false);
     }, 2500);
   };
+
+  const sendActive = hasText || loading;
 
   const inputElement = (
     <TextInputWrapper
@@ -236,7 +275,27 @@ export function ComposerCapsule({
     </TextInputWrapper>
   );
 
-  const sendActive = hasText || loading;
+  const plusButton = (
+    <IconButton
+      accessibilityLabel="Attachments and tools"
+      onPress={onPlusPress}
+      flashOnPress
+      size={controlSize}
+    >
+      <Plus color={COMPOSER_COLORS.icon} size={glyphPlus} strokeWidth={2} />
+    </IconButton>
+  );
+
+  const micButton = (
+    <IconButton
+      accessibilityLabel="Voice input"
+      onPress={handleMic}
+      size={controlSize}
+    >
+      <Mic color={COMPOSER_COLORS.icon} size={glyphMic} strokeWidth={2} />
+    </IconButton>
+  );
+
   const sendButton = (
     <Pressable
       accessibilityLabel={loading ? "Stop generating" : "Send message"}
@@ -247,21 +306,37 @@ export function ComposerCapsule({
       onPress={onSendPress}
       className="items-center justify-center rounded-full"
       style={({ pressed }) => ({
-        // Inside the capsule: grey while empty, app accent once active.
+        // Inside the capsule: grey circle + grey arrow while inactive,
+        // accent circle + white arrow once active.
         backgroundColor: sendActive
           ? COMPOSER_COLORS.send
           : COMPOSER_COLORS.sendInactive,
-        height: CONTROL_SIZE,
+        height: controlSize,
         opacity: pressed ? 0.85 : 1,
-        width: CONTROL_SIZE,
+        width: controlSize,
       })}
     >
       {loading ? (
         <StopCircle color="#FFFFFF" size={20} />
       ) : (
-        <ArrowUp color="#FFFFFF" size={GLYPH_SEND} strokeWidth={2.5} />
+        <TablerArrowUp
+          color={sendActive ? "#FFFFFF" : COMPOSER_COLORS.sendArrowInactive}
+          size={glyphSend}
+        />
       )}
     </Pressable>
+  );
+
+  const expandButton = (
+    <IconButton
+      accessibilityLabel="Expand editor"
+      onPress={() => {
+        setExpandOpen(true);
+      }}
+      size={controlSize}
+    >
+      <Maximize2 color={COMPOSER_COLORS.icon} size={px(56)} strokeWidth={2} />
+    </IconButton>
   );
 
   return (
@@ -280,19 +355,23 @@ export function ComposerCapsule({
         ]}
       >
         {layout.singleRow ? (
-          <View className="flex-row items-center px-2 py-1.5">
-            <IconButton
-              accessibilityLabel="Attachments and tools"
-              onPress={onPlusPress}
-              flashOnPress
+          <View
+            className="flex-row items-center"
+            style={{
+              paddingLeft: padLeft,
+              paddingRight: padRight,
+              paddingVertical: 8,
+            }}
+          >
+            {plusButton}
+            <View
+              className="min-w-0 flex-1"
+              style={{ paddingHorizontal: padMiddle }}
             >
-              <Plus color={COMPOSER_COLORS.icon} size={GLYPH_PLUS} strokeWidth={2} />
-            </IconButton>
-            <View className="min-w-0 flex-1 px-2">{inputElement}</View>
-            <IconButton accessibilityLabel="Voice input" onPress={handleMic}>
-              <Mic color={COMPOSER_COLORS.icon} size={GLYPH_MIC} strokeWidth={2} />
-            </IconButton>
-            <View className="w-2" />
+              {inputElement}
+            </View>
+            {micButton}
+            <View style={{ width: rightGap }} />
             {sendButton}
           </View>
         ) : (
@@ -308,33 +387,19 @@ export function ComposerCapsule({
                 {inputElement}
               </Animated.View>
             </View>
-            <View className="flex-row items-center px-2 pb-2">
-              <IconButton
-                accessibilityLabel="Attachments and tools"
-                onPress={onPlusPress}
-                flashOnPress
-              >
-                <Plus color={COMPOSER_COLORS.icon} size={GLYPH_PLUS} strokeWidth={2} />
-              </IconButton>
+            <View
+              className="flex-row items-center"
+              style={{
+                paddingLeft: padLeft,
+                paddingRight: padRight,
+                paddingBottom: 8,
+              }}
+            >
+              {plusButton}
               <View className="flex-1" />
-              {layout.showExpand ? (
-                <IconButton
-                  accessibilityLabel="Expand editor"
-                  onPress={() => {
-                    setExpandOpen(true);
-                  }}
-                >
-                  <Maximize2
-                    color={COMPOSER_COLORS.icon}
-                    size={GLYPH_EXPAND}
-                    strokeWidth={2}
-                  />
-                </IconButton>
-              ) : null}
-              <IconButton accessibilityLabel="Voice input" onPress={handleMic}>
-                <Mic color={COMPOSER_COLORS.icon} size={GLYPH_MIC} strokeWidth={2} />
-              </IconButton>
-              <View className="w-2" />
+              {layout.showExpand ? expandButton : null}
+              {micButton}
+              <View style={{ width: rightGap }} />
               {sendButton}
             </View>
           </View>
@@ -356,8 +421,7 @@ export function ComposerCapsule({
         visible={expandOpen}
       >
         <View className="flex-1 bg-background px-sp-4 pb-sp-4 pt-sp-12 dark:bg-background-dark">
-          <GestureDetector gesture={expandFling}>
-            <View className="flex-row items-center justify-between pb-sp-2">
+          <View className="flex-row items-center justify-between pb-sp-2">
             <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
               Message
             </Text>
@@ -374,8 +438,7 @@ export function ComposerCapsule({
                 Done
               </Text>
             </Pressable>
-            </View>
-          </GestureDetector>
+          </View>
           <TextInput
             autoFocus
             className="flex-1 font-sans text-foreground dark:text-foreground-dark"

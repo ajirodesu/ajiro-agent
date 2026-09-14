@@ -5,6 +5,7 @@ import {
   COMPOSER_DESIGN_MAX_HEIGHT,
   COMPOSER_DESIGN_TEXT_CAP,
   COMPOSER_LINE_HEIGHT,
+  COMPOSER_MARGIN_RATIO,
   COMPOSER_MIN_HEIGHT,
   COMPOSER_RADIUS_MAX,
   COMPOSER_RADIUS_MIN,
@@ -145,5 +146,13 @@ describe("composer stage table", () => {
     expect(layout.scrollable).toBe(false);
     expect(layout.showExpand).toBe(false);
     expect(layout.barHeight).toBe(COMPOSER_MIN_HEIGHT);
+  });
+
+  it("places the capsule at 9.45% screen margins (119/1022/119 at 1260)", () => {
+    expect(COMPOSER_MARGIN_RATIO).toBeCloseTo(0.0945, 4);
+    const screenWidth = 1260;
+    const margin = screenWidth * COMPOSER_MARGIN_RATIO;
+    expect(Math.round(margin)).toBe(119);
+    expect(Math.round(screenWidth - margin * 2)).toBe(1022);
   });
 });

@@ -1,25 +1,27 @@
 /**
  * ChatGPT-style composer: measured spec + stage test data.
  *
- * Reverse-engineered from the 13 reference screenshots (900x1932, dark):
- * - Screen: capsule margins ~30px/side (~3.3% — responsive ratio).
- * - Stage 1: single row (+, text, mic, send), bar 52.
- * - Stage 2+: text block on top (full width), bottom control row
- *   (+ left; [expand from 5+ lines] mic send right).
- * - Growth is one text line at a time; per-line delta ~44-50 image px at
- *   2.3x scale => LINE_HEIGHT 22 at fontSize 17.
+ * Reverse-engineered from chat-ui.html (1260x2800 canvas, proportional
+ * spec: composerWidth = screenWidth * 0.811, margins 9.45% each side) and
+ * the reference photo (2800x1260 device):
+ * - Capsule: #212121 bg, 1px #424242 hairline, full pill single-line.
+ * - Single row (+, text, mic, send); multiline wraps to text-over-controls.
+ * - Plus/send controls: 112px circles (same container); plus transparent
+ *   until pressed (#2A2A2A); send #2A2A2A + grey arrow when inactive,
+ *   #2D9CDB + white tabler arrow when active.
+ * - Input 16px #ECECEC, placeholder #8E8E93, caret #ECECEC, line pitch 22.
+ * - Mic glyph #FFFFFF; right gap 83px; middle padding 24px (all proportional).
  * - Max: stage 12 ~= stage 13 capsule; text viewport scrolls, capsule and
  *   controls frozen, keyboard gap stable. Scroll begins between 11 and 12
  *   content lines, so the cap is 11 lines (stage 12 fits exactly).
- * - Radius: pill (h/2) when short, settling ~28 when tall.
- * - Colors sampled: capsule #2C2C2E, hairline #3D3D41, text #ECECEC,
- *   placeholder #8E8E93, cursor #3A9BFF, send #1F8FFF, icons #FFFFFF.
  *
  * ONE layout system generates all 13 stages (no per-stage rules).
  */
 export const COMPOSER_LINE_HEIGHT = 22;
-export const COMPOSER_FONT_SIZE = 17;
+export const COMPOSER_FONT_SIZE = 16;
 export const COMPOSER_MIN_HEIGHT = 52;
+/** Horizontal screen-edge margin as a screen-width ratio (119/1260). */
+export const COMPOSER_MARGIN_RATIO = 0.0945;
 export const COMPOSER_MAX_TEXT_LINES = 11;
 export const COMPOSER_DESIGN_TEXT_CAP =
   COMPOSER_LINE_HEIGHT * COMPOSER_MAX_TEXT_LINES; // 242
@@ -36,15 +38,17 @@ export const COMPOSER_EXPAND_MIN_LINES = 5;
 export const COMPOSER_MAX_VIEWPORT_RATIO = 0.65;
 
 export const COMPOSER_COLORS = {
-  capsule: "#2C2C2E",
-  border: "#3D3D41",
+  capsule: "#212121",
+  border: "#424242",
   text: "#ECECEC",
   placeholder: "#8E8E93",
-  cursor: "#3A9BFF",
+  cursor: "#ECECEC",
   selection: "#0A84FF",
-  send: "#0A84FF",
-  sendInactive: "#48484A",
+  send: "#2D9CDB",
+  sendInactive: "#2A2A2A",
+  sendArrowInactive: "#8E8E93",
   icon: "#FFFFFF",
+  plusActive: "#2A2A2A",
 } as const;
 
 export type ComposerLayout = {
