@@ -67,6 +67,12 @@ export type ComposerCapsuleProps = {
   onPlusPress: () => void;
   screenHeight: number;
   keyboardHeight: number;
+  /**
+   * Resolved app accent for the active send state (locked to the theme
+   * primary for aqua/burnt/indigo, user accent otherwise). Defaults to the
+   * reference send blue.
+   */
+  accentColor?: string;
 };
 
 /** Canvas unit: chat-ui.html is authored on a 1260-wide canvas. */
@@ -160,6 +166,7 @@ export function ComposerCapsule({
   onPlusPress,
   screenHeight,
   keyboardHeight,
+  accentColor = COMPOSER_COLORS.send,
 }: ComposerCapsuleProps) {
   const { width: screenWidth } = useWindowDimensions();
   const scale = screenWidth / CANVAS_WIDTH;
@@ -307,9 +314,9 @@ export function ComposerCapsule({
       className="items-center justify-center rounded-full"
       style={({ pressed }) => ({
         // Inside the capsule: grey circle + grey arrow while inactive,
-        // accent circle + white arrow once active.
+        // app accent circle + white arrow once active.
         backgroundColor: sendActive
-          ? COMPOSER_COLORS.send
+          ? accentColor
           : COMPOSER_COLORS.sendInactive,
         height: controlSize,
         opacity: pressed ? 0.85 : 1,

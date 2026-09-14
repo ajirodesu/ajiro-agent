@@ -39,8 +39,13 @@ import { Input } from "@/components/ui/input";
 import type { DatabaseMode, ModelRef } from "@/core/types/app-state";
 import { cn } from "@/core/utils";
 import { useAppState } from "@/hooks/use-app-state";
+import { useAppTheme } from "@/hooks/use-app-theme";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
+import {
+  ACCENT_CHOICES,
+  BUILT_IN_THEMES,
+} from "@/theme/themes";
 import { countEnabledBuiltInFileTools } from "@/modules/config/built-in-tools";
 import { useUpdate } from "@/providers/check-for-updates";
 import {
@@ -54,6 +59,7 @@ type DrawerKey =
   | "current-model"
   | "db"
   | "theme"
+  | "accent"
   | "background"
   | "notifications"
   | null;
@@ -175,15 +181,25 @@ export default function SettingsScreen() {
     notificationSettings,
     savedPrompts,
     skills,
-    themeMode,
     toolSettings,
     updateDatabaseSettings,
     updateNotificationSettings,
-    updateThemeMode,
     providers,
     codingSettings,
   } = useConfig();
   const { release, installing, installUpdate } = useUpdate();
+  const {
+    themeId,
+    theme: activeTheme,
+    accent: activeAccent,
+    setTheme,
+    setAccent,
+  } = useAppTheme();
+  const accentLocked = activeTheme.lockedAccent;
+  const accentChoiceLabel = accentLocked
+    ? "Controlled by Theme"
+    : (ACCENT_CHOICES.find((choice) => choice.value === activeAccent)
+        ?.label ?? "Default");
   const [databaseUrlInput, setDatabaseUrlInput] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [openDrawer, setOpenDrawer] = useState<DrawerKey>(null);
@@ -556,13 +572,7 @@ export default function SettingsScreen() {
                 <SettingsRefRow
                   icon={Contrast}
                   title="Theme"
-                  value={
-                    themeMode === "system"
-                      ? "System"
-                      : themeMode === "dark"
-                        ? "Dark"
-                        : "Light"
-                  }
+                  value={activeTheme.displayName}
                 />
               </DrawerTrigger>
               <DrawerContent showCloseButton>
@@ -582,14 +592,96 @@ export default function SettingsScreen() {
                       label={label}
                       onPress={() => {
                         runAction(`theme:${value}`, async () => {
-                          await updateThemeMode(value);
+                          await setTheme(value);
                           setOpenDrawer(null);
                         }).catch(console.error);
                       }}
-                      selected={themeMode === value}
+                      selected={themeId === value}
                       subtitle={subtitle}
                     />
                   ))}
+                  {(
+                    [
+                      ["aqua", "Aqua", "Cool mint developer theme (default)"],
+                      ["burnt", "Burnt", "Warm terracotta dark theme"],
+                      ["indigo", "Indigo", "Violet nocturnal theme"],
+                    ] as const
+                  ).map(([value, label, subtitle]) => (
+                    <DrawerOptionRow
+                      key={value}
+                      label={label}
+                      onPress={() => {
+                        runAction(`theme:${value}`, async () => {
+                          await setTheme(value);
+                          setOpenDrawer(null);
+                        }).catch(console.error);
+                      }}
+                      selected={themeId === value}
+                      subtitle={subtitle}
+                      accentColor={BUILT_IN_THEMES[value].colors.primary}
+                    />
+                  ))}
+                </DrawerBody>
+              </DrawerContent>
+            </Drawer>
+            <Drawer
+              onOpenChange={(open) => {
+                setOpenDrawer(open ? "accent" : null);
+              }}
+              open={openDrawer === "accent"}
+            >
+              <DrawerTrigger asChild>
+                <SettingsRefRow
+                  icon={Contrast}
+                  title="Accent color"
+                  value={accentChoiceLabel}
+                  disabled={accentLocked}
+                  showChevron={!accentLocked}
+                />
+              </DrawerTrigger>
+              <DrawerContent showCloseButton>
+                <DrawerHeader>
+                  <DrawerTitle>Accent color</DrawerTitle>
+                </DrawerHeader>
+                <DrawerBody contentContainerClassName="gap-sp-2">
+                  {accentLocked ? (
+                    <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                      Controlled by Theme — {activeTheme.displayName} owns
+                      its accent ({activeTheme.colors.primary}) and a custom
+                      accent cannot override it.
+                    </Text>
+                  ) : (
+                    ACCENT_CHOICES.map((choice) => (
+                      <DrawerOptionRow
+                        key={choice.id}
+                        label={choice.label}
+                        onPress={() => {
+                          runAction(`accent:${choice.id}`, async () => {
+                            await setAccent(choice.value);
+                            setOpenDrawer(null);
+                          }).catch(console.error);
+                        }}
+                        selected={
+                          choice.value === null
+                            ? activeAccent === "#0A84FF"
+                            : choice.value === activeAccent
+                        }
+                        leading={
+                          <View
+                            className="rounded-full"
+                            style={{
+                              width: 22,
+                              height: 22,
+                              backgroundColor:
+                                choice.value ?? activeTheme.colors.primary,
+                              borderWidth: 1,
+                              borderColor: "rgba(255,255,255,0.12)",
+                            }}
+                          />
+                        }
+                      />
+                    ))
+                  )}
                 </DrawerBody>
               </DrawerContent>
             </Drawer>
@@ -740,11 +832,16 @@ function DrawerOptionRow({
   onPress,
   selected = false,
   subtitle,
+  accentColor,
+  leading,
 }: {
   label: string;
   onPress: () => void;
   selected?: boolean;
   subtitle?: string;
+  /** Selected-state color; defaults to the existing foreground behavior. */
+  accentColor?: string;
+  leading?: ReactNode;
 }) {
   const theme = useTheme();
 
@@ -754,12 +851,20 @@ function DrawerOptionRow({
       className={cn(
         "min-h-14 flex-row items-center gap-sp-3 rounded-ui border px-sp-4 py-sp-3",
         selected
-          ? "border-foreground bg-secondary dark:border-foreground-dark dark:bg-secondary-dark"
+          ? "bg-secondary dark:bg-secondary-dark"
           : "border-border bg-background dark:border-border-dark dark:bg-background-dark",
       )}
       onPress={onPress}
-      style={({ pressed }) => (pressed ? { opacity: 0.86 } : null)}
+      style={({ pressed }) => ({
+        ...(selected && accentColor
+          ? { borderColor: accentColor }
+          : selected
+            ? { borderColor: theme.text }
+            : null),
+        opacity: pressed ? 0.86 : 1,
+      })}
     >
+      {leading}
       <View className="flex-1 gap-1">
         <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
           {label}
@@ -770,7 +875,9 @@ function DrawerOptionRow({
           </Text>
         ) : null}
       </View>
-      {selected ? <Check color={theme.text} size={18} /> : null}
+      {selected ? (
+        <Check color={accentColor ?? theme.text} size={18} />
+      ) : null}
     </Pressable>
   );
 }

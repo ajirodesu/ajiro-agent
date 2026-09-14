@@ -66,6 +66,8 @@ export const EMPTY_SETTINGS: AppSettings = {
     maxToolSteps: 50,
     schedulingEnabled: true,
     themeMode: "system",
+    themeId: "aqua",
+    accentColor: null,
     toolApprovalMode: "ask",
     toolAllowList: [],
     notificationSettings: {

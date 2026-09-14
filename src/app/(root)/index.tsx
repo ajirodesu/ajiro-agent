@@ -14,7 +14,6 @@ import {
   ChevronRight,
   Clock,
   FolderOpen,
-  MessageCircle,
   Paperclip,
   Server,
   Sparkle,
@@ -87,8 +86,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
-  ContextRingButton,
   ContextUsageDrawer,
+  UsageCapsule,
   useContextUsage,
 } from "@/components/ui/context-usage";
 import type { CompactConversationResult } from "@/providers/app-state";
@@ -113,6 +112,7 @@ import type {
 import { listPrimaryAgents, resolveAgent } from "@/modules/agents/registry";
 import { cn } from "@/core/utils";
 import { useAppState } from "@/hooks/use-app-state";
+import { useAppTheme } from "@/hooks/use-app-theme";
 import { useChat } from "@/hooks/use-chat";
 import { useIdeWorkspace } from "@/providers/ide-workspace";
 import { useConfig } from "@/hooks/use-config";
@@ -726,31 +726,17 @@ export default function Screen() {
               </Text>
             </Pressable>
             <View className="flex-1" />
-            <ContextRingButton
-              onPress={() => {
+            <UsageCapsule
+              expanded={messages.length > 0}
+              percent={contextUsage.percent}
+              onPressRing={() => {
                 setSidebarOpen(false);
                 setContextDrawerOpen(true);
               }}
-              percent={contextUsage.percent}
-            />
-            <Pressable
-              accessibilityLabel="New chat"
-              accessibilityRole="button"
-              onPress={() => {
+              onNewChat={() => {
                 createConversation().catch(console.error);
               }}
-              className="items-center justify-center rounded-full"
-              style={({ pressed }) => ({
-                width: 48,
-                height: 48,
-                backgroundColor: "#212121",
-                borderWidth: 1,
-                borderColor: "#424242",
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <MessageCircle color="#FFFFFF" size={24} strokeWidth={2} />
-            </Pressable>
+            />
           </View>
 
           <MessageScrollerProvider
@@ -1219,6 +1205,7 @@ const ChatInput = memo(function ChatInput({
   const theme = useTheme();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const composerSelection = useSyncedComposerSelection();
+  const { accent: appAccent } = useAppTheme();
   const ideWorkspace = useIdeWorkspace();
   const { scrollToEnd } = useMessageScrollerActions();
   const sendingRef = useRef(false);
@@ -2114,6 +2101,7 @@ const ChatInput = memo(function ChatInput({
           }}
           screenHeight={screenHeight}
           keyboardHeight={keyboardHeight}
+          accentColor={appAccent}
         />
       </View>
 

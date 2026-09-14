@@ -1,5 +1,6 @@
-export type ProviderFamily =
-  | "openai"
+import type { AppThemeId } from "@/theme/types";
+
+export type ProviderFamily =  | "openai"
   | "anthropic"
   | "google"
   | "on-device"
@@ -485,6 +486,14 @@ export type AppSettings = {
   maxToolSteps: number;
   schedulingEnabled: boolean;
   themeMode: ThemeMode;
+  /**
+   * Full theme selection (existing system/light/dark plus aqua/burnt/
+   * indigo). Missing/invalid resolves to aqua for fresh installs; existing
+   * legacy preferences are preserved by the startup rule.
+   */
+  themeId: AppThemeId;
+  /** User accent override (legacy themes only; locked themes ignore it). */
+  accentColor: string | null;
   toolApprovalMode: ToolApprovalMode;
   /** Persisted allow-list for approval mode "allowList" (tool names). */
   toolAllowList: string[];

@@ -8,9 +8,16 @@
  *
  * Author: AjiroDesu
  */
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { Circle, Svg } from "react-native-svg";
+import { SquarePen } from "lucide-react-native";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -220,6 +227,99 @@ export function ContextRingButton({
     >
       <ContextRing percent={percent} />
     </Pressable>
+  );
+}
+
+/**
+ * Usage capsule: the context ring's container. While no message has been
+ * sent it is a single 48px circle holding the ring; once the conversation
+ * has messages it smoothly expands to a capsule revealing a new-chat button
+ * on the left of the ring. Width + reveal animate together so the
+ * transition never snaps.
+ */
+const CAPSULE_COLLAPSED = 48;
+const CAPSULE_EXPANDED = 96;
+const CAPSULE_ICON = 40;
+
+export function UsageCapsule({
+  expanded,
+  onNewChat,
+  onPressRing,
+  percent,
+}: {
+  expanded: boolean;
+  onNewChat: () => void;
+  onPressRing: () => void;
+  percent: number | null;
+}) {
+  const progress = useSharedValue(expanded ? 1 : 0);
+
+  useEffect(() => {
+    progress.value = withTiming(expanded ? 1 : 0, { duration: 260 });
+  }, [expanded, progress]);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    width: interpolate(
+      progress.value,
+      [0, 1],
+      [CAPSULE_COLLAPSED, CAPSULE_EXPANDED],
+    ),
+  }));
+  const newChatStyle = useAnimatedStyle(() => ({
+    width: interpolate(progress.value, [0, 1], [0, CAPSULE_ICON]),
+    opacity: progress.value,
+  }));
+
+  return (
+    <Animated.View
+      className="flex-row items-center overflow-hidden rounded-full"
+      style={[
+        containerStyle,
+        {
+          height: CAPSULE_COLLAPSED,
+          backgroundColor: "#212121",
+          borderWidth: 1,
+          borderColor: "#424242",
+          paddingHorizontal: 4,
+          gap: 8,
+        },
+      ]}
+    >
+      <Animated.View style={[{ alignItems: "center" }, newChatStyle]}>
+        <Pressable
+          accessibilityLabel="New chat"
+          accessibilityRole="button"
+          onPress={onNewChat}
+          className="items-center justify-center rounded-full"
+          style={({ pressed }) => ({
+            width: CAPSULE_ICON,
+            height: CAPSULE_ICON,
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <SquarePen color="#FFFFFF" size={20} strokeWidth={2} />
+        </Pressable>
+      </Animated.View>
+      <Pressable
+        accessibilityHint="Shows context usage details"
+        accessibilityLabel={
+          percent === null
+            ? "Context usage unavailable"
+            : `Context usage ${percent}%`
+        }
+        accessibilityRole="button"
+        onPress={onPressRing}
+        className="items-center justify-center rounded-full"
+        hitSlop={8}
+        style={({ pressed }) => ({
+          width: CAPSULE_ICON,
+          height: CAPSULE_ICON,
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <ContextRing percent={percent} size={22} />
+      </Pressable>
+    </Animated.View>
   );
 }
 

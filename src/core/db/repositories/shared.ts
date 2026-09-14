@@ -13,6 +13,10 @@ import type {
   ThemeMode,
   ToolApprovalMode,
 } from "@/core/types/app-state";
+import {
+  isValidAccent,
+  resolveStartupThemeId,
+} from "@/theme/themes";
 
 type AppSettingRow = typeof appSettings.$inferSelect;
 
@@ -92,6 +96,15 @@ export function buildSettings(rows: AppSettingRow[]): AppSettings {
     )
       ? (storedThemeMode as ThemeMode)
       : "system",
+    themeId: resolveStartupThemeId({
+      storedThemeId: settingsMap.get("theme_id"),
+      storedThemeMode,
+      hasThemeModeKey: settingsMap.has("theme_mode"),
+    }),
+    accentColor: (() => {
+      const raw = settingsMap.get("accent_color");
+      return raw && isValidAccent(raw) ? raw : null;
+    })(),
     toolApprovalMode:
       (settingsMap.get("tool_approval_mode") as ToolApprovalMode | null) ??
       "ask",

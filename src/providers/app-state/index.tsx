@@ -114,6 +114,7 @@ import type {
     WorkspaceFile,
 } from "@/core/types/app-state";
 import { createModelRef } from "@/core/types/app-state";
+import type { AppThemeId } from "@/theme/types";
 import {
     computeNextRun,
     createSchedulerEngine,
@@ -442,6 +443,8 @@ type AppStateContextValue = {
     exportAgentMarkdown: (agentId: string) => string;
     updateMaxToolSteps: (maxToolSteps: number) => Promise<void>;
     updateThemeMode: (mode: AppSettings["themeMode"]) => Promise<void>;
+    updateThemeId: (id: AppThemeId) => Promise<void>;
+    updateAccentColor: (value: string | null) => Promise<void>;
     updateProvider: (
         providerId: string,
         input: {
@@ -480,21 +483,31 @@ type AppStateProviderProps = {
 };
 
 function ThemePreferenceController({
-    mode,
+    themeId,
 }: {
-    mode: AppSettings["themeMode"];
+    themeId: AppThemeId;
 }) {
     const systemColorScheme = useSystemColorScheme();
 
     useEffect(() => {
+        // New built-ins are deliberately dark and never follow the device
+        // (§26). Legacy ids keep the exact previous behavior below.
+        if (
+            themeId === "aqua" ||
+            themeId === "burnt" ||
+            themeId === "indigo"
+        ) {
+            colorScheme.set("dark");
+            return;
+        }
         colorScheme.set(
-            Platform.OS === "web" && mode === "system"
+            Platform.OS === "web" && themeId === "system"
                 ? systemColorScheme === "dark"
                     ? "dark"
                     : "light"
-                : mode,
+                : themeId,
         );
-    }, [mode, systemColorScheme]);
+    }, [themeId, systemColorScheme]);
 
     return null;
 }
@@ -2142,6 +2155,35 @@ Your output must be:
 
     async function updateThemeMode(mode: AppSettings["themeMode"]) {
         await repositoriesRef.current.configRepository.setThemeMode(mode);
+        // Keep the full selection in sync so legacy callers cannot strand
+        // theme_id and theme_mode on different values.
+        await repositoriesRef.current.configRepository.setSetting(
+            "theme_id",
+            mode,
+        );
+        await hydrate();
+    }
+
+    /**
+     * Full theme selection (additive): persists theme_id and, for legacy
+     * ids, mirrors theme_mode so pre-existing readers stay consistent.
+     */
+    async function updateThemeId(id: AppThemeId) {
+        await repositoriesRef.current.configRepository.setSetting(
+            "theme_id",
+            id,
+        );
+        if (id === "system" || id === "light" || id === "dark") {
+            await repositoriesRef.current.configRepository.setThemeMode(id);
+        }
+        await hydrate();
+    }
+
+    async function updateAccentColor(value: string | null) {
+        await repositoriesRef.current.configRepository.setSetting(
+            "accent_color",
+            value,
+        );
         await hydrate();
     }
 
@@ -4084,12 +4126,14 @@ Your output must be:
                 updateConversationModes,
                 updateToolApprovalMode,
                 updateThemeMode,
+                updateThemeId,
+                updateAccentColor,
                 updateMaxToolSteps,
                 updateProvider,
                 workspaceFiles: snapshot.workspaceFiles,
             }}
         >
-            <ThemePreferenceController mode={snapshot.settings.themeMode} />
+                <ThemePreferenceController themeId={snapshot.settings.themeId} />
             {children}
         </AppStateContext.Provider>
     );
@@ -4177,6 +4221,8 @@ export function useConfig() {
         testMcpServer: context.testMcpServer,
         toolApprovalMode: context.settings.toolApprovalMode,
         themeMode: context.settings.themeMode,
+        themeId: context.settings.themeId,
+        accentColor: context.settings.accentColor,
         toolSettings: context.settings.builtInToolSettings,
         updateDatabaseSettings: context.updateDatabaseSettings,
         updateMcpServer: context.updateMcpServer,
@@ -4189,6 +4235,8 @@ export function useConfig() {
         updateToolAllowList: context.updateToolAllowList,
         updateConversationModes: context.updateConversationModes,
         updateThemeMode: context.updateThemeMode,
+        updateThemeId: context.updateThemeId,
+        updateAccentColor: context.updateAccentColor,
         notificationSettings: context.settings.notificationSettings,
         updateNotificationSettings: context.updateNotificationSettings,
         codingSettings: context.settings.codingSettings,
