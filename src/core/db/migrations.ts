@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 
 import { serializeSkillToMarkdown } from "@/modules/skills/skill-markdown";
 
-const DATABASE_VERSION = 27;
+const DATABASE_VERSION = 28;
 
 const CORE_SCHEMA_REPAIR_SQL = `
   PRAGMA journal_mode = WAL;
@@ -249,6 +249,27 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
       `);
     }
 
+    // Skill origin metadata (v28): repairs databases whose skills table
+    // predates source_url/author, including fresh installs that jumped
+    // straight to the latest schema version.
+    const skillColumns = await db.getAllAsync<{ name: string }>(
+      "PRAGMA table_info(skills)",
+    );
+
+    if (!skillColumns.some((column) => column.name === "source_url")) {
+      await db.execAsync(`
+        ALTER TABLE skills
+        ADD COLUMN source_url TEXT;
+      `);
+    }
+
+    if (!skillColumns.some((column) => column.name === "author")) {
+      await db.execAsync(`
+        ALTER TABLE skills
+        ADD COLUMN author TEXT;
+      `);
+    }
+
     const runColumns = await db.getAllAsync<{ name: string }>(
       "PRAGMA table_info(agent_runs)",
     );
@@ -382,6 +403,8 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
         description TEXT,
         instructions TEXT NOT NULL,
         source_markdown TEXT,
+        source_url TEXT,
+        author TEXT,
         enabled INTEGER NOT NULL DEFAULT 1,
         auto_match INTEGER NOT NULL DEFAULT 0,
         match_keywords_json TEXT NOT NULL DEFAULT '[]',
@@ -659,6 +682,8 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
         description TEXT,
         instructions TEXT NOT NULL,
         source_markdown TEXT,
+        source_url TEXT,
+        author TEXT,
         enabled INTEGER NOT NULL DEFAULT 1,
         auto_match INTEGER NOT NULL DEFAULT 0,
         match_keywords_json TEXT NOT NULL DEFAULT '[]',
@@ -1100,6 +1125,28 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
     );
 
     currentVersion = 27;
+  }
+
+  if (currentVersion === 27) {
+    const skillColumns = await db.getAllAsync<{ name: string }>(
+      "PRAGMA table_info(skills)",
+    );
+
+    if (!skillColumns.some((column) => column.name === "source_url")) {
+      await db.execAsync(`
+        ALTER TABLE skills
+        ADD COLUMN source_url TEXT;
+      `);
+    }
+
+    if (!skillColumns.some((column) => column.name === "author")) {
+      await db.execAsync(`
+        ALTER TABLE skills
+        ADD COLUMN author TEXT;
+      `);
+    }
+
+    currentVersion = 28;
   }
 
   await db.execAsync(`PRAGMA user_version = ${currentVersion}`);

@@ -82,6 +82,12 @@ import {
     SKILL_FILE_MAX_COUNT,
     SKILL_FILE_MAX_TOTAL_BYTES,
 } from "@/modules/skills/skill-files";
+import {
+    installSkillFromEntry,
+    uninstallSkill,
+    type InstallResult,
+    type SkillInstallProgress,
+} from "@/modules/skills/skill-install";
 import type {
     AgentConfig,
     AgentMode,
@@ -240,6 +246,7 @@ type AppStateContextValue = {
         select?: boolean;
     }) => Promise<void>;
     createSkill: (input: {
+        author?: string | null;
         autoMatch?: boolean;
         description?: string | null;
         enabled?: boolean;
@@ -247,9 +254,11 @@ type AppStateContextValue = {
         matchKeywords?: string[];
         recommendedBuiltInToolKeys?: SkillConfig["recommendedBuiltInToolKeys"];
         recommendedMcpServerIds?: string[];
+        sourceUrl?: string | null;
         title: string;
     }) => Promise<SkillConfig>;
     importSkillMarkdown: (input: {
+        author?: string | null;
         markdown: string;
         replaceById?: string | null;
         sourceUrl?: string | null;
@@ -303,6 +312,18 @@ type AppStateContextValue = {
     deleteModelPreset: (modelPresetId: string) => Promise<void>;
     clearMemory: () => Promise<void>;
     deleteSkill: (skillId: string) => Promise<void>;
+    getProjectSkillIds: (session: ExternalFolderSession) => Promise<string[]>;
+    setProjectSkillIds: (
+        session: ExternalFolderSession,
+        skillIds: string[],
+    ) => Promise<void>;
+    installStoreSkill: (input: {
+        author?: string | null;
+        slug: string;
+        sourceUrl: string;
+        onProgress?: (progress: SkillInstallProgress) => void;
+    }) => Promise<InstallResult>;
+    uninstallStoreSkill: (skillId: string) => Promise<void>;
     deleteSavedPrompt: (savedPromptId: string) => Promise<void>;
     disconnectOpenAIOAuth: () => Promise<void>;
     error: string | null;
@@ -321,6 +342,7 @@ type AppStateContextValue = {
     memory: MemoryEntry | null;
     messages: StoredMessage[];
     editAndResendMessage: (messageId: string, content: string) => Promise<void>;
+    deleteMessage: (messageId: string) => Promise<void>;
     savedPrompts: SavedPrompt[];
     mcpServers: McpServerConfig[];
     resumePendingRuns: () => Promise<void>;
@@ -457,6 +479,7 @@ type AppStateContextValue = {
     updateSkill: (
         skillId: string,
         input: {
+            author?: string | null;
             autoMatch?: boolean;
             description?: string | null;
             enabled?: boolean;
@@ -464,6 +487,7 @@ type AppStateContextValue = {
             matchKeywords?: string[];
             recommendedBuiltInToolKeys?: SkillConfig["recommendedBuiltInToolKeys"];
             recommendedMcpServerIds?: string[];
+            sourceUrl?: string | null;
             title?: string;
         },
     ) => Promise<void>;
@@ -1863,6 +1887,7 @@ Your output must be:
     }
 
     async function createSkill(input: {
+        author?: string | null;
         autoMatch?: boolean;
         description?: string | null;
         enabled?: boolean;
@@ -1870,6 +1895,7 @@ Your output must be:
         matchKeywords?: string[];
         recommendedBuiltInToolKeys?: SkillConfig["recommendedBuiltInToolKeys"];
         recommendedMcpServerIds?: string[];
+        sourceUrl?: string | null;
         title: string;
     }) {
         const skill = await repositoriesRef.current.skillRepository.create(input);
@@ -1880,6 +1906,7 @@ Your output must be:
     async function updateSkill(
         skillId: string,
         input: {
+            author?: string | null;
             autoMatch?: boolean;
             description?: string | null;
             enabled?: boolean;
@@ -1887,6 +1914,7 @@ Your output must be:
             matchKeywords?: string[];
             recommendedBuiltInToolKeys?: SkillConfig["recommendedBuiltInToolKeys"];
             recommendedMcpServerIds?: string[];
+            sourceUrl?: string | null;
             title?: string;
         },
     ) {
@@ -1896,6 +1924,46 @@ Your output must be:
 
     async function deleteSkill(skillId: string) {
         await repositoriesRef.current.skillRepository.delete(skillId);
+        await hydrate();
+    }
+
+    async function getProjectSkillIds(session: ExternalFolderSession) {
+        const settings =
+            await repositoriesRef.current.configRepository.getProjectCodingSettings(
+                session,
+            );
+        return settings?.skillIds ?? [];
+    }
+
+    async function setProjectSkillIds(
+        session: ExternalFolderSession,
+        skillIds: string[],
+    ) {
+        await repositoriesRef.current.configRepository.setProjectCodingSettings(
+            session,
+            { skillIds },
+        );
+    }
+
+    async function installStoreSkill(input: {
+        author?: string | null;
+        slug: string;
+        sourceUrl: string;
+        onProgress?: (progress: SkillInstallProgress) => void;
+    }) {
+        const result = await installSkillFromEntry(
+            {
+                repository: repositoriesRef.current.skillRepository,
+                onProgress: input.onProgress,
+            },
+            { author: input.author ?? null, slug: input.slug, sourceUrl: input.sourceUrl },
+        );
+        await hydrate();
+        return result;
+    }
+
+    async function uninstallStoreSkill(skillId: string) {
+        await uninstallSkill(repositoriesRef.current.skillRepository, skillId);
         await hydrate();
     }
 
@@ -1973,6 +2041,7 @@ Your output must be:
     }
 
     async function importSkillMarkdown(input: {
+        author?: string | null;
         markdown: string;
         replaceById?: string | null;
         sourceUrl?: string | null;
@@ -2012,6 +2081,7 @@ Your output must be:
 
         if (input.replaceById) {
             await repositoriesRef.current.skillRepository.update(input.replaceById, {
+                author: input.author ?? undefined,
                 autoMatch: parsed.autoMatch,
                 description: parsed.description,
                 enabled: true,
@@ -2019,6 +2089,7 @@ Your output must be:
                 matchKeywords: parsed.matchKeywords,
                 recommendedBuiltInToolKeys: parsed.recommendedBuiltInToolKeys,
                 recommendedMcpServerIds: parsed.recommendedMcpServerIds,
+                sourceUrl: input.sourceUrl ?? undefined,
                 title: parsed.title,
             });
             const replaced = await repositoriesRef.current.skillRepository.getById(
@@ -2032,6 +2103,7 @@ Your output must be:
             skill = replaced;
         } else {
             skill = await repositoriesRef.current.skillRepository.create({
+                author: input.author ?? null,
                 autoMatch: parsed.autoMatch,
                 description: parsed.description,
                 enabled: true,
@@ -2040,6 +2112,7 @@ Your output must be:
                 recommendedBuiltInToolKeys: parsed.recommendedBuiltInToolKeys,
                 recommendedMcpServerIds: parsed.recommendedMcpServerIds,
                 skillFiles: fileInput,
+                sourceUrl: input.sourceUrl ?? null,
                 title: parsed.title,
             });
         }
@@ -3475,6 +3548,42 @@ Your output must be:
             });
     }, []);
 
+    const deleteMessage = useCallback(async (messageId: string) => {
+        const current = snapshotRef.current;
+        const message = current.messages.find((item) => item.id === messageId);
+
+        if (!message) {
+            throw new Error("Message not found.");
+        }
+
+        const run = current.agentRuns.find(
+            (item) =>
+                item.userMessageId === messageId ||
+                item.assistantMessageId === messageId,
+        );
+
+        if (run && isActiveAgentRunStatus(run.status)) {
+            throw new Error("Wait for the current response to finish first.");
+        }
+
+        if (run) {
+            await repositoriesRef.current.agentRunRepository.deleteById(run.id);
+        }
+        await repositoriesRef.current.messageRepository.deleteById(messageId);
+
+        const nextSnapshot = {
+            ...snapshotRef.current,
+            agentRuns: run
+                ? snapshotRef.current.agentRuns.filter((item) => item.id !== run.id)
+                : snapshotRef.current.agentRuns,
+            messages: snapshotRef.current.messages.filter(
+                (item) => item.id !== messageId,
+            ),
+        };
+        snapshotRef.current = nextSnapshot;
+        setSnapshot(nextSnapshot);
+    }, []);
+
     const cancelRun = useCallback(async (input?: {
         conversationId?: string;
         runId?: string;
@@ -4060,6 +4169,10 @@ Your output must be:
                 deleteModelPreset,
                 deleteSavedPrompt,
                 deleteSkill,
+                installStoreSkill,
+                uninstallStoreSkill,
+                getProjectSkillIds,
+                setProjectSkillIds,
                 deleteWorkspaceFile,
                 disconnectOpenAIOAuth,
                 error,
@@ -4071,6 +4184,7 @@ Your output must be:
                 exportSkillMarkdown,
                 messages: snapshot.messages,
                 editAndResendMessage,
+                deleteMessage,
                 savedPrompts: snapshot.savedPrompts,
                 memory: snapshot.memory,
                 mcpServers: snapshot.mcpServers,
@@ -4171,6 +4285,7 @@ export function useConfig() {
 
     return {
         ...context.resolvedConfig,
+        activeModelRef: context.settings.activeModelRef,
         clearMcpServerCredentials: context.clearMcpServerCredentials,
         clearProviderApiKey: context.clearProviderApiKey,
         connectMcpServerOAuth: context.connectMcpServerOAuth,
@@ -4191,6 +4306,10 @@ export function useConfig() {
         deleteModelPreset: context.deleteModelPreset,
         deleteSavedPrompt: context.deleteSavedPrompt,
         deleteSkill: context.deleteSkill,
+        installStoreSkill: context.installStoreSkill,
+        uninstallStoreSkill: context.uninstallStoreSkill,
+        getProjectSkillIds: context.getProjectSkillIds,
+        setProjectSkillIds: context.setProjectSkillIds,
         deleteWorkspaceFile: context.deleteWorkspaceFile,
         disconnectOpenAIOAuth: context.disconnectOpenAIOAuth,
         currentSelectedMcpServerIds: context.currentSelectedMcpServerIds,
@@ -4288,6 +4407,7 @@ export function useChat() {
         importFiles: context.importFiles,
         messages: context.messages,
         editAndResendMessage: context.editAndResendMessage,
+        deleteMessage: context.deleteMessage,
         savedPrompts: context.savedPrompts,
         pickConversationFolder: context.pickConversationFolder,
         resumePendingRuns: context.resumePendingRuns,

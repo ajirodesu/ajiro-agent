@@ -5,6 +5,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/shared/container";
 import { Button } from "@/components/ui/button";
+import { AppHeader, CircleIconButton } from "@/components/ui/chrome";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -81,28 +82,24 @@ export default function SettingsMemoryScreen() {
       contentClassName="gap-sp-4 py-sp-4"
       includeBottomTabInset={false}
     >
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/settings/memory");
-            }
-          }}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <View className="min-w-0 flex-1">
-          <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-            Local memory
-          </Text>
-          <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
-            {memoryEnabled ? "On" : "Off"}
-          </Text>
-        </View>
-      </View>
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push("/settings/memory");
+              }
+            }}
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Local memory"
+        subtitle={memoryEnabled ? "On" : "Off"}
+      />
 
       <Card className="overflow-hidden">
         <SwitchRow

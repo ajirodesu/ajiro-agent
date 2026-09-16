@@ -58,6 +58,20 @@ export function agentAllowsBuiltInKey(
   return agent.toolPermissions.builtInTools?.[key] !== false;
 }
 
+/** Whether the agent may use a skill id (deny-wins; default allow). */
+export function agentAllowsSkillId(agent: AgentConfig, skillId: string): boolean {
+  return agent.toolPermissions.skills?.[skillId] !== false;
+}
+
+/** Skill ids the agent explicitly denies. */
+export function agentDeniedSkillIds(agent: AgentConfig): string[] {
+  const skills = agent.toolPermissions.skills;
+  if (!skills) return [];
+  return Object.entries(skills)
+    .filter(([, allowed]) => allowed === false)
+    .map(([skillId]) => skillId);
+}
+
 /**
  * Filter a built-in runtime toolset by the agent's permissions.
  * `toolNameToKey` maps each runtime tool name in this toolset to the

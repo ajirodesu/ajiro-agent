@@ -5,7 +5,7 @@ import { Text, View } from "react-native";
 
 import { cn, withSlottedProps } from "@/core/utils";
 
-const bubbleVariants = cva("self-start max-w-[80%]", {
+const bubbleVariants = cva("self-start max-w-[75%]", {
   variants: {
     align: {
       start: "self-start",
@@ -31,7 +31,7 @@ const bubbleContentVariants = cva("rounded-card px-sp-4 py-sp-3", {
   variants: {
     variant: {
       default:
-        "rounded-2xl rounded-br bg-[#2c2c2e] dark:bg-[#2c2c2e]",
+        "rounded-2xl",
       secondary: "bg-secondary dark:bg-secondary-dark",
       muted: "bg-card dark:bg-card-dark",
       tinted:

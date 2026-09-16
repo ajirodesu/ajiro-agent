@@ -27,6 +27,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  AppHeader,
+  CircleIconButton,
+  HeaderShadow,
+} from "@/components/ui/chrome";
+import {
   Drawer,
   DrawerBody,
   DrawerContent,
@@ -95,7 +100,7 @@ function SettingsRefRow({
         opacity: pressed && !disabled ? 0.75 : disabled ? 0.5 : 1,
       })}
     >
-      <Icon color="#ffffff" size={22} strokeWidth={2} />
+      <Icon color={theme.text} size={22} strokeWidth={2} />
       <Text
         numberOfLines={1}
         className="min-w-0 flex-1 font-sans text-foreground dark:text-foreground-dark"
@@ -165,6 +170,7 @@ function SettingsSectionLabel({ children }: { children: string }) {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const { error, hydrating, ready } = useAppState();
   const {
     activeModels,
@@ -245,10 +251,23 @@ export default function SettingsScreen() {
       edges={["top", "left", "right"]}
     >
       <View className="relative flex-1">
+        <AppHeader
+          left={
+            <CircleIconButton
+              accessibilityLabel="Back"
+              onPress={() => {
+                router.back();
+              }}
+            >
+              <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+            </CircleIconButton>
+          }
+          title="Settings"
+        />
         <ScrollView
           className="flex-1"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 100, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}
           scrollEventThrottle={32}
           onScroll={(event) => {
             setScrolled(event.nativeEvent.contentOffset.y > 4);
@@ -779,49 +798,7 @@ export default function SettingsScreen() {
           ) : null}
         </ScrollView>
 
-        {scrolled ? (
-          <View
-            className="absolute inset-x-0 top-0"
-            pointerEvents="none"
-            style={{ height: 96 }}
-          >
-            <View style={{ flex: 26, backgroundColor: "rgba(0,0,0,0.55)" }} />
-            <View style={{ flex: 35, backgroundColor: "rgba(0,0,0,0.25)" }} />
-            <View style={{ flex: 35, backgroundColor: "rgba(0,0,0,0)" }} />
-          </View>
-        ) : null}
-
-        <View
-          className="absolute left-0 right-0 flex-row items-center justify-center"
-          pointerEvents="box-none"
-          style={{ top: 44, height: 44 }}
-        >
-          <Text
-            className="font-sans text-foreground dark:text-foreground-dark"
-            style={{ fontSize: 18, fontWeight: "600" }}
-          >
-            Settings
-          </Text>
-        </View>
-        <Pressable
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-          onPress={() => {
-            router.back();
-          }}
-          className="absolute items-center justify-center rounded-full"
-          style={{
-            top: 44,
-            left: 20,
-            width: 44,
-            height: 44,
-            backgroundColor: "#2a2b31",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.12)",
-          }}
-        >
-          <ChevronLeft color="#ffffff" size={20} strokeWidth={2} />
-        </Pressable>
+        <HeaderShadow visible={scrolled} />
       </View>
     </SafeAreaView>
   );

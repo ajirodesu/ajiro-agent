@@ -1,13 +1,15 @@
 import * as Crypto from "expo-crypto";
-import { useRouter } from "expo-router";
-import { Check, ChevronLeft, ChevronRight, Plus } from "lucide-react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from "react-native";
 import type { DownloadableModel } from "expo-ai-kit";
 
 import { Container } from "@/components/shared/container";
 import { Button } from "@/components/ui/button";
+import { AppHeader, CircleIconButton } from "@/components/ui/chrome";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Drawer,
   DrawerBody,
@@ -23,6 +25,12 @@ import { useConfig } from "@/hooks/use-config";
 import { useAppState } from "@/hooks/use-app-state";
 import { useTheme } from "@/hooks/use-theme";
 import { invalidateLiveModelCatalog } from "@/modules/config/live-model-catalog";
+import {
+  isModelIdValid,
+  normalizeModelIdInput,
+  presetsForProvider,
+} from "@/modules/config/manual-models";
+import { parseContextWindowInput } from "@/modules/models/model-display";
 import {
   fetchProviderModels,
   testProviderConnection,
@@ -44,6 +52,7 @@ import { cn } from "@/core/utils";
 import {
   createModelRef,
   type CuratedModelDefinition,
+  type ModelPreset,
   type ModelRef,
   type ProviderConfig,
   type ResolvedModel,
@@ -60,6 +69,8 @@ type ProviderListItem = {
 export default function SettingsProvidersScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { provider: providerParam, addProvider: addProviderParam } =
+    useLocalSearchParams<{ addProvider?: string; provider?: string }>();
   const { error: hydrationError, modelDiscoveryInProgress, ready } = useAppState();
   const {
     activeProviderIds,
@@ -69,8 +80,10 @@ export default function SettingsProvidersScreen() {
     createModelPreset,
     createProvider,
     currentModel,
+    deleteModelPreset,
     deleteProvider,
     disconnectOpenAIOAuth,
+    modelPresets,
     providers,
     providerModelDiscovery,
     refresh,
@@ -88,6 +101,15 @@ export default function SettingsProvidersScreen() {
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [baseUrlInput, setBaseUrlInput] = useState("");
   const [customModelId, setCustomModelId] = useState("");
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [manualModelId, setManualModelId] = useState("");
+  const [manualModelLabel, setManualModelLabel] = useState("");
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [customModelContext, setCustomModelContext] = useState("");
+  const [customModelVision, setCustomModelVision] = useState(false);
+  const [customModelReasoning, setCustomModelReasoning] = useState(false);
+  const [customModelTools, setCustomModelTools] = useState(false);
+  const [customModelImage, setCustomModelImage] = useState(false);
   const [modelQuery, setModelQuery] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [onDeviceModels, setOnDeviceModels] = useState<DownloadableModel[]>([]);
@@ -171,6 +193,24 @@ export default function SettingsProvidersScreen() {
   const selectedProviderIsCustom = selectedProvider
     ? getSupportedProviderDefinition(selectedProvider.id) === null
     : false;
+  // Deep links from the Choose Model modal: `?provider=<id>` preselects a
+  // provider, `?addProvider=1` opens the custom-provider flow. Runs once.
+  const deepLinkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    if (typeof addProviderParam === "string" && addProviderParam) {
+      deepLinkAppliedRef.current = true;
+      setAddProviderOpen(true);
+      return;
+    }
+    if (typeof providerParam === "string" && providerParam) {
+      const key = `provider:${providerParam}`;
+      if (providerItems.some((item) => item.key === key)) {
+        deepLinkAppliedRef.current = true;
+        setSelectedItemKey(key);
+      }
+    }
+  }, [addProviderParam, providerItems, providerParam]);
   useEffect(() => {
     if (selectedProvider?.family !== "on-device") {
       return;
@@ -309,6 +349,33 @@ export default function SettingsProvidersScreen() {
     ],
     [displayModels],
   );
+  const providerPresets = useMemo(
+    () =>
+      selectedProviderId
+        ? presetsForProvider(modelPresets, selectedProviderId)
+        : [],
+    [modelPresets, selectedProviderId],
+  );
+  const editingPreset: ModelPreset | null =
+    providerPresets.find((preset) => preset.id === editingPresetId) ?? null;
+  // Manual entry applies to regular API providers whose live list is
+  // missing (custom providers keep their richer dedicated form; ollama and
+  // on-device have their own flows).
+  const isManualCapable =
+    !!selectedProvider &&
+    !selectedProviderIsCustom &&
+    selectedProvider.family !== "ollama" &&
+    selectedProvider.family !== "on-device";
+  const showManualSection =
+    isManualCapable &&
+    !modelDiscoveryInProgress &&
+    (displayModels.length === 0 ||
+      manualEntryOpen ||
+      providerPresets.length > 0);
+
+  useEffect(() => {
+    resetManualForm();
+  }, [selectedProviderId]);
 
   const runAction = async (key: string, action: () => Promise<void>) => {
     setBusyKey(key);
@@ -318,6 +385,71 @@ export default function SettingsProvidersScreen() {
     } finally {
       setBusyKey(null);
     }
+  };
+
+  const resetManualForm = () => {
+    setManualEntryOpen(false);
+    setManualModelId("");
+    setManualModelLabel("");
+    setEditingPresetId(null);
+  };
+
+  const saveManualModel = () => {
+    if (!selectedProvider) return;
+    const modelId = normalizeModelIdInput(manualModelId);
+    if (!isModelIdValid(manualModelId)) {
+      Alert.alert(
+        "Enter a model ID.",
+        "Type the exact model identifier the provider expects.",
+      );
+      return;
+    }
+    const editing = editingPreset;
+    runAction(`manual-model:${selectedProvider.id}`, async () => {
+      if (editing && editing.modelId !== modelId) {
+        await deleteModelPreset(editing.id);
+      }
+      await createModelPreset({
+        label: manualModelLabel.trim() || modelId,
+        makeDefault:
+          editing != null
+            ? editing.isDefault
+            : selectedProviderModels.length === 0,
+        modelId,
+        providerId: selectedProvider.id,
+        select: false,
+      });
+      setManualModelId("");
+      setManualModelLabel("");
+      setEditingPresetId(null);
+    }).catch((error) => {
+      Alert.alert(
+        "Could not save model",
+        error instanceof Error ? error.message : "The model could not be saved.",
+      );
+    });
+  };
+
+  const deleteManualModel = (preset: ModelPreset) => {
+    Alert.alert(
+      "Delete model?",
+      `"${preset.label?.trim() || preset.modelId}" will be removed from this provider.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            runAction(`delete-manual-model:${preset.id}`, async () => {
+              if (editingPresetId === preset.id) {
+                resetManualForm();
+              }
+              await deleteModelPreset(preset.id);
+            }).catch(console.error);
+          },
+        },
+      ],
+    );
   };
 
   const resetCustomProviderForm = () => {
@@ -609,28 +741,27 @@ export default function SettingsProvidersScreen() {
       contentClassName="gap-sp-4 py-sp-4"
       includeBottomTabInset={false}
     >
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={() => {
-            router.back();
-          }}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-          Providers
-        </Text>
-        <Button
-          className="ml-auto"
-          leftIcon={<Plus color={theme.text} size={16} />}
-          onPress={() => setAddProviderOpen(true)}
-          size="sm"
-          variant="outline"
-        >
-          Add custom
-        </Button>
-      </View>
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
+            onPress={() => {
+              router.back();
+            }}
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Providers"
+        right={
+          <CircleIconButton
+            accessibilityLabel="Add custom provider"
+            onPress={() => setAddProviderOpen(true)}
+          >
+            <Plus color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+      />
 
       {hydrationError && !ready ? (
         <Card className="px-sp-4 py-sp-4">
@@ -774,6 +905,7 @@ export default function SettingsProvidersScreen() {
             setBaseUrlInput("");
             setCustomModelId("");
             setModelQuery("");
+            resetManualForm();
           }
         }}
         open={selectedItemKey !== null}
@@ -816,8 +948,7 @@ export default function SettingsProvidersScreen() {
                   ) : null}
                 </View>
 
-                {selectedProvider.family === "ollama" &&
-                selectedProviderDiscovery?.error ? (
+                {selectedProviderDiscovery?.error ? (
                   <Text className="font-sans text-sm text-destructive dark:text-destructive-dark">
                     {selectedProviderDiscovery.error}
                   </Text>
@@ -1159,6 +1290,14 @@ export default function SettingsProvidersScreen() {
                           }
                           onPress={() => {
                             const modelId = customModelId.trim();
+                            const contextWindow = parseContextWindowInput(customModelContext);
+                            if (customModelContext.trim() && contextWindow === null) {
+                              Alert.alert(
+                                "Invalid context window",
+                                "Enter tokens like 128000 or 128K, or leave it blank (unknown).",
+                              );
+                              return;
+                            }
                             runAction(
                               `custom-model:${selectedProvider.id}:${modelId}`,
                               async () => {
@@ -1167,10 +1306,28 @@ export default function SettingsProvidersScreen() {
                                   makeDefault:
                                     selectedProviderModels.length === 0,
                                   modelId,
+                                  options: {
+                                    __ajiroAgentModelProfile: {
+                                      capabilities: {
+                                        imageGeneration: customModelImage,
+                                        imageInput: customModelVision,
+                                        reasoning: customModelReasoning,
+                                        tools: customModelTools,
+                                      },
+                                      ...(contextWindow === null
+                                        ? {}
+                                        : { contextWindow }),
+                                    },
+                                  },
                                   providerId: selectedProvider.id,
                                   select: true,
                                 });
                                 setCustomModelId("");
+                                setCustomModelContext("");
+                                setCustomModelVision(false);
+                                setCustomModelReasoning(false);
+                                setCustomModelTools(false);
+                                setCustomModelImage(false);
                               },
                             ).catch(console.error);
                           }}
@@ -1179,6 +1336,51 @@ export default function SettingsProvidersScreen() {
                         >
                           Use
                         </Button>
+                      </View>
+                      <Input
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="numeric"
+                        onChangeText={setCustomModelContext}
+                        placeholder="Context window in tokens, e.g. 128K (optional)"
+                        value={customModelContext}
+                      />
+                      <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                        Capabilities (only what you verify — unchecked stays off):
+                      </Text>
+                      <View className="flex-row flex-wrap gap-sp-3">
+                        <Checkbox
+                          checked={customModelVision}
+                          onCheckedChange={(checked) =>
+                            setCustomModelVision(checked === true)
+                          }
+                        >
+                          Vision
+                        </Checkbox>
+                        <Checkbox
+                          checked={customModelReasoning}
+                          onCheckedChange={(checked) =>
+                            setCustomModelReasoning(checked === true)
+                          }
+                        >
+                          Reasoning
+                        </Checkbox>
+                        <Checkbox
+                          checked={customModelTools}
+                          onCheckedChange={(checked) =>
+                            setCustomModelTools(checked === true)
+                          }
+                        >
+                          Tools
+                        </Checkbox>
+                        <Checkbox
+                          checked={customModelImage}
+                          onCheckedChange={(checked) =>
+                            setCustomModelImage(checked === true)
+                          }
+                        >
+                          Image generation
+                        </Checkbox>
                       </View>
                     </View>
                   ) : null}
@@ -1359,16 +1561,181 @@ export default function SettingsProvidersScreen() {
                       </Text>
                     </View>
                   ) : (
-                    <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                      {selectedProvider.family === "ollama" &&
-                      selectedProviderDiscovery?.status === "connected"
-                        ? "Connected, but no pulled models were found. Pull a model in Ollama, then tap Refresh."
-                        : selectedProvider.family === "ollama"
-                          ? "Connect to Ollama to load pulled models."
-                          : "No models found"}
-                    </Text>
+                    <View className="gap-sp-2">
+                      <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                        {selectedProvider.family === "ollama" &&
+                        selectedProviderDiscovery?.status === "connected"
+                          ? "Connected, but no pulled models were found. Pull a model in Ollama, then tap Refresh."
+                          : selectedProvider.family === "ollama"
+                            ? "Connect to Ollama to load pulled models."
+                            : selectedProviderIsCustom
+                              ? "No models found"
+                              : "No models found — the live list could not be loaded."}
+                      </Text>
+                      {isManualCapable ? (
+                        <View className="flex-row gap-sp-2">
+                          <Button
+                            loading={
+                              busyKey ===
+                              `retry-models:${selectedProvider.id}`
+                            }
+                            onPress={() => {
+                              runAction(
+                                `retry-models:${selectedProvider.id}`,
+                                async () => {
+                                  invalidateLiveModelCatalog();
+                                  await refresh();
+                                },
+                              ).catch(console.error);
+                            }}
+                            size="xs"
+                            variant="outline"
+                          >
+                            Retry fetch
+                          </Button>
+                          <Button
+                            onPress={() => {
+                              setManualEntryOpen(true);
+                            }}
+                            size="xs"
+                            variant="outline"
+                          >
+                            Add model manually
+                          </Button>
+                        </View>
+                      ) : null}
+                    </View>
                   )}
                 </View>
+                {showManualSection ? (
+                  <View className="gap-sp-2 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
+                        {editingPreset
+                          ? "Edit manual model"
+                          : manualEntryOpen || providerPresets.length === 0
+                            ? "Add model manually"
+                            : "Manual models"}
+                      </Text>
+                      {!manualEntryOpen && providerPresets.length > 0 ? (
+                        <Button
+                          onPress={() => {
+                            setManualEntryOpen(true);
+                          }}
+                          size="xs"
+                          variant="outline"
+                        >
+                          Add another
+                        </Button>
+                      ) : null}
+                    </View>
+                    {(manualEntryOpen || providerPresets.length === 0) && (
+                      <>
+                        <Input
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          onChangeText={(text) => {
+                            setManualModelId(text);
+                          }}
+                          placeholder="Model ID, e.g. gpt-4o"
+                          value={manualModelId}
+                        />
+                        <Input
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          onChangeText={setManualModelLabel}
+                          placeholder="Label (optional, defaults to the ID)"
+                          value={manualModelLabel}
+                        />
+                        <View className="flex-row gap-sp-2">
+                          <Button
+                            disabled={!isModelIdValid(manualModelId)}
+                            loading={
+                              busyKey ===
+                              `manual-model:${selectedProvider.id}`
+                            }
+                            onPress={saveManualModel}
+                            size="sm"
+                            variant="outline"
+                          >
+                            {editingPreset ? "Save changes" : "Add model"}
+                          </Button>
+                          {editingPreset ? (
+                            <Button
+                              onPress={() => {
+                                setEditingPresetId(null);
+                                setManualModelId("");
+                                setManualModelLabel("");
+                              }}
+                              size="sm"
+                              variant="ghost"
+                            >
+                              Cancel
+                            </Button>
+                          ) : null}
+                        </View>
+                      </>
+                    )}
+                    {providerPresets.length > 0 ? (
+                      <View className="gap-sp-1">
+                        {providerPresets.map((preset) => (
+                          <View
+                            key={preset.id}
+                            className="flex-row items-center gap-sp-2"
+                          >
+                            <View className="min-w-0 flex-1">
+                              <Text
+                                numberOfLines={1}
+                                className="font-sans text-sm font-medium text-foreground dark:text-foreground-dark"
+                              >
+                                {preset.label?.trim() || preset.modelId}
+                              </Text>
+                              <Text
+                                numberOfLines={1}
+                                className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark"
+                              >
+                                {preset.modelId}
+                              </Text>
+                            </View>
+                            <Pressable
+                              accessibilityLabel={`Edit ${preset.modelId}`}
+                              accessibilityRole="button"
+                              hitSlop={8}
+                              onPress={() => {
+                                setEditingPresetId(preset.id);
+                                setManualModelId(preset.modelId);
+                                setManualModelLabel(preset.label ?? "");
+                                setManualEntryOpen(true);
+                              }}
+                              className="p-sp-1"
+                            >
+                              <Pencil
+                                color={theme.textSecondary}
+                                size={16}
+                                strokeWidth={2}
+                              />
+                            </Pressable>
+                            <Pressable
+                              accessibilityLabel={`Delete ${preset.modelId}`}
+                              accessibilityRole="button"
+                              hitSlop={8}
+                              onPress={() => {
+                                deleteManualModel(preset);
+                              }}
+                              className="p-sp-1"
+                            >
+                              <Trash2
+                                color={theme.destructive}
+                                size={16}
+                                strokeWidth={2}
+                              />
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
               </DrawerBody>
               <DrawerFooter>
                 {selectedProviderIsCustom ? (

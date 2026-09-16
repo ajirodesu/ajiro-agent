@@ -102,6 +102,20 @@ import {
   buildWorkspaceSystemPrompt,
   createWorkspaceTools,
 } from "@/modules/tools/workspace-tools";
+import {
+  buildActiveSkillsPrompt,
+  resolveRuntimeSkills,
+} from "@/modules/skills/skill-scopes";
+import {
+  extractSkillImportRoutes,
+  formatSkillImportRoutes,
+} from "@/modules/skills/skill-import-routes";
+import {
+  buildProjectSkillsPrompt,
+  resolveProjectSkills,
+  type ProjectSkill,
+} from "@/modules/skills/project-skills";
+import { createExternalFolderService } from "@/core/services/external-folder/external-folder-service";
 import type { WorkspaceFileService } from "@/core/services/workspace-file-service";
 
 import {
@@ -1338,20 +1352,63 @@ export async function executeClaimedAgentRun(
     if (selectedFilesContext) {
       appendContextToLatestUserMessage(runtimeMessages, selectedFilesContext);
     }
-    const skillsForPrompt = snapshotRef.current.skills.filter((skill) => {
-      if (!skill.enabled) return false;
-      // Manual skill mode: only explicitly selected skills attach. Auto
-      // mode attaches every enabled skill (auto-match happens by relevance).
-      if (conversation.skillMode === "manual") {
-        return conversation.selectedSkillIds.includes(skill.id);
+    // Project skill scope: pinned ids from project settings + live scan of
+    // the project's conventional skill directories (read-only context).
+    let projectSkillIds: string[] = [];
+    let projectSkills: ProjectSkill[] = [];
+    let projectSkillsNote: string | undefined;
+    if (externalFolderSession) {
+      try {
+        const projectSettings =
+          await repositories.configRepository.getProjectCodingSettings(
+            externalFolderSession,
+          );
+        projectSkillIds = projectSettings?.skillIds ?? [];
+      } catch {
+        projectSkillIds = [];
       }
-      return true;
+      try {
+        const folderService = createExternalFolderService();
+        const session = externalFolderSession;
+        const outcome = await resolveProjectSkills(
+          {
+            listDir: async (path) =>
+              folderService
+                .listEntries(session, path)
+                .map((entry) => ({
+                  kind: entry.kind === "directory" ? ("dir" as const) : ("file" as const),
+                  name: entry.name,
+                })),
+            readFile: async (path, maxBytes) =>
+              folderService.readTextFile(session, path, maxBytes),
+          },
+          { maxSkills: 20 },
+        );
+        projectSkills = outcome.skills;
+      } catch {
+        projectSkillsNote =
+          "Project skill scan unavailable for this folder; continuing without project skills.";
+      }
+    }
+    const resolvedSkills = resolveRuntimeSkills({
+      agent,
+      projectSkillIds,
+      selectedSkillIds: conversation.selectedSkillIds,
+      skillMode: conversation.skillMode,
+      skills: snapshotRef.current.skills,
     });
     const skillsRuntimeSystem = buildSkillsSystemPrompt({
       builtInToolSettings: snapshotRef.current.settings.builtInToolSettings,
       mcpServers: runMcpServers,
-      skills: skillsForPrompt,
+      skills: resolvedSkills.catalog,
     });
+    const activeSkillsRuntimeSystem = buildActiveSkillsPrompt(resolvedSkills.inline);
+    const projectSkillsRuntimeSystem = buildProjectSkillsPrompt(projectSkills);
+    const skillImportRouteSystem = formatSkillImportRoutes(
+      extractSkillImportRoutes(
+        typeof userMessage?.content === "string" ? userMessage.content : "",
+      ),
+    );
     const skillManagementRuntimeSystem =
       skillRuntime && runtimeSupportsTools && !isPlanMode
         ? "You can create, update, delete, and list skills with the manageSkill tool. Skills follow the SKILL.md format: a name, a short description, and markdown instructions. Create a skill when the user explicitly asks to save one, or when a repeated task would benefit from reusable instructions."
@@ -1413,6 +1470,10 @@ export async function executeClaimedAgentRun(
         mcpRuntime?.systemPrompt,
         memoryRuntimeSystem,
         skillsRuntimeSystem,
+        activeSkillsRuntimeSystem,
+        projectSkillsRuntimeSystem,
+        projectSkillsNote,
+        skillImportRouteSystem,
         skillManagementRuntimeSystem,
         agentManagementRuntimeSystem,
         taskRuntimeSystem,

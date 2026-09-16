@@ -17,10 +17,29 @@
 
 ## Skills (§19, I)
 - SKILL.md discovery (`discoverSkillFromMarkdown`: frontmatter version else
-  content hash), enable/disable + autoMatch (existing repo), keyword scoring
-  + ranking (`skills/lifecycle.ts`), supporting files (`skill_files` table),
-  import drawer + GitHub import (existing UI kept), MCP access via
-  recommended server ids, version + lifecycle metadata without migration.
+  content hash), enable/disable + autoMatch, keyword scoring + ranking
+  (`skills/lifecycle.ts`), supporting files (`skill_files` table), import
+  drawer + GitHub import.
+- Strict frontmatter validation (`skills/skill-validation.ts`, lobehub-style
+  typed errors: name kebab ≤80, single-line description, bundle-name lock).
+- Scopes (`skills/skill-scopes.ts`): global / project / agent (deny-wins via
+  `toolPermissions.skills`, no migration) / conversation-selected /
+  runtime-active; inline-vs-catalog split prevents duplicate injection.
+- Project skills: SAF scan of `.agents/skills`, `.claude/skills`,
+  `.ajiro/skills` (read-only context; no Electron IPC).
+- Skill Store (`catalog/skills.json` curated from official Anthropic skills
+  + `settings/skill-store.tsx`): browse/search/filter/detail/install/update/
+  uninstall with rollback; update checks by content hash.
+- Composer Skills Modal (search, sections, detail, enable, project install)
+  bound to real `selectedSkillIds` runtime state.
+- Management (`settings/skills/[id].tsx`): validated create/edit, agent
+  assignment display, project pinning (`ProjectCodingSettings.skillIds`, no
+  migration), MCP dependency inspection.
+- Runtime: `skill`/`skillReadFile`/`manageSkill`/`importSkillFromUrl` tools
+  plus `skillRunScript` (own-file allow-list, Linux headless, destructive
+  approval); skill-link import routes appended as system hints;
+  `recommendedMcpServerIds` surfaced with availability status everywhere —
+  MCP itself untouched and authoritative for execution.
 
 ## Plugins (§20, J)
 - `modules/plugins/engine.ts`: strict manifest validation (name/semver/lists),

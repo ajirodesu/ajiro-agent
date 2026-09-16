@@ -1,4 +1,4 @@
-import { PropsWithChildren } from 'react';
+import { PropsWithChildren, type ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { Edge } from 'react-native-safe-area-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +13,11 @@ export type ContainerProps = PropsWithChildren<{
   contentStyle?: StyleProp<ViewStyle>;
   edges?: Edge[];
   includeBottomTabInset?: boolean;
+  /** Fixed overlay rendered above scroll content (e.g. header shadow). */
+  overlay?: ReactNode;
+  onScroll?: (event: {
+    nativeEvent: { contentOffset: { y: number } };
+  }) => void;
   safeArea?: boolean;
   scroll?: boolean;
   scrollClassName?: string;
@@ -25,6 +30,8 @@ export function Container({
   contentStyle,
   edges = ['top', 'right', 'bottom', 'left'],
   includeBottomTabInset = true,
+  overlay,
+  onScroll,
   safeArea = true,
   scroll = false,
   scrollClassName,
@@ -38,21 +45,26 @@ export function Container({
       <Wrapper
         {...wrapperProps}
         className={cn('flex-1 bg-background dark:bg-background-dark', className)}>
-        <ScrollView
-          className={cn('flex-1', scrollClassName)}
-          contentContainerStyle={{
-            alignItems: 'center',
-            flexGrow: 1,
-            paddingBottom: bottomPadding,
-            paddingTop: Platform.OS === 'web' ? Spacing.six : 0,
-          }}
-          keyboardShouldPersistTaps="handled">
-          <View
-            className={cn('w-full max-w-content px-sp-4', contentClassName)}
-            style={[{ maxWidth: MaxContentWidth }, contentStyle]}>
-            {children}
-          </View>
-        </ScrollView>
+        <View className="relative flex-1">
+          <ScrollView
+            className={cn('flex-1', scrollClassName)}
+            contentContainerStyle={{
+              alignItems: 'center',
+              flexGrow: 1,
+              paddingBottom: bottomPadding,
+              paddingTop: Platform.OS === 'web' ? Spacing.six : 0,
+            }}
+            keyboardShouldPersistTaps="handled"
+            scrollEventThrottle={onScroll ? 32 : undefined}
+            onScroll={onScroll}>
+            <View
+              className={cn('w-full max-w-content px-sp-4', contentClassName)}
+              style={[{ maxWidth: MaxContentWidth }, contentStyle]}>
+              {children}
+            </View>
+          </ScrollView>
+          {overlay}
+        </View>
       </Wrapper>
     );
   }

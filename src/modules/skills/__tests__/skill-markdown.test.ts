@@ -23,6 +23,8 @@ describe("skill-markdown", () => {
       description: "Help with git",
       instructions: "Do git stuff",
       sourceMarkdown: null,
+      sourceUrl: null,
+      author: null,
       enabled: true,
       autoMatch: true,
       matchKeywords: ["git"],

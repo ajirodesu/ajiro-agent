@@ -46,6 +46,7 @@ export type PreviewKind =
   | "code"
   | "markdown"
   | "json"
+  | "html"
   | "image"
   | "svg"
   | "text"
@@ -66,6 +67,7 @@ export function previewKindFor(name: string, mimeType: string | null): PreviewKi
     return "markdown";
   }
   if (extension === ".json") return "json";
+  if (extension === ".html" || extension === ".htm") return "html";
   if (TEXT_EXTENSIONS.has(extension) || !extension) return "code";
   return "binary";
 }

@@ -80,6 +80,12 @@ export function resolveConfiguredModel(input: {
           ResolvedModel["capabilities"]
         >)
       : undefined;
+  const storedContextWindow =
+    typeof storedProfileRecord?.contextWindow === "number" &&
+    Number.isFinite(storedProfileRecord.contextWindow) &&
+    (storedProfileRecord.contextWindow as number) > 0
+      ? (storedProfileRecord.contextWindow as number)
+      : undefined;
 
   const profile = resolveModelProfile({
     authType: input.provider.authType,
@@ -111,7 +117,7 @@ export function resolveConfiguredModel(input: {
     supportsImageGeneration: profile.capabilities.imageGeneration,
     supportsReasoning: profile.capabilities.reasoning,
     transport: profile.transport,
-    contextWindow: suggestion.contextWindow ?? null,
+    contextWindow: suggestion.contextWindow ?? storedContextWindow ?? null,
     options:
       input.options ?? input.preset?.options ?? suggestion.options ?? null,
   };

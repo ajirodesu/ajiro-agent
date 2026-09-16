@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { ChevronLeft, Copy, FileDown, Trash2 } from "lucide-react-native";
+import { ChevronLeft, Copy, FileDown, Plus, Trash2 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -8,6 +8,12 @@ import { Container } from "@/components/shared/container";
 import { AgentImportDrawer } from "@/components/agents/agent-import-drawer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AppHeader,
+  CapsuleContainer,
+  CircleIconButton,
+  ICON_INNER,
+} from "@/components/ui/chrome";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
@@ -63,42 +69,56 @@ export default function SettingsAgentsScreen() {
       contentClassName="gap-sp-4 py-sp-4"
       includeBottomTabInset={false}
     >
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/settings");
-            }
-          }}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <View className="min-w-0 flex-1">
-          <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-            Agents
-          </Text>
-          <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
-            {customAgents.length} custom · built-ins always available
-          </Text>
-        </View>
-        <Button
-          onPress={() => {
-            router.push("/settings/agents/new" as never);
-          }}
-          size="sm"
-        >
-          New agent
-        </Button>
-        <Button
-          leftIcon={<FileDown color={theme.text} size={16} />}
-          onPress={() => setImportOpen(true)}
-          size="icon-xs"
-          variant="outline"
-        />
-      </View>
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push("/settings");
+              }
+            }}
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Agents"
+        subtitle={`${customAgents.length} custom · built-ins always available`}
+        right={
+          <CapsuleContainer accessibilityLabel="Agent actions">
+            <Pressable
+              accessibilityLabel="New agent"
+              accessibilityRole="button"
+              onPress={() => {
+                router.push("/settings/agents/new" as never);
+              }}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: ICON_INNER,
+                height: ICON_INNER,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Plus color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Import agent"
+              accessibilityRole="button"
+              onPress={() => setImportOpen(true)}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: ICON_INNER,
+                height: ICON_INNER,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <FileDown color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+          </CapsuleContainer>
+        }
+      />
 
       <Card className="overflow-hidden">
         {NATIVE_AGENTS.map((agent, index) => (

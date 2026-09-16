@@ -33,7 +33,17 @@ const REQUIRED_PATHS = [
   "bin/bash",
   "bin/sh",
   "usr/bin",
+  "usr/lib",
   "etc",
+  "tmp",
+];
+
+/**
+ * Mount-point / workspace directories a stock tarball may omit: created
+ * during finalize() instead of failing validation. PRoot bind-mounts
+ * /dev, /proc, /sys itself; /workspace is the coding-agent workdir.
+ */
+const ENSURED_PATHS = [
   "proc",
   "sys",
   "dev",
@@ -51,6 +61,12 @@ export interface RootfsDownloadConfig {
    * file. Takes precedence over `url`; no download happens.
    */
   archiveUri?: string;
+  /**
+   * Leading path components to strip on extraction. Termux proot-distro
+   * tarballs nest the filesystem one directory deep (`strip = 1`);
+   * flat archives (linuxcontainers style) use `0`.
+   */
+  stripComponents?: number;
   /** Expected size in bytes (progress display only). */
   totalBytes?: number;
 }
@@ -189,7 +205,12 @@ export class RootfsManager {
         `Unsupported rootfs archive format (need .tar.xz, .tar.gz/.tgz, or .tar): ${archivePath}`,
       );
     }
-    await this.extract(rootfsPath, archivePath, archiveFormatLabel(format));
+    await this.extract(
+      rootfsPath,
+      archivePath,
+      archiveFormatLabel(format),
+      config.stripComponents ?? 0,
+    );
     await this.finalize(rootfsPath);
   }
 
@@ -227,8 +248,17 @@ export class RootfsManager {
     return uriToFsPath(dest.uri);
   }
 
-  private async extract(rootfsPath: string, archivePath: string, formatLabel: string): Promise<void> {
-    this.emit({ phase: "extracting", progress: 0, message: `Extracting Linux userspace (${formatLabel})…` });
+  private async extract(
+    rootfsPath: string,
+    archivePath: string,
+    formatLabel: string,
+    stripComponents: number,
+  ): Promise<void> {
+    this.emit({
+      phase: "extracting",
+      progress: 0,
+      message: `Extracting Linux userspace (${formatLabel})…`,
+    });
     // Extraction runs in the native module (commons-compress + Tukaani XZ);
     // the bridge reports typed errors when the module is unavailable.
     const { terminalBridge } = await import("@/native/TerminalBridge");
@@ -250,7 +280,7 @@ export class RootfsManager {
       });
     });
     try {
-      const result = await terminalBridge.extractRootfs(archivePath, rootfsPath);
+      const result = await terminalBridge.extractRootfs(archivePath, rootfsPath, stripComponents);
       this.emit({
         phase: "extracting",
         progress: 1,
@@ -272,6 +302,20 @@ export class RootfsManager {
       await this.removeContents(rootfsPath).catch(() => {});
       this.emit({ phase: "error", progress: 0, message: problems[0] });
       throw new LinuxRuntimeError("rootfs-invalid", problems[0] ?? "Rootfs validation failed.");
+    }
+    // Stock tarballs omit mount points and the agent workdir: create them
+    // (PRoot bind-mounts /dev, /proc, /sys; /workspace is the workdir).
+    for (const ensured of ENSURED_PATHS) {
+      try {
+        const dir = new Directory(joinPath(rootfsPath, ensured));
+        if (!dir.exists) dir.create({ intermediates: true });
+      } catch (error) {
+        throw new LinuxRuntimeError(
+          "rootfs-invalid",
+          `Rootfs invalid: cannot create ${ensured}.`,
+          { cause: error },
+        );
+      }
     }
     const readyMarker = new File(joinPath(rootfsPath, ROOTFS_READY_MARKER));
     if (!readyMarker.exists) readyMarker.create();

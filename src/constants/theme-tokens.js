@@ -28,6 +28,7 @@ const lightPalette = {
   syntaxString: "#196B3A",
   destructive: "#DC2626",
   destructiveForeground: "#FFFFFF",
+  success: "#196B3A",
 };
 
 const darkPalette = {
@@ -53,6 +54,7 @@ const darkPalette = {
   syntaxString: "#76D39B",
   destructive: "#EF4444",
   destructiveForeground: "#FFFFFF",
+  success: "#76D39B",
 };
 
 const Colors = {

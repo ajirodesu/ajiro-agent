@@ -24,11 +24,23 @@ import { SQLiteProvider } from "expo-sqlite";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { X } from "lucide-react-native";
-import { useEffect, useRef } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { Image } from "expo-image";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  SPLASH_FADE_OUT_MS,
+  SPLASH_MARK_WIDTH_FRACTION,
+} from "@/launch/splash";
 import "./global.css";
 
 SplashScreen.preventAutoHideAsync();
@@ -258,6 +270,49 @@ function SplashScreenController() {
   return null;
 }
 
+function ThemedSplashOverlay() {
+  const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const opacity = useRef(new Animated.Value(1)).current;
+  const [gone, setGone] = useState(false);
+
+  useEffect(() => {
+    const animation = Animated.timing(opacity, {
+      toValue: 0,
+      duration: SPLASH_FADE_OUT_MS,
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (finished) setGone(true);
+    });
+    return () => {
+      animation.stop();
+    };
+  }, [opacity]);
+
+  if (gone) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        { ...StyleSheet.absoluteFill },
+        { backgroundColor: theme.background, opacity, zIndex: 100 },
+      ]}
+    >
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <Image
+          source={require("../../assets/images/new-splash-icon.png")}
+          style={{
+            width: width * SPLASH_MARK_WIDTH_FRACTION,
+            aspectRatio: 1,
+          }}
+          contentFit="contain"
+        />
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function MainLayout() {
   // The resolved color scheme comes from the shared css-interop observable.
   // ThemePreferenceController (in AppStateProvider) sets it from the user's
@@ -293,6 +348,7 @@ export default function MainLayout() {
                     <InAppNotificationBanner />
                     <ReleaseUpdateBanner />
                     <Slot />
+                    <ThemedSplashOverlay />
                   </UpdateProvider>
                 </IdeWorkspaceProvider>
               </AppStateProvider>

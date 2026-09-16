@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import {
+  BookOpen,
   Check,
   ChevronDown,
   FileText,
@@ -83,6 +84,18 @@ function describeToolCall(toolName: string, inputSummary: string): string {
       return "Renaming entry";
     case "moveEntry":
       return "Moving entry";
+    case "skill":
+      return `Using skill ${firstQuoted(detail) ?? "skill"}`;
+    case "skillReadFile":
+      return `Reading skill file ${firstQuoted(detail) ?? "file"}`;
+    case "skillRunScript":
+      return `Running skill script ${firstQuoted(detail) ?? "script"}`;
+    case "manageSkill":
+      return "Managing skills";
+    case "importSkillFromUrl":
+      return "Importing skill";
+    case "shell":
+      return `Running ${firstQuoted(detail) ?? "command"}`;
     default:
       return toolName
         .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -134,6 +147,20 @@ function ToolGlyph({ toolName }: { toolName: string }) {
   }
 
   if (toolName === "exec" || toolName === "run-command") {
+    return <Terminal color={color} size={size} />;
+  }
+
+  if (
+    toolName === "skill" ||
+    toolName === "skillReadFile" ||
+    toolName === "skillRunScript" ||
+    toolName === "manageSkill" ||
+    toolName === "importSkillFromUrl"
+  ) {
+    return <BookOpen color={color} size={size} />;
+  }
+
+  if (toolName === "shell") {
     return <Terminal color={color} size={size} />;
   }
 

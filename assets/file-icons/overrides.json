@@ -1,0 +1,10 @@
+{
+  "$comment": "Local file-icon overrides applied by vendor-file-icons.mjs on top of the official material-icon-theme manifest. Extension keys follow manifest convention (lowercase, no leading dot); fileNames keys are exact lowercase file names.",
+  "extensions": {
+    "ajiro": "ajiro"
+  },
+  "fileNames": {},
+  "files": {
+    "ajiro": "ajiro.svg"
+  }
+}

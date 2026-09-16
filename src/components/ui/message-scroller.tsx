@@ -79,7 +79,7 @@ const MessageScrollerActionsContext = createContext<{
 
 const MessageScrollerScrollableContext = createContext<ScrollState | null>(null);
 
-function useMessageScrollerContext() {
+export function useMessageScrollerContext() {
   const context = useContext(MessageScrollerContext);
 
   if (!context) {

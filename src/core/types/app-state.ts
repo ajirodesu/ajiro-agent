@@ -32,6 +32,12 @@ export type AgentVisibilityMode = "primary" | "subagent" | "all";
 export type AgentToolPermissions = {
   builtInTools?: Partial<Record<BuiltInToolKey, boolean>>;
   mcpServers?: Record<string, boolean>;
+  /**
+   * Agent skill assignment (skill id → allowed). Absent map or absent entry
+   * means allowed; explicit `false` denies (deny-wins). Stored in the same
+   * `tool_permissions_json` blob, so no migration is needed.
+   */
+  skills?: Record<string, boolean>;
 };
 export type ThemeMode = "system" | "light" | "dark";
 export type McpServerTransport = "http" | "sse";
@@ -91,6 +97,10 @@ export type SkillConfig = {
   description: string | null;
   instructions: string;
   sourceMarkdown: string | null;
+  /** Origin URL the skill was installed from (store catalog or import URL). */
+  sourceUrl: string | null;
+  /** Author attribution from the catalog or skill metadata. */
+  author: string | null;
   skillFiles: SkillFile[];
   enabled: boolean;
   autoMatch: boolean;

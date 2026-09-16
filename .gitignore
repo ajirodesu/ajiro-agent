@@ -48,3 +48,4 @@ example
 # Local Expo module Android build output
 /modules/*/android/build/
 /modules/*/android/.gradle/
+/modules/*/android/.cxx/

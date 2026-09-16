@@ -27,7 +27,10 @@ import {
   FileVideo,
   Loader,
   Pencil,
+  RotateCcw,
   Share2,
+  TextCursor,
+  Trash,
   TriangleAlert,
 } from "lucide-react-native";
 import {
@@ -36,6 +39,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -45,8 +49,10 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
+  TextInput,
   type TextStyle,
   View,
 } from "react-native";
@@ -71,6 +77,12 @@ import tsx from "refractor/tsx";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import {
+  InlineAudio,
+  InlineVideo,
+  mediaKindForUri,
+} from "@/components/chat/inline-media";
+import { CodeAccordion } from "@/components/ui/code-accordion";
+import {
   Drawer,
   DrawerBody,
   DrawerContent,
@@ -79,12 +91,11 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  MessageMenu,
+  type MessageMenuAction,
+} from "@/components/chat/message-menu";
 import { Message, MessageFooter } from "@/components/ui/message";
+import { formatClockTime, formatMessageDate } from "@/modules/chat/message-dates";
 import { ProcessingStatus } from "@/components/ui/processing-status";
 import { ToolTrace } from "@/components/ui/tool-trace";
 import {
@@ -172,9 +183,12 @@ MARKDOWN_PARSER.core.ruler.after(
 type ChatMessageProps = {
   canEditAndResend?: boolean;
   message: StoredMessage;
+  onDeleteMessage?: () => void;
   onEditMessage?: (content: string) => void;
+  onEditText?: (content: string) => void;
   onInterrupt?: () => void;
   onOpenHistory?: () => void;
+  onRegenerate?: () => void;
   onRetry?: () => void;
   onSavePrompt?: (content: string) => void;
   workspaceFiles: WorkspaceFile[];
@@ -191,13 +205,29 @@ const MARKDOWN_RULES = {
       language={getCodeLanguage(node)}
     />
   ),
-  image: (node) => (
-    <MarkdownImage
-      alt={String(node.attributes.alt ?? "")}
-      key={node.key}
-      uri={String(node.attributes.src ?? "")}
-    />
-  ),
+  image: (node) => {
+    const uri = String(node.attributes.src ?? "");
+    const kind = mediaKindForUri(uri);
+    if (kind === "video") {
+      return <InlineVideo key={node.key} uri={uri} />;
+    }
+    if (kind === "audio") {
+      return (
+        <InlineAudio
+          key={node.key}
+          title={String(node.attributes.alt ?? "Audio")}
+          uri={uri}
+        />
+      );
+    }
+    return (
+      <MarkdownImage
+        alt={String(node.attributes.alt ?? "")}
+        key={node.key}
+        uri={uri}
+      />
+    );
+  },
   list_item: (node, children, parent, styles) => {
     const list = parent.find(
       (parentNode) =>
@@ -373,6 +403,31 @@ function getTableText(node: ASTNode) {
     .join("\n");
 }
 
+function MessageActionButton({
+  children,
+  destructive,
+  label,
+  onPress,
+}: {
+  children: ReactNode;
+  destructive?: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={onPress}
+      className="p-sp-1"
+      style={({ pressed }) => (pressed ? { opacity: 0.6 } : null)}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
 function CopyButton({ label, value }: { label: string; value: string }) {
   const theme = useTheme();
   const [copied, setCopied] = useRecyclingState(false, [value]);
@@ -472,10 +527,10 @@ function CopyableCodeBlock({
   }, [code, language]);
 
   return (
-    <CopyableMarkdownBlock
-      copyLabel="Copy code"
-      copyValue={code}
+    <CodeAccordion
       label={language || "Code"}
+      defaultExpanded={code.split("\n").length <= 15}
+      trailing={<CopyButton label="Copy code" value={code} />}
     >
       <ScrollView
         horizontal
@@ -498,7 +553,7 @@ function CopyableCodeBlock({
             : code}
         </Text>
       </ScrollView>
-    </CopyableMarkdownBlock>
+    </CodeAccordion>
   );
 }
 
@@ -726,6 +781,29 @@ const CODE_EXTENSIONS = [
 ];
 const SPREADSHEET_EXTENSIONS = [".csv", ".xls", ".xlsx", ".ods"];
 
+function AttachmentPlayer({ file }: { file: WorkspaceFile }) {
+  const uri = useMemo(() => {
+    try {
+      const local = resolveWorkspaceFile(file.relativePath);
+      return local.exists ? local.uri : null;
+    } catch {
+      return null;
+    }
+  }, [file.relativePath]);
+  const mimeType = file.mimeType?.toLowerCase() ?? "";
+  const kind = mimeType.startsWith("video/")
+    ? "video"
+    : mimeType.startsWith("audio/")
+      ? "audio"
+      : mediaKindForUri(file.displayName);
+  if (!uri) return null;
+  if (kind === "video") return <InlineVideo uri={uri} />;
+  if (kind === "audio") {
+    return <InlineAudio title={file.displayName} uri={uri} />;
+  }
+  return null;
+}
+
 function getFileTypeIcon(file: WorkspaceFile) {
   const mimeType = file.mimeType?.toLowerCase() ?? "";
   const fileName = file.displayName.toLowerCase();
@@ -803,9 +881,12 @@ function SpinningLoader({ color, size }: { color: string; size: number }) {
 export const ChatMessage = memo(function ChatMessage({
   canEditAndResend = false,
   message,
+  onDeleteMessage,
   onEditMessage,
+  onEditText,
   onInterrupt,
   onOpenHistory,
+  onRegenerate,
   onRetry,
   onSavePrompt,
   workspaceFiles,
@@ -826,6 +907,19 @@ export const ChatMessage = memo(function ChatMessage({
     () => message.status === "streaming",
     [message.id],
   );
+  const [reasoningTouched, setReasoningTouched] = useRecyclingState(false, [
+    message.id,
+  ]);
+
+  useEffect(() => {
+    if (
+      message.status !== "streaming" &&
+      !reasoningTouched &&
+      reasoningExpanded
+    ) {
+      setReasoningExpanded(false);
+    }
+  }, [message.status, reasoningTouched, reasoningExpanded, setReasoningExpanded]);
   const [tasksExpanded, setTasksExpanded] = useRecyclingState(
     () => message.status === "streaming",
     [message.id],
@@ -835,6 +929,15 @@ export const ChatMessage = memo(function ChatMessage({
   const [timelineExpanded, setTimelineExpanded] = useRecyclingState(false, [
     message.id,
   ]);
+  const [menuOpen, setMenuOpen] = useRecyclingState(false, [message.id]);
+  const [menuAnchor, setMenuAnchor] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [selecting, setSelecting] = useRecyclingState(false, [message.id]);
+  const bubblePressRef = useRef<View>(null);
   const isAssistant = message.role === "assistant";
   const isUser = message.role === "user";
   const align = isUser ? "end" : "start";
@@ -898,6 +1001,66 @@ export const ChatMessage = memo(function ChatMessage({
     await Clipboard.setStringAsync(message.content);
     setCopied(true);
   };
+  const openMenu = () => {
+    bubblePressRef.current?.measureInWindow((x, y, width, height) => {
+      setMenuAnchor({ x, y, width, height });
+      setMenuOpen(true);
+    });
+  };
+  const menuActions: MessageMenuAction[] = [
+    {
+      key: "copy",
+      label: copied ? "Copied" : "Copy",
+      icon: copied ? (
+        <Check color={theme.textSecondary} size={18} />
+      ) : (
+        <Copy color={theme.textSecondary} size={18} />
+      ),
+      onPress: () => {
+        handleCopy().catch(console.error);
+      },
+    },
+    {
+      key: "select",
+      label: "Select text",
+      icon: <TextCursor color={theme.textSecondary} size={18} />,
+      onPress: () => {
+        setSelecting(true);
+      },
+    },
+    ...(canEditAndResend && onEditMessage
+      ? [
+          {
+            key: "edit",
+            label: "Edit message",
+            icon: <Pencil color={theme.textSecondary} size={18} />,
+            onPress: () => {
+              onEditMessage(message.content);
+            },
+          } as MessageMenuAction,
+        ]
+      : []),
+    ...(onSavePrompt
+      ? [
+          {
+            key: "save",
+            label: "Save prompt",
+            icon: <Bookmark color={theme.textSecondary} size={18} />,
+            onPress: () => {
+              onSavePrompt(message.content);
+            },
+          } as MessageMenuAction,
+        ]
+      : []),
+    {
+      key: "share",
+      label: "Share prompt",
+      icon: <Share2 color={theme.textSecondary} size={18} />,
+      onPress: () => {
+        Share.share({ message: message.content }).catch(() => {});
+      },
+    },
+  ];
   const handleLinkPress = useCallback((url: string) => {
     openMarkdownLink(url).catch(console.error);
     return false;
@@ -1087,7 +1250,7 @@ export const ChatMessage = memo(function ChatMessage({
       <View
         className={cn("gap-1", align === "end" ? "items-end" : "items-start", {
           "w-full": isAssistant,
-          "max-w-[80%]": !isAssistant,
+          "max-w-[75%]": !isAssistant,
         })}
       >
         {hasUserAttachments ? (
@@ -1142,6 +1305,21 @@ export const ChatMessage = memo(function ChatMessage({
                 </Pressable>
               );
             })}
+            {attachedFiles.some((file) => {
+              const mimeType = file.mimeType?.toLowerCase() ?? "";
+              const kind = mimeType.startsWith("video/")
+                ? "video"
+                : mimeType.startsWith("audio/")
+                  ? "audio"
+                  : mediaKindForUri(file.displayName);
+              return kind === "video" || kind === "audio";
+            }) ? (
+              <View className="gap-sp-2 px-sp-2 pb-sp-2">
+                {attachedFiles.map((file) => (
+                  <AttachmentPlayer key={`player-${file.id}`} file={file} />
+                ))}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -1153,6 +1331,7 @@ export const ChatMessage = memo(function ChatMessage({
           >
             <BubbleContent
               className={fileHeaderConnected ? "rounded-tr-none" : undefined}
+              style={isUser ? { backgroundColor: theme.accent } : undefined}
             >
               {isAssistant ? (
                 <View className="gap-sp-3">
@@ -1160,8 +1339,9 @@ export const ChatMessage = memo(function ChatMessage({
                     <View className="gap-sp-2">
                       <Pressable
                         accessibilityRole="button"
-                        className="self-start flex-row items-center gap-sp-2"
+                        className="w-full flex-row items-center gap-sp-2"
                         onPress={() => {
+                          setReasoningTouched(true);
                           setReasoningExpanded((current) => !current);
                         }}
                         style={({ pressed }) =>
@@ -1171,6 +1351,7 @@ export const ChatMessage = memo(function ChatMessage({
                         <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
                           {reasoningLabel}
                         </Text>
+                        <View className="flex-1" />
                         <ChevronDown
                           color={theme.textSecondary}
                           size={14}
@@ -1337,65 +1518,54 @@ export const ChatMessage = memo(function ChatMessage({
                   ) : null}
                 </View>
               ) : (
-                <DropdownMenu>
-                  <DropdownMenuTrigger triggerOn="longPress">
-                    <Pressable
-                      accessibilityHint="Long press to open message actions"
-                      accessibilityRole="button"
-                      delayLongPress={220}
-                      style={({ pressed }) =>
-                        pressed ? { opacity: 0.9 } : null
-                      }
-                    >
-                      <Text className="font-sans text-base text-background dark:text-background-dark">
-                        {message.content}
-                      </Text>
-                    </Pressable>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    alignOffset={52}
-                    sideOffset={16}
-                    width={200}
-                  >
-                    <DropdownMenuItem
-                      className="flex-row items-center gap-sp-3"
-                      onPress={() => {
-                        handleCopy().catch(console.error);
+                <>
+                  <Pressable
+                    ref={bubblePressRef}
+                    accessibilityHint="Long press to open message actions"
+                  accessibilityRole="button"
+                  delayLongPress={220}
+                  onLongPress={openMenu}
+                  style={({ pressed }) =>
+                    pressed ? { opacity: 0.9 } : null
+                  }
+                >
+                  {selecting ? (
+                    <TextInput
+                      autoFocus
+                      multiline
+                      onBlur={() => {
+                        setSelecting(false);
                       }}
+                      showSoftInputOnFocus={false}
+                      value={message.content}
+                      onChangeText={() => {}}
+                      style={{
+                        color: theme.accentForeground,
+                        fontSize: 16,
+                        lineHeight: 22,
+                        padding: 0,
+                      }}
+                    />
+                  ) : (
+                    <Text
+                      className="font-sans text-base"
+                      style={{ color: theme.accentForeground }}
                     >
-                      <Copy color={theme.textSecondary} size={18} />
-                      <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-                        Copy
-                      </Text>
-                    </DropdownMenuItem>
-                    {onSavePrompt ? (
-                      <DropdownMenuItem
-                        className="flex-row items-center gap-sp-3"
-                        onPress={() => onSavePrompt(message.content)}
-                      >
-                        <Bookmark color={theme.textSecondary} size={18} />
-                        <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-                          Save prompt
-                        </Text>
-                      </DropdownMenuItem>
-                    ) : null}
-                    {canEditAndResend && onEditMessage ? (
-                      <DropdownMenuItem
-                        className="flex-row items-center gap-sp-3"
-                        onPress={() => {
-                          setTimeout(() => {
-                            onEditMessage(message.content);
-                          }, 180);
-                        }}
-                      >
-                        <Pencil color={theme.textSecondary} size={18} />
-                        <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-                          Edit & resend
-                        </Text>
-                      </DropdownMenuItem>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      {message.content}
+                    </Text>
+                  )}
+                </Pressable>
+                <MessageMenu
+                  actions={menuActions}
+                  align="end"
+                  anchor={menuAnchor}
+                  dateLabel={formatMessageDate(message.createdAt)}
+                  onClose={() => {
+                    setMenuOpen(false);
+                  }}
+                  visible={menuOpen}
+                />
+                </>
               )}
             </BubbleContent>
           </Bubble>
@@ -1407,23 +1577,69 @@ export const ChatMessage = memo(function ChatMessage({
           executionTimeline.length > 0 ||
           generatedImages.length > 0) ? (
           <MessageFooter>
-            <Button
-              leftIcon={
-                copied ? (
-                  <Check color={theme.textSecondary} size={14} />
-                ) : (
-                  <Copy color={theme.textSecondary} size={14} />
-                )
-              }
+            <MessageActionButton
+              label={copied ? "Copied" : "Copy"}
               onPress={() => {
                 handleCopy().catch(console.error);
               }}
-              size="xs"
-              textClassName="text-muted-foreground dark:text-muted-foreground-dark"
-              variant="ghost"
             >
-              {copied ? "Copied" : "Copy"}
-            </Button>
+              {copied ? (
+                <Check color={theme.textSecondary} size={18} />
+              ) : (
+                <Copy color={theme.textSecondary} size={18} />
+              )}
+            </MessageActionButton>
+            {onEditText ? (
+              <MessageActionButton
+                label="Edit text"
+                onPress={() => {
+                  onEditText(message.content);
+                }}
+              >
+                <Pencil color={theme.textSecondary} size={18} />
+              </MessageActionButton>
+            ) : null}
+            {message.content.trim() && onSavePrompt ? (
+              <MessageActionButton
+                label="Save prompt"
+                onPress={() => onSavePrompt(message.content)}
+              >
+                <Bookmark color={theme.textSecondary} size={18} />
+              </MessageActionButton>
+            ) : null}
+            {onRetry || onRegenerate ? (
+              <MessageActionButton
+                label="Retry"
+                onPress={() => {
+                  if (onRetry) {
+                    onRetry();
+                  } else {
+                    onRegenerate?.();
+                  }
+                }}
+              >
+                <RotateCcw color={theme.textSecondary} size={18} />
+              </MessageActionButton>
+            ) : null}
+            {onDeleteMessage ? (
+              <MessageActionButton
+                label="Delete"
+                destructive
+                onPress={onDeleteMessage}
+              >
+                <Trash color={theme.destructive} size={18} />
+              </MessageActionButton>
+            ) : null}
+            {timelineLabel ? (
+              <MessageActionButton
+                label="Steps"
+                onPress={() => {
+                  setTimelineExpanded(true);
+                }}
+              >
+                <Clock3 color={theme.textSecondary} size={18} />
+              </MessageActionButton>
+            ) : null}
             {memoryEventLabel ? (
               <Button
                 leftIcon={<Brain color={theme.textSecondary} size={14} />}
@@ -1438,30 +1654,6 @@ export const ChatMessage = memo(function ChatMessage({
                 variant="ghost"
               >
                 {memoryEventLabel}
-              </Button>
-            ) : null}
-            {message.content.trim() && onSavePrompt ? (
-              <Button
-                leftIcon={<Bookmark color={theme.textSecondary} size={14} />}
-                onPress={() => onSavePrompt(message.content)}
-                size="xs"
-                textClassName="text-muted-foreground dark:text-muted-foreground-dark"
-                variant="ghost"
-              >
-                Save prompt
-              </Button>
-            ) : null}
-            {timelineLabel ? (
-              <Button
-                leftIcon={<Clock3 color={theme.textSecondary} size={14} />}
-                onPress={() => {
-                  setTimelineExpanded(true);
-                }}
-                size="xs"
-                textClassName="text-muted-foreground dark:text-muted-foreground-dark"
-                variant="ghost"
-              >
-                {timelineLabel}
               </Button>
             ) : null}
           </MessageFooter>
@@ -1546,6 +1738,20 @@ export const ChatMessage = memo(function ChatMessage({
                 </View>
               );
             })}
+            {message.status === "completed" && executionTimeline.length > 0 ? (
+              <View
+                key="timeline-complete"
+                className="flex-row items-center gap-sp-2 rounded-ui border border-border bg-card px-sp-3 py-sp-3 dark:border-border-dark dark:bg-card-dark"
+              >
+                <Check color={theme.success ?? theme.textSecondary} size={16} />
+                <Text className="flex-1 font-sans text-sm font-medium text-foreground dark:text-foreground-dark">
+                  Complete
+                </Text>
+                <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                  {formatClockTime(message.updatedAt)}
+                </Text>
+              </View>
+            ) : null}
           </DrawerBody>
         </DrawerContent>
       </Drawer>

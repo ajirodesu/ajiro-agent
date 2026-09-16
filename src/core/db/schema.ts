@@ -266,6 +266,8 @@ export const skills = sqliteTable(
     description: text("description"),
     instructions: text("instructions").notNull(),
     sourceMarkdown: text("source_markdown"),
+    sourceUrl: text("source_url"),
+    author: text("author"),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     autoMatch: integer("auto_match", { mode: "boolean" }).notNull().default(false),
     matchKeywords: text("match_keywords_json", { mode: "json" })

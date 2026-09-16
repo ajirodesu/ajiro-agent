@@ -6,7 +6,11 @@ import { DEFAULT_PROVIDER_CONFIGS } from "@/modules/config/registry";
 import { appSettings, modelPresets, providerConfigs } from "@/core/db/schema";
 import {
   normalizeCodingSettings,
+  normalizeProjectCodingSettings,
+  parseProjectCodingSettings,
+  projectSettingsKey,
   serializeCodingSettings,
+  serializeProjectCodingSettings,
 } from "@/core/services/coding/coding-settings";
 import { buildSettings, nowIso } from "@/core/db/repositories/shared";
 import type {
@@ -294,6 +298,32 @@ export function createConfigRepository(db: AppDatabase): ConfigRepository {
         target: appSettings.key,
         set: { value },
       });
+    },
+    async getProjectCodingSettings(session) {
+      const rows = await db
+        .select()
+        .from(appSettings)
+        .where(eq(appSettings.key, projectSettingsKey(session)))
+        .limit(1);
+      return parseProjectCodingSettings(rows[0]?.value ?? null);
+    },
+    async setProjectCodingSettings(session, input) {
+      const current =
+        (await this.getProjectCodingSettings(session)) ??
+        normalizeProjectCodingSettings({
+          projectName: session.displayName,
+          projectUri: session.uri,
+        });
+      const next = normalizeProjectCodingSettings({
+        ...current,
+        ...input,
+        projectName: session.displayName,
+        projectUri: session.uri,
+      });
+      await this.setSetting(
+        projectSettingsKey(session),
+        serializeProjectCodingSettings(next),
+      );
     },
   };
 }

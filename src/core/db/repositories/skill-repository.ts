@@ -37,6 +37,8 @@ export function createSkillRepository(db: AppDatabase): SkillRepository {
     description: row.description,
     instructions: row.instructions,
     sourceMarkdown: row.sourceMarkdown,
+    sourceUrl: row.sourceUrl,
+    author: row.author,
     enabled: row.enabled,
     autoMatch: row.autoMatch,
     matchKeywords: row.matchKeywords,
@@ -70,6 +72,8 @@ export function createSkillRepository(db: AppDatabase): SkillRepository {
         description: input.description ?? null,
         instructions: input.instructions,
         sourceMarkdown: input.sourceMarkdown ?? null,
+        sourceUrl: input.sourceUrl ?? null,
+        author: input.author ?? null,
         enabled: input.enabled ?? true,
         autoMatch: input.autoMatch ?? false,
         matchKeywords: input.matchKeywords ?? [],
@@ -145,6 +149,10 @@ export function createSkillRepository(db: AppDatabase): SkillRepository {
             input.sourceMarkdown !== undefined
               ? input.sourceMarkdown
               : current.sourceMarkdown,
+          sourceUrl:
+            input.sourceUrl !== undefined ? input.sourceUrl : current.sourceUrl,
+          author:
+            input.author !== undefined ? input.author : current.author,
           title: input.title ?? current.title,
           updatedAt: nowIso(),
         })

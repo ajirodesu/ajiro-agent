@@ -1,9 +1,27 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { ChevronLeft } from "lucide-react-native";
+import {
+  BookMarked,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Download,
+  ExternalLink,
+  GitBranch,
+  Minus,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Settings,
+  Upload,
+  User,
+} from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   Text,
@@ -13,6 +31,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button } from "@/components/ui/button";
+import { AppHeader, CircleIconButton, HeaderShadow } from "@/components/ui/chrome";
+import { withAlpha } from "@/components/ui/chrome-spec";
 import {
   Drawer,
   DrawerBody,
@@ -21,10 +41,15 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { FileTypeIcon } from "@/file-icons/FileTypeIcon";
 import { useTheme } from "@/hooks/use-theme";
 import { secureSecretStore } from "@/core/services/secrets";
 import { useIdeWorkspace } from "@/providers/ide-workspace";
 import type { ConflictFile } from "@/modules/ide/git-conflicts";
+import {
+  formatRelativeTime,
+  parseRemoteRepo,
+} from "@/modules/ide/git-display";
 
 type DiffView = { path: string; staged: boolean; text: string } | null;
 
@@ -35,13 +60,13 @@ export default function GitScreen() {
 
   const project = ide.activeProject;
   const session = ide.activeSession;
-  const [statusText, setStatusText] = useState<string | null>(null);
   const [status, setStatus] = useState<import("@/modules/ide/git-ops").GitStatusSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [diff, setDiff] = useState<DiffView>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
+  const [commitDescription, setCommitDescription] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [branches, setBranches] = useState<{
@@ -54,9 +79,12 @@ export default function GitScreen() {
   >([]);
   const [conflicts, setConflicts] = useState<ConflictFile[]>([]);
   const [branchModal, setBranchModal] = useState(false);
+  const [branchDrawer, setBranchDrawer] = useState(false);
+  const [messageCollapsed, setMessageCollapsed] = useState(false);
+  const [reviewExpanded, setReviewExpanded] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
   const [newBranch, setNewBranch] = useState("");
-  const [tokenModal, setTokenModal] = useState(false);
-  const [tokenInput, setTokenInput] = useState("");
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -163,14 +191,6 @@ export default function GitScreen() {
       ide.emit({ type: "GIT_STATUS_CHANGED", projectId: project.id });
     });
 
-  const unstageAll = () =>
-    withBusy("stage", async () => {
-      if (!session || !project) return;
-      const { unstageAll } = await import("@/modules/ide/git-ops");
-      await unstageAll(session);
-      ide.emit({ type: "GIT_STATUS_CHANGED", projectId: project.id });
-    });
-
   const stageOne = (path: string) =>
     withBusy("stage", async () => {
       if (!session || !project) return;
@@ -195,26 +215,12 @@ export default function GitScreen() {
       ide.emit({ type: "GIT_STATUS_CHANGED", projectId: project.id });
     });
 
-  const doCommit = async (push: boolean) => {
-    if (!session || !project || !commitMessage.trim()) {
-      setError("Enter a commit message.");
-      return;
-    }
-    await withBusy("commit", async () => {
-      const { commitChanges, pushChanges } = await import(
-        "@/modules/ide/git-ops"
-      );
-      await commitChanges(session, commitMessage.trim());
-      setCommitMessage("");
-      if (push) {
-        const auth = await authed();
-        const result = await pushChanges(session, auth, (progress) => {
-          setProgress(`${progress.phase} ${progress.loaded}/${progress.total}`);
-        });
-        if (!result.ok) throw new Error(result.message);
-      }
-      ide.emit({ type: "GIT_STATUS_CHANGED", projectId: project.id });
-    });
+  const trackProgress = (progress: {
+    phase: string;
+    loaded: number;
+    total: number;
+  }) => {
+    setProgress(`${progress.phase} ${progress.loaded}/${progress.total}`);
   };
 
   const doPush = () =>
@@ -222,9 +228,7 @@ export default function GitScreen() {
       if (!session || !project) return;
       const { pushChanges } = await import("@/modules/ide/git-ops");
       const auth = await authed();
-      const result = await pushChanges(session, auth, (progress) => {
-        setProgress(`${progress.phase} ${progress.loaded}/${progress.total}`);
-      });
+      const result = await pushChanges(session, auth, trackProgress);
       if (!result.ok) throw new Error(result.message);
       ide.emit({ type: "GIT_STATUS_CHANGED", projectId: project.id });
     });
@@ -234,12 +238,60 @@ export default function GitScreen() {
       if (!session || !project) return;
       const { pullChanges } = await import("@/modules/ide/git-ops");
       const auth = await authed();
-      const result = await pullChanges(session, auth, (progress) => {
-        setProgress(`${progress.phase} ${progress.loaded}/${progress.total}`);
-      });
+      const result = await pullChanges(session, auth, trackProgress);
       if (!result.ok) throw new Error(result.message);
+      setLastFetchedAt(Date.now());
       ide.emit({ type: "GIT_STATUS_CHANGED", projectId: project.id });
     });
+
+  const doSync = () =>
+    withBusy("sync", async () => {
+      if (!session || !project) return;
+      const { pullChanges, pushChanges } = await import(
+        "@/modules/ide/git-ops"
+      );
+      const auth = await authed();
+      const pulled = await pullChanges(session, auth, trackProgress);
+      if (!pulled.ok) throw new Error(pulled.message);
+      setLastFetchedAt(Date.now());
+      const pushed = await pushChanges(session, auth, trackProgress);
+      if (!pushed.ok) throw new Error(pushed.message);
+      ide.emit({ type: "GIT_STATUS_CHANGED", projectId: project.id });
+    });
+
+  const doCommitAll = async () => {
+    if (!commitMessage.trim()) {
+      setError("Enter a commit message.");
+      return;
+    }
+    const fullMessage = commitDescription.trim()
+      ? `${commitMessage.trim()}\n\n${commitDescription.trim()}`
+      : commitMessage.trim();
+    await withBusy("commit", async () => {
+      if (!session || !project) return;
+      const { stageAll, commitChanges } = await import(
+        "@/modules/ide/git-ops"
+      );
+      await stageAll(session);
+      await commitChanges(session, fullMessage);
+      setCommitMessage("");
+      setCommitDescription("");
+      ide.emit({ type: "GIT_STATUS_CHANGED", projectId: project.id });
+    });
+  };
+
+  const openRemoteRepo = async () => {
+    const parsed = parseRemoteRepo(remoteUrl);
+    if (!parsed) {
+      setError("Could not determine the remote repository URL.");
+      return;
+    }
+    try {
+      await Linking.openURL(parsed.httpsUrl);
+    } catch {
+      setError("Could not open the remote repository.");
+    }
+  };
 
   const doCheckout = (ref: string) =>
     withBusy("checkout", async () => {
@@ -294,33 +346,6 @@ export default function GitScreen() {
       setBranchModal(false);
     });
 
-  const saveToken = async () => {
-    if (!remoteUrl || !tokenInput.trim()) return;
-    try {
-      const host = new URL(remoteUrl).hostname.toLowerCase();
-      await secureSecretStore.setProviderApiKey(
-        `git:${host}`,
-        tokenInput.trim(),
-      );
-      setTokenInput("");
-      setTokenModal(false);
-      setStatusText("Credential saved for this host.");
-    } catch (error) {
-      fail(error);
-    }
-  };
-
-  const forgetToken = async () => {
-    if (!remoteUrl) return;
-    try {
-      const host = new URL(remoteUrl).hostname.toLowerCase();
-      await secureSecretStore.deleteProviderApiKey(`git:${host}`);
-      setStatusText("Credential removed.");
-    } catch (error) {
-      fail(error);
-    }
-  };
-
   if (!project || !session) {
     return (
       <SafeAreaView
@@ -355,52 +380,96 @@ export default function GitScreen() {
   const unstaged = (status?.files ?? []).filter((file) => file.unstaged);
   const staged = (status?.files ?? []).filter((file) => file.staged);
 
+  const currentBranch = branches?.current ?? status?.branch ?? null;
+  const remote = parseRemoteRepo(remoteUrl);
+  const tracking = status?.upstream ??
+    (currentBranch ? `origin/${currentBranch}` : null);
+  const ahead = status?.ahead ?? 0;
+  const behind = status?.behind ?? 0;
+  const canPull = behind > 0;
+  const canPush = ahead > 0;
+  const canSync = canPull || canPush;
+  const changeCount = unstaged.length + staged.length;
+
   return (
     <SafeAreaView
       className="flex-1 bg-background dark:bg-background-dark"
       edges={["top", "left", "right", "bottom"]}
     >
       <View className="flex-1 gap-sp-2 px-sp-4" style={{ paddingTop: 12 }}>
-        <View className="flex-row items-center gap-sp-2">
+        <AppHeader
+          left={
+            <CircleIconButton
+              accessibilityLabel="Back"
+              onPress={() => {
+                router.back();
+              }}
+            >
+              <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+            </CircleIconButton>
+          }
+          title="Git"
+          subtitle={`${project.displayName}${status?.branch ? ` · ${status.branch}` : ""}${
+            status && (status.ahead || status.behind)
+              ? ` · ↑${status.ahead ?? 0} ↓${status.behind ?? 0}`
+              : ""
+          }`}
+          right={
+            loading ? (
+              <ActivityIndicator size="small" color={theme.textSecondary} />
+            ) : undefined
+          }
+        />
+
+        <View
+          className="flex-row items-center gap-sp-2 border-b border-border px-sp-4 py-sp-2 dark:border-border-dark"
+          style={{ marginHorizontal: -16 }}
+        >
+          <GitBranch color={theme.textSecondary} size={18} strokeWidth={2} />
+          <Text
+            numberOfLines={1}
+            className="min-w-0 flex-1 font-mono text-base text-foreground dark:text-foreground-dark"
+          >
+            {currentBranch ?? "no branch"}
+          </Text>
           <Pressable
-            accessibilityLabel="Back"
+            accessibilityLabel="Switch branch"
             accessibilityRole="button"
             hitSlop={8}
             onPress={() => {
-              router.back();
+              setBranchDrawer(true);
             }}
-            className="h-10 w-10 items-center justify-center rounded-full"
+            className="p-sp-1"
           >
-            <ChevronLeft color={theme.text} size={20} />
+            <ChevronDown color={theme.textSecondary} size={18} strokeWidth={2} />
           </Pressable>
-          <View className="min-w-0 flex-1">
-            <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-              Git
-            </Text>
-            <Text
-              numberOfLines={1}
-              className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark"
-            >
-              {project.displayName}
-              {status?.branch ? ` · ${status.branch}` : ""}
-              {status && (status.ahead || status.behind)
-                ? ` · ↑${status.ahead ?? 0} ↓${status.behind ?? 0}`
-                : ""}
-            </Text>
-          </View>
-          {loading ? (
-            <ActivityIndicator size="small" color={theme.textSecondary} />
-          ) : null}
+          <Pressable
+            accessibilityLabel="Git settings"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => {
+              router.push("./settings");
+            }}
+            className="p-sp-1"
+          >
+            <Settings color={theme.textSecondary} size={18} strokeWidth={2} />
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Refresh status"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => {
+              void refresh();
+            }}
+            className="p-sp-1"
+          >
+            <RefreshCw color={theme.textSecondary} size={18} strokeWidth={2} />
+          </Pressable>
         </View>
 
         {error ? (
           <Text className="font-sans text-sm text-destructive dark:text-destructive-dark">
             {error}
-          </Text>
-        ) : null}
-        {statusText ? (
-          <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-            {statusText}
           </Text>
         ) : null}
         {progress ? (
@@ -409,11 +478,17 @@ export default function GitScreen() {
           </Text>
         ) : null}
 
-        <ScrollView
-          className="min-h-0 flex-1"
-          showsVerticalScrollIndicator={false}
-          contentContainerClassName="gap-sp-3 pb-sp-6"
-        >
+        <View className="relative min-h-0 flex-1">
+          <HeaderShadow visible={scrolled} />
+          <ScrollView
+            className="min-h-0 flex-1"
+            showsVerticalScrollIndicator={false}
+            contentContainerClassName="gap-sp-3 pb-sp-6"
+            scrollEventThrottle={32}
+            onScroll={(event) => {
+              setScrolled(event.nativeEvent.contentOffset.y > 4);
+            }}
+          >
           {conflicts.length > 0 ? (
             <View className="gap-sp-2 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
               <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
@@ -439,268 +514,426 @@ export default function GitScreen() {
             </View>
           ) : null}
 
-          <View className="gap-sp-1 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
-            <View className="flex-row items-center justify-between">
-              <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
-                Changes ({unstaged.length})
+          <View className="gap-sp-2">
+            <View className="flex-row items-center gap-sp-2">
+              <Text className="font-sans text-lg font-semibold text-foreground dark:text-foreground-dark">
+                Remote Updates
               </Text>
-              {unstaged.length > 0 ? (
-                <View className="flex-row gap-sp-2">
-                  <SmallButton label="Stage all" onPress={stageAll} />
-                  <SmallButton
-                    label="Discard all"
-                    danger
-                    onPress={() => {
-                      Alert.alert(
-                        "Discard all changes?",
-                        "Unstaged edits revert and untracked files are deleted.",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Discard",
-                            style: "destructive",
-                            onPress: () => {
-                              void withBusy("discard", async () => {
-                                const { discardPaths } = await import(
-                                  "@/modules/ide/git-ops"
-                                );
-                                await discardPaths(
-                                  session,
-                                  unstaged.map((file) => file.path),
-                                );
-                                ide.emit({
-                                  type: "GIT_STATUS_CHANGED",
-                                  projectId: project.id,
-                                });
-                              });
-                            },
-                          },
-                        ],
-                      );
-                    }}
+              <View className="flex-1" />
+              {remote ? (
+                <View className="flex-row items-center gap-sp-1">
+                  <BookMarked
+                    color={theme.textSecondary}
+                    size={15}
+                    strokeWidth={2}
                   />
-                </View>
-              ) : null}
-            </View>
-            {unstaged.length === 0 ? (
-              <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                {status?.clean ? "Working tree clean." : "No unstaged changes."}
-              </Text>
-            ) : (
-              unstaged.map((file) => (
-                <ChangeRow
-                  key={file.path}
-                  path={file.path}
-                  mark={file.unstaged === "untracked" ? "?" : "M"}
-                  conflicted={file.conflicted}
-                  primaryLabel="Stage"
-                  onPrimary={() => stageOne(file.path)}
-                  onDiff={() => openDiff(file.path, false)}
-                  onDiscard={() => discardOne(file.path)}
-                />
-              ))
-            )}
-          </View>
-
-          <View className="gap-sp-1 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
-            <View className="flex-row items-center justify-between">
-              <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
-                Staged Changes ({staged.length})
-              </Text>
-              {staged.length > 0 ? (
-                <SmallButton label="Unstage all" onPress={unstageAll} />
-              ) : null}
-            </View>
-            {staged.length === 0 ? (
-              <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                Nothing staged.
-              </Text>
-            ) : (
-              staged.map((file) => (
-                <ChangeRow
-                  key={file.path}
-                  path={file.path}
-                  mark="S"
-                  conflicted={file.conflicted}
-                  primaryLabel="Unstage"
-                  onPrimary={() => unstageOne(file.path)}
-                  onDiff={() => openDiff(file.path, true)}
-                />
-              ))
-            )}
-          </View>
-
-          <View className="gap-sp-2 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
-            <TextInput
-              value={commitMessage}
-              onChangeText={setCommitMessage}
-              placeholder="Commit Message"
-              placeholderTextColor={theme.textSecondary}
-              autoCapitalize="sentences"
-              className="min-h-11 rounded-ui border border-border bg-input px-sp-3 font-sans text-base text-foreground dark:border-border-dark dark:bg-input-dark dark:text-foreground-dark"
-            />
-            <View className="flex-row gap-sp-2">
-              <Button
-                className="flex-1"
-                loading={busy === "commit"}
-                disabled={!commitMessage.trim() || staged.length === 0}
-                onPress={() => {
-                  void doCommit(false);
-                }}
-              >
-                Commit
-              </Button>
-              <Button
-                className="flex-1"
-                loading={busy === "commit"}
-                disabled={!commitMessage.trim() || staged.length === 0}
-                onPress={() => {
-                  void doCommit(true);
-                }}
-                variant="outline"
-              >
-                Commit & Push
-              </Button>
-            </View>
-          </View>
-
-          <View className="flex-row gap-sp-2">
-            <Button
-              className="flex-1"
-              loading={busy === "push"}
-              onPress={() => {
-                void doPush();
-              }}
-              variant="outline"
-            >
-              Push
-            </Button>
-            <Button
-              className="flex-1"
-              loading={busy === "pull"}
-              onPress={() => {
-                void doPull();
-              }}
-              variant="outline"
-            >
-              Pull
-            </Button>
-          </View>
-
-          <View className="gap-sp-1 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
-            <View className="flex-row items-center justify-between">
-              <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
-                Branches
-              </Text>
-              <SmallButton
-                label="+ New"
-                onPress={() => {
-                  setNewBranch("");
-                  setBranchModal(true);
-                }}
-              />
-            </View>
-            {(branches?.local ?? []).map((name) => (
-              <Pressable
-                key={name}
-                accessibilityRole="button"
-                onPress={() => {
-                  if (name !== branches?.current) void doCheckout(name);
-                }}
-                className="flex-row items-center gap-sp-2 rounded-ui px-sp-2 py-sp-2"
-                style={({ pressed }) => ({
-                  backgroundColor:
-                    name === branches?.current
-                      ? "rgba(59,130,246,0.18)"
-                      : pressed
-                        ? "rgba(255,255,255,0.06)"
-                        : "transparent",
-                })}
-              >
-                <Text
-                  className="flex-1 font-mono text-sm text-foreground dark:text-foreground-dark"
-                  style={{
-                    fontWeight: name === branches?.current ? "700" : "400",
-                  }}
-                >
-                  {name === branches?.current ? `● ${name}` : name}
-                </Text>
-                {name !== branches?.current ? (
+                  <Text className="font-mono text-sm text-foreground dark:text-foreground-dark">
+                    {remote.owner}/{remote.repo}
+                  </Text>
                   <Pressable
-                    accessibilityLabel={`Delete branch ${name}`}
+                    accessibilityLabel="Open remote repository"
                     accessibilityRole="button"
                     hitSlop={8}
                     onPress={() => {
-                      Alert.alert("Delete branch?", `"${name}"`, [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Delete",
-                          style: "destructive",
-                          onPress: () => {
-                            void withBusy("branch", async () => {
-                              const { deleteBranch } = await import(
-                                "@/modules/ide/git-ops"
-                              );
-                              await deleteBranch(session, name);
-                            });
-                          },
-                        },
-                      ]);
+                      void openRemoteRepo();
                     }}
+                    className="p-sp-1"
                   >
-                    <Text className="font-sans text-xs text-destructive dark:text-destructive-dark">
-                      Delete
-                    </Text>
+                    <ExternalLink
+                      color={theme.textSecondary}
+                      size={15}
+                      strokeWidth={2}
+                    />
                   </Pressable>
-                ) : null}
-              </Pressable>
-            ))}
-            {remoteUrl ? (
-              <Text
-                numberOfLines={1}
-                className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark"
-              >
-                {remoteUrl}
-              </Text>
-            ) : null}
-            <View className="flex-row gap-sp-2">
-              <SmallButton
-                label="Credential"
-                onPress={() => {
-                  setTokenInput("");
-                  setTokenModal(true);
-                }}
-              />
-              <SmallButton label="Forget credential" onPress={forgetToken} danger />
+                </View>
+              ) : (
+                <Text className="font-mono text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                  No remote
+                </Text>
+              )}
+            </View>
+            <View className="gap-sp-2 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
+              <View className="flex-row items-center gap-sp-2">
+                <Text
+                  numberOfLines={1}
+                  className="min-w-0 flex-1 font-mono text-sm text-foreground dark:text-foreground-dark"
+                >
+                  {tracking ? `${tracking} • upstream` : "no upstream"}
+                </Text>
+                <Text className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                  {lastFetchedAt
+                    ? `last fetched ${formatRelativeTime(Math.floor(lastFetchedAt / 1000))}`
+                    : "never fetched"}
+                </Text>
+                <Pressable
+                  accessibilityLabel="Refresh status"
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => {
+                    void refresh();
+                  }}
+                  className="p-sp-1"
+                >
+                  <RefreshCw
+                    color={theme.textSecondary}
+                    size={16}
+                    strokeWidth={2}
+                  />
+                </Pressable>
+              </View>
+              <View className="flex-row gap-sp-1 rounded-ui bg-secondary p-sp-1 dark:bg-secondary-dark">
+                <GitActionButton
+                  label="Sync Changes"
+                  icon={
+                    <RefreshCw
+                      color={theme.textSecondary}
+                      size={16}
+                      strokeWidth={2}
+                    />
+                  }
+                  flex={1.5}
+                  loading={busy === "sync"}
+                  disabled={!canSync}
+                  onPress={() => {
+                    void doSync();
+                  }}
+                />
+                <GitActionButton
+                  label="Pull"
+                  icon={
+                    <Download
+                      color={theme.textSecondary}
+                      size={16}
+                      strokeWidth={2}
+                    />
+                  }
+                  loading={busy === "pull"}
+                  disabled={!canPull}
+                  onPress={() => {
+                    void doPull();
+                  }}
+                />
+                <GitActionButton
+                  label="Push"
+                  icon={
+                    <Upload
+                      color={theme.textSecondary}
+                      size={16}
+                      strokeWidth={2}
+                    />
+                  }
+                  loading={busy === "push"}
+                  disabled={!canPush}
+                  onPress={() => {
+                    void doPush();
+                  }}
+                />
+              </View>
             </View>
           </View>
 
-          <View className="gap-sp-1 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
-            <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
-              History
+          <View className="gap-sp-2">
+            <Text className="font-sans text-lg font-semibold text-foreground dark:text-foreground-dark">
+              Commit
             </Text>
-            {history.length === 0 ? (
-              <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                No commits yet.
-              </Text>
-            ) : (
-              history.map((commit) => (
-                <View key={commit.oid} className="gap-sp-0 py-sp-1">
-                  <Text
-                    numberOfLines={1}
-                    className="font-sans text-sm text-foreground dark:text-foreground-dark"
-                  >
-                    {commit.message}
+            <View className="gap-sp-2 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
+              <Pressable
+                accessibilityLabel={
+                  messageCollapsed ? "Expand message" : "Collapse message"
+                }
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !messageCollapsed }}
+                onPress={() => {
+                  setMessageCollapsed((value) => !value);
+                }}
+                className="flex-row items-center"
+              >
+                <Text className="flex-1 font-sans text-base text-foreground dark:text-foreground-dark">
+                  Message
+                </Text>
+                {messageCollapsed ? (
+                  <ChevronRight
+                    color={theme.textSecondary}
+                    size={18}
+                    strokeWidth={2}
+                  />
+                ) : (
+                  <ChevronUp
+                    color={theme.textSecondary}
+                    size={18}
+                    strokeWidth={2}
+                  />
+                )}
+              </Pressable>
+              {messageCollapsed ? null : (
+                <>
+                  <TextInput
+                    value={commitMessage}
+                    onChangeText={setCommitMessage}
+                    placeholder="Summary"
+                    placeholderTextColor={theme.textSecondary}
+                    autoCapitalize="sentences"
+                    className="min-h-11 rounded-ui border border-border bg-input px-sp-3 font-sans text-base text-foreground dark:border-border-dark dark:bg-input-dark dark:text-foreground-dark"
+                  />
+                  <TextInput
+                    value={commitDescription}
+                    onChangeText={setCommitDescription}
+                    placeholder="Description (optional)"
+                    placeholderTextColor={theme.textSecondary}
+                    autoCapitalize="sentences"
+                    multiline
+                    textAlignVertical="top"
+                    className="min-h-20 rounded-ui border border-border bg-input px-sp-3 py-sp-2 font-sans text-base text-foreground dark:border-border-dark dark:bg-input-dark dark:text-foreground-dark"
+                  />
+                </>
+              )}
+            </View>
+
+            <View className="gap-sp-2 rounded-card border border-border bg-card p-sp-3 dark:border-border-dark dark:bg-card-dark">
+              <Pressable
+                accessibilityLabel={
+                  reviewExpanded
+                    ? "Collapse change list"
+                    : "Expand change list"
+                }
+                accessibilityRole="button"
+                accessibilityState={{ expanded: reviewExpanded }}
+                onPress={() => {
+                  setReviewExpanded((value) => !value);
+                }}
+                className="flex-row items-center gap-sp-2"
+              >
+                <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
+                  Review Changes
+                </Text>
+                <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                  {changeCount} changes
+                </Text>
+                <View className="flex-1" />
+                {reviewExpanded ? (
+                  <ChevronUp
+                    color={theme.textSecondary}
+                    size={18}
+                    strokeWidth={2}
+                  />
+                ) : (
+                  <ChevronRight
+                    color={theme.textSecondary}
+                    size={18}
+                    strokeWidth={2}
+                  />
+                )}
+              </Pressable>
+              {reviewExpanded ? (
+                <>
+                  <View className="flex-row items-center gap-sp-2">
+                    <Pressable
+                      accessibilityLabel="Collapse change list"
+                      accessibilityRole="button"
+                      hitSlop={8}
+                      onPress={() => {
+                        setReviewExpanded(false);
+                      }}
+                      className="p-sp-1"
+                    >
+                      <ChevronUp
+                        color={theme.textSecondary}
+                        size={18}
+                        strokeWidth={2}
+                      />
+                    </Pressable>
+                    <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
+                      {unstaged.length} changed files
+                    </Text>
+                    <View className="flex-1" />
+                    <View className="flex-row items-center rounded-ui bg-secondary px-sp-2 py-sp-1 dark:bg-secondary-dark">
+                      <Pressable
+                        accessibilityLabel="Discard all changes"
+                        accessibilityRole="button"
+                        onPress={() => {
+                          Alert.alert(
+                            "Discard all changes?",
+                            "Unstaged edits revert and untracked files are deleted.",
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Discard",
+                                style: "destructive",
+                                onPress: () => {
+                                  void withBusy("discard", async () => {
+                                    const { discardPaths } = await import(
+                                      "@/modules/ide/git-ops"
+                                    );
+                                    await discardPaths(
+                                      session,
+                                      unstaged.map((file) => file.path),
+                                    );
+                                    ide.emit({
+                                      type: "GIT_STATUS_CHANGED",
+                                      projectId: project.id,
+                                    });
+                                  });
+                                },
+                              },
+                            ],
+                          );
+                        }}
+                        className="flex-row items-center gap-sp-1"
+                      >
+                        <RotateCcw
+                          color={theme.textSecondary}
+                          size={14}
+                          strokeWidth={2}
+                        />
+                        <Text className="font-sans text-sm text-foreground dark:text-foreground-dark">
+                          Discard All
+                        </Text>
+                      </Pressable>
+                      <View
+                        style={{
+                          width: 1,
+                          height: 20,
+                          marginHorizontal: 8,
+                          backgroundColor: theme.border,
+                        }}
+                      />
+                      <Pressable
+                        accessibilityLabel="Stage all changes"
+                        accessibilityRole="button"
+                        onPress={stageAll}
+                        className="flex-row items-center gap-sp-1"
+                      >
+                        <Plus
+                          color={theme.textSecondary}
+                          size={14}
+                          strokeWidth={2}
+                        />
+                        <Text className="font-sans text-sm text-foreground dark:text-foreground-dark">
+                          Stage All
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                  {unstaged.length === 0 ? (
+                    <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                      {status?.clean
+                        ? "Working tree clean."
+                        : "No unstaged changes."}
+                    </Text>
+                  ) : (
+                    unstaged.map((file) => (
+                      <ChangeFileRow
+                        key={file.path}
+                        path={file.path}
+                        badge={
+                          file.unstaged === "untracked"
+                            ? "?"
+                            : file.unstaged === "deleted"
+                              ? "D"
+                              : "M"
+                        }
+                        action="stage"
+                        onDiscard={() => discardOne(file.path)}
+                        onAction={() => stageOne(file.path)}
+                        onDiff={() => openDiff(file.path, false)}
+                      />
+                    ))
+                  )}
+                  {staged.length > 0 ? (
+                    <>
+                      <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                        Staged ({staged.length})
+                      </Text>
+                      {staged.map((file) => (
+                        <ChangeFileRow
+                          key={file.path}
+                          path={file.path}
+                          badge="S"
+                          action="unstage"
+                          onAction={() => unstageOne(file.path)}
+                          onDiff={() => openDiff(file.path, true)}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+                  <Text className="text-center font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                    Committing will automatically stage your changes.
                   </Text>
-                  <Text className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
-                    {commit.oid.slice(0, 10)} · {commit.author} ·{" "}
-                    {new Date(commit.timestamp * 1000).toLocaleDateString()}
-                  </Text>
-                </View>
-              ))
-            )}
+                </>
+              ) : null}
+            </View>
+            <Button
+              leftIcon={<Check color={theme.accentForeground} size={18} />}
+              loading={busy === "commit"}
+              disabled={!commitMessage.trim() || changeCount === 0}
+              onPress={() => {
+                void doCommitAll();
+              }}
+            >
+              Stage and commit all changes
+            </Button>
           </View>
+
+          {/* Branches live in the branch drawer (branch-bar chevron). */}
+
+          {history.length === 0 ? (
+            <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+              No commits yet.
+            </Text>
+          ) : (
+            <View>
+              {history.map((commit, index) => (
+                <View key={commit.oid} className="flex-row gap-sp-3">
+                  <View
+                    className="items-center"
+                    style={{ width: 12 }}
+                  >
+                    <View
+                      className="rounded-full"
+                      style={{
+                        width: 8,
+                        height: 8,
+                        marginTop: 6,
+                        backgroundColor: theme.textSecondary,
+                      }}
+                    />
+                    {index === history.length - 1 ? null : (
+                      <View
+                        className="flex-1"
+                        style={{ width: 1, backgroundColor: theme.border }}
+                      />
+                    )}
+                  </View>
+                  <View className="min-w-0 flex-1" style={{ paddingBottom: 20 }}>
+                    <Text
+                      numberOfLines={2}
+                      className="font-sans text-base text-foreground dark:text-foreground-dark"
+                    >
+                      {commit.message}
+                    </Text>
+                    <View className="flex-row items-center gap-sp-2 pt-sp-1">
+                      <User
+                        color={theme.textSecondary}
+                        size={13}
+                        strokeWidth={2}
+                      />
+                      <Text
+                        numberOfLines={1}
+                        className="min-w-0 flex-1 font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark"
+                      >
+                        {commit.author}
+                      </Text>
+                      <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
+                        {formatRelativeTime(commit.timestamp)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
+        </View>
 
         {diff ? (
           <View className="absolute inset-x-0 bottom-0 top-16 rounded-card border border-border bg-card dark:border-border-dark dark:bg-card-dark">
@@ -740,6 +973,87 @@ export default function GitScreen() {
           </View>
         ) : null}
 
+        <Drawer open={branchDrawer} onOpenChange={(open) => !open && setBranchDrawer(false)}>
+          <DrawerContent showCloseButton showHandle>
+            <DrawerHeader>
+              <DrawerTitle>Branches</DrawerTitle>
+              <DrawerDescription>
+                {currentBranch ? `Current: ${currentBranch}` : "No branch checked out."}
+              </DrawerDescription>
+            </DrawerHeader>
+            <DrawerBody contentContainerClassName="gap-sp-1 pb-sp-4">
+              {(branches?.local ?? []).map((name) => (
+                <Pressable
+                  key={name}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    if (name !== branches?.current) {
+                      setBranchDrawer(false);
+                      void doCheckout(name);
+                    }
+                  }}
+                  className="flex-row items-center gap-sp-2 rounded-ui px-sp-2 py-sp-2"
+                  style={({ pressed }) => ({
+                    backgroundColor:
+                      name === branches?.current
+                        ? withAlpha(theme.accent, 0.18)
+                        : pressed
+                          ? withAlpha(theme.text, 0.08)
+                          : "transparent",
+                  })}
+                >
+                  <Text
+                    className="flex-1 font-mono text-sm text-foreground dark:text-foreground-dark"
+                    style={{
+                      fontWeight: name === branches?.current ? "700" : "400",
+                    }}
+                  >
+                    {name === branches?.current ? `● ${name}` : name}
+                  </Text>
+                  {name !== branches?.current ? (
+                    <Pressable
+                      accessibilityLabel={`Delete branch ${name}`}
+                      accessibilityRole="button"
+                      hitSlop={8}
+                      onPress={() => {
+                        Alert.alert("Delete branch?", `"${name}"`, [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () => {
+                              void withBusy("branch", async () => {
+                                const { deleteBranch } = await import(
+                                  "@/modules/ide/git-ops"
+                                );
+                                await deleteBranch(session, name);
+                              });
+                            },
+                          },
+                        ]);
+                      }}
+                    >
+                      <Text className="font-sans text-xs text-destructive dark:text-destructive-dark">
+                        Delete
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </Pressable>
+              ))}
+              <Button
+                variant="outline"
+                onPress={() => {
+                  setBranchDrawer(false);
+                  setNewBranch("");
+                  setBranchModal(true);
+                }}
+              >
+                + New branch
+              </Button>
+            </DrawerBody>
+          </DrawerContent>
+        </Drawer>
+
         <Drawer open={branchModal} onOpenChange={(open) => !open && setBranchModal(false)}>
           <DrawerContent showCloseButton showHandle>
             <DrawerHeader>
@@ -767,31 +1081,50 @@ export default function GitScreen() {
           </DrawerContent>
         </Drawer>
 
-        <Drawer open={tokenModal} onOpenChange={(open) => !open && setTokenModal(false)}>
-          <DrawerContent showCloseButton showHandle>
-            <DrawerHeader>
-              <DrawerTitle>Git credential</DrawerTitle>
-              <DrawerDescription>
-                Stored securely on this device, never sent to the model.
-              </DrawerDescription>
-            </DrawerHeader>
-            <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-              <TextInput
-                value={tokenInput}
-                onChangeText={setTokenInput}
-                placeholder="Personal access token"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-                className="h-11 rounded-ui border border-border bg-input px-sp-3 font-mono text-base text-foreground dark:border-border-dark dark:bg-input-dark dark:text-foreground-dark"
-              />
-              <Button onPress={() => void saveToken()}>Save</Button>
-            </DrawerBody>
-          </DrawerContent>
-        </Drawer>
       </View>
     </SafeAreaView>
+  );
+}
+
+function GitActionButton({
+  label,
+  icon,
+  onPress,
+  disabled,
+  loading,
+  flex = 1,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  flex?: number;
+}) {
+  const theme = useTheme();
+  const inactive = disabled || loading;
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: inactive }}
+      onPress={onPress}
+      disabled={inactive}
+      className="flex-row items-center justify-center gap-sp-1 rounded-ui px-sp-2 py-sp-2"
+      style={({ pressed }) => ({
+        flex,
+        opacity: inactive ? 0.4 : pressed ? 0.7 : 1,
+      })}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={theme.textSecondary} />
+      ) : (
+        icon
+      )}
+      <Text className="font-sans text-sm text-foreground dark:text-foreground-dark">
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -824,55 +1157,99 @@ function SmallButton({
   );
 }
 
-function ChangeRow({
+function ChangeFileRow({
   path,
-  mark,
-  conflicted,
-  primaryLabel,
-  onPrimary,
-  onDiff,
+  badge,
+  action,
+  onAction,
   onDiscard,
+  onDiff,
 }: {
   path: string;
-  mark: string;
-  conflicted: boolean;
-  primaryLabel: string;
-  onPrimary: () => void;
-  onDiff: () => void;
+  badge: string;
+  action: "stage" | "unstage";
+  onAction: () => void;
   onDiscard?: () => void;
+  onDiff: () => void;
 }) {
+  const theme = useTheme();
+  const badgeColor =
+    badge === "?"
+      ? "#3B82F6"
+      : badge === "D"
+        ? "#EF4444"
+        : badge === "S"
+          ? "#76D39B"
+          : "#E0A23C";
   return (
-    <View className="flex-row items-center gap-sp-2 rounded-ui px-sp-1 py-sp-1">
-      <Text
-        className="w-6 text-center font-mono text-xs"
-        style={{
-          color:
-            mark === "?"
-              ? "#3B82F6"
-              : mark === "D"
-                ? "#EF4444"
-                : mark === "S"
-                  ? "#76D39B"
-                  : "#E0A23C",
-        }}
-      >
-        {conflicted ? "!" : mark}
-      </Text>
+    <Pressable
+      accessibilityLabel={path}
+      accessibilityRole="button"
+      onPress={onDiff}
+      className="flex-row items-center gap-sp-2 py-sp-1"
+      style={({ pressed }) => (pressed ? { opacity: 0.7 } : null)}
+    >
+      <FileTypeIcon fileName={path.split("/").pop() ?? path} size={20} />
       <Text
         numberOfLines={1}
-        className="min-w-0 flex-1 font-mono text-xs text-foreground dark:text-foreground-dark"
+        ellipsizeMode="middle"
+        className="min-w-0 flex-1 font-mono text-sm text-foreground dark:text-foreground-dark"
       >
         {path}
       </Text>
-      <SmallButton label="Diff" onPress={onDiff} />
-      <SmallButton label={primaryLabel} onPress={onPrimary} />
       {onDiscard ? (
-        <SmallButton label="Discard" danger onPress={onDiscard} />
+        <>
+          <Pressable
+            accessibilityLabel={`Discard changes to ${path}`}
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onDiscard}
+            className="p-sp-1"
+          >
+            <RotateCcw
+              color={theme.textSecondary}
+              size={16}
+              strokeWidth={2}
+            />
+          </Pressable>
+          <View
+            style={{ width: 1, height: 20, backgroundColor: theme.border }}
+          />
+        </>
       ) : null}
-    </View>
+      <Pressable
+        accessibilityLabel={
+          action === "stage" ? `Stage ${path}` : `Unstage ${path}`
+        }
+        accessibilityRole="button"
+        hitSlop={8}
+        onPress={onAction}
+        className="p-sp-1"
+      >
+        {action === "stage" ? (
+          <Plus color={theme.textSecondary} size={16} strokeWidth={2} />
+        ) : (
+          <Minus color={theme.textSecondary} size={16} strokeWidth={2} />
+        )}
+      </Pressable>
+      <View
+        className="items-center justify-center rounded-ui"
+        style={{
+          width: 24,
+          height: 24,
+          backgroundColor: `${badgeColor}26`,
+        }}
+      >
+        <Text
+          className="font-mono text-xs font-semibold"
+          style={{ color: badgeColor }}
+        >
+          {badge}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
-
 function ConflictCard({
   file,
   session,

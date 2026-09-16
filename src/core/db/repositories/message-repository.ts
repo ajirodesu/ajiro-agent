@@ -61,6 +61,9 @@ export function createMessageRepository(db: AppDatabase): MessageRepository {
         .where(eq(messages.status, "streaming"))
         .orderBy(messages.updatedAt);
     },
+    async deleteById(id) {
+      await db.delete(messages).where(eq(messages.id, id));
+    },
     async deleteBefore(conversationId, sequence) {
       await db
         .delete(messages)

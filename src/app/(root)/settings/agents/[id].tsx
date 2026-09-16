@@ -5,6 +5,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/shared/container";
 import { Button } from "@/components/ui/button";
+import { AppHeader, CircleIconButton } from "@/components/ui/chrome";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -126,6 +127,7 @@ export default function SettingsAgentEditorScreen() {
     currentModel,
     mcpServers,
     providers,
+    skills,
     updateAgent,
     deleteAgent,
   } = useConfig();
@@ -152,9 +154,10 @@ export default function SettingsAgentEditorScreen() {
   if (!isNew && !existing) {
     return (
       <Container scroll contentClassName="gap-sp-4 py-sp-4" includeBottomTabInset={false}>
-        <View className="flex-row items-center gap-sp-2">
-          <Button
-            leftIcon={<ChevronLeft color={theme.text} size={16} />}
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
             onPress={() => {
               if (router.canGoBack()) {
                 router.back();
@@ -162,13 +165,12 @@ export default function SettingsAgentEditorScreen() {
                 router.push("/settings/agents" as never);
               }
             }}
-            size="icon-xs"
-            variant="ghost"
-          />
-          <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-            Agent not found
-          </Text>
-        </View>
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Agent not found"
+      />
       </Container>
     );
   }
@@ -343,9 +345,10 @@ export default function SettingsAgentEditorScreen() {
 
   return (
     <Container scroll contentClassName="gap-sp-4 py-sp-4" includeBottomTabInset={false}>
-      <View className="flex-row items-center gap-sp-2">
-          <Button
-            leftIcon={<ChevronLeft color={theme.text} size={16} />}
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
             onPress={() => {
               if (router.canGoBack()) {
                 router.back();
@@ -353,18 +356,13 @@ export default function SettingsAgentEditorScreen() {
                 router.push("/settings/agents" as never);
               }
             }}
-            size="icon-xs"
-            variant="ghost"
-          />
-          <View className="min-w-0 flex-1">
-          <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-            {isNew ? "New agent" : current.name || "Agent"}
-          </Text>
-          <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
-            Persona, model override, and tool access
-          </Text>
-        </View>
-      </View>
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title={isNew ? "New agent" : current.name || "Agent"}
+        subtitle="Persona, model override, and tool access"
+      />
 
       <Card className="gap-sp-3 px-sp-4 py-sp-4">
         <View className="gap-sp-2">
@@ -448,6 +446,7 @@ export default function SettingsAgentEditorScreen() {
         draft={current}
         mcpServerIds={mcpServers.map((server) => server.id)}
         onChange={updateDraft}
+        skills={skills}
       />
 
       {error ? (
@@ -543,14 +542,17 @@ function ToolPermissionsCard({
   draft,
   mcpServerIds,
   onChange,
+  skills,
 }: {
   draft: Draft;
   mcpServerIds: string[];
   onChange: (patch: Partial<Draft>) => void;
+  skills: { id: string; title: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const builtInDenies = draft.toolPermissions.builtInTools ?? {};
   const mcpPermissions = draft.toolPermissions.mcpServers ?? {};
+  const skillPermissions = draft.toolPermissions.skills ?? {};
 
   const setBuiltInAllowed = (key: BuiltInToolKey, allowed: boolean) => {
     const next = { ...builtInDenies };
@@ -576,6 +578,23 @@ function ToolPermissionsCard({
       toolPermissions: {
         ...draft.toolPermissions,
         mcpServers: next,
+      },
+    });
+  };
+
+  const setSkillAllowed = (skillId: string, allowed: boolean) => {
+    const next = { ...skillPermissions };
+    if (allowed) {
+      delete next[skillId];
+    } else {
+      next[skillId] = false;
+    }
+    const { skills: _dropped, ...rest } = draft.toolPermissions;
+    void _dropped;
+    onChange({
+      toolPermissions: {
+        ...rest,
+        ...(Object.keys(next).length > 0 ? { skills: next } : {}),
       },
     });
   };
@@ -650,6 +669,28 @@ function ToolPermissionsCard({
                       {serverId}
                     </Text>
                   </Pressable>
+                ))}
+              </>
+            ) : null}
+            {skills.length > 0 ? (
+              <>
+                <Text className="px-sp-1 pt-sp-3 font-sans text-sm font-semibold text-foreground dark:text-foreground-dark">
+                  Skills
+                </Text>
+                <Text className="px-sp-1 font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                  Agents use enabled skills by default. Uncheck to deny a
+                  skill for this agent.
+                </Text>
+                {skills.map((skill) => (
+                  <Checkbox
+                    key={skill.id}
+                    checked={skillPermissions[skill.id] !== false}
+                    onCheckedChange={(checked) =>
+                      setSkillAllowed(skill.id, checked === true)
+                    }
+                  >
+                    {skill.title}
+                  </Checkbox>
                 ))}
               </>
             ) : null}

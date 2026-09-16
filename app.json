@@ -4,7 +4,7 @@
     "slug": "ajiro-agent",
     "version": "1.1.5",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/new-icon.png",
     "scheme": "ajiro-agent",
     "userInterfaceStyle": "automatic",
     "owner": "ajirodesu",
@@ -13,7 +13,7 @@
       "ios"
     ],
     "ios": {
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/new-icon.png",
       "bundleIdentifier": "com.ajirohq.ajiroagent",
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -40,8 +40,8 @@
       ],
       "adaptiveIcon": {
         "backgroundColor": "#000000",
-        "foregroundImage": "./assets/images/adaptive-foreground.png",
-        "monochromeImage": "./assets/images/adaptive-foreground.png"
+        "foregroundImage": "./assets/images/new-icon.png",
+        "monochromeImage": "./assets/images/new-icon.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.ajirohq.ajiroagent"
@@ -63,9 +63,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#000000",
-          "image": "./assets/images/splash-icon.png",
-          "resizeMode": "contain"
+          "backgroundColor": "#000000"
         }
       ],
       "expo-sqlite",
@@ -81,7 +79,9 @@
       "expo-status-bar",
       "expo-web-browser",
       "expo-sharing",
-      "expo-asset"
+      "expo-asset",
+      "expo-video",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

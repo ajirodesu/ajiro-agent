@@ -132,5 +132,8 @@ export function createAgentRunRepository(db: AppDatabase): AgentRunRepository {
         })
         .where(eq(agentRuns.id, id));
     },
+    async deleteById(id) {
+      await db.delete(agentRuns).where(eq(agentRuns.id, id));
+    },
   };
 }

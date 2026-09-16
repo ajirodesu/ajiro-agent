@@ -50,6 +50,8 @@ import {
   composerLayoutFor,
   composerTextCap,
 } from "@/modules/chat/composer-stages";
+import { withAlpha } from "@/components/ui/chrome-spec";
+import { useTheme } from "@/hooks/use-theme";
 
 export type ComposerCapsuleProps = {
   value: string;
@@ -113,6 +115,7 @@ function IconButton({
   children,
   onPress,
   background,
+  flashColor,
   flashOnPress,
   size,
 }: {
@@ -127,6 +130,7 @@ function IconButton({
    */
   flashOnPress?: boolean;
   size: number;
+  flashColor?: string;
 }) {
   return (
     <Pressable
@@ -139,7 +143,7 @@ function IconButton({
         backgroundColor:
           background ??
           (flashOnPress && pressed
-            ? COMPOSER_COLORS.plusActive
+            ? (flashColor ?? "transparent")
             : "transparent"),
         height: size,
         opacity:
@@ -168,7 +172,20 @@ export function ComposerCapsule({
   keyboardHeight,
   accentColor = COMPOSER_COLORS.send,
 }: ComposerCapsuleProps) {
+  const theme = useTheme();
   const { width: screenWidth } = useWindowDimensions();
+  const colors = {
+    capsule: theme.backgroundElement,
+    border: theme.border,
+    text: theme.text,
+    placeholder: theme.textSecondary,
+    cursor: theme.text,
+    selection: withAlpha(theme.accent, 0.35),
+    sendInactive: theme.backgroundSelected,
+    sendArrowInactive: theme.textSecondary,
+    icon: theme.text,
+    plusActive: theme.backgroundSelected,
+  };
   const scale = screenWidth / CANVAS_WIDTH;
   const px = (canvasPx: number) => Math.max(1, Math.round(canvasPx * scale));
   const controlSize = px(112);
@@ -252,14 +269,14 @@ export function ComposerCapsule({
         ref={inputRef}
         className="h-full w-full min-h-0 border-0 bg-transparent px-0 py-0 font-sans dark:bg-transparent"
         style={{
-          color: COMPOSER_COLORS.text,
+          color: colors.text,
           fontSize: COMPOSER_FONT_SIZE,
           lineHeight: COMPOSER_LINE_HEIGHT,
         }}
-        cursorColor={COMPOSER_COLORS.cursor}
-        selectionColor={COMPOSER_COLORS.selection}
+        cursorColor={colors.cursor}
+        selectionColor={colors.selection}
         placeholder={placeholder}
-        placeholderTextColor={COMPOSER_COLORS.placeholder}
+        placeholderTextColor={colors.placeholder}
         multiline
         onChangeText={onChangeText}
         onContentSizeChange={(event) => {
@@ -286,10 +303,11 @@ export function ComposerCapsule({
     <IconButton
       accessibilityLabel="Attachments and tools"
       onPress={onPlusPress}
+      flashColor={colors.plusActive}
       flashOnPress
       size={controlSize}
     >
-      <Plus color={COMPOSER_COLORS.icon} size={glyphPlus} strokeWidth={2} />
+      <Plus color={colors.icon} size={glyphPlus} strokeWidth={2} />
     </IconButton>
   );
 
@@ -299,7 +317,7 @@ export function ComposerCapsule({
       onPress={handleMic}
       size={controlSize}
     >
-      <Mic color={COMPOSER_COLORS.icon} size={glyphMic} strokeWidth={2} />
+      <Mic color={colors.icon} size={glyphMic} strokeWidth={2} />
     </IconButton>
   );
 
@@ -317,7 +335,7 @@ export function ComposerCapsule({
         // app accent circle + white arrow once active.
         backgroundColor: sendActive
           ? accentColor
-          : COMPOSER_COLORS.sendInactive,
+          : colors.sendInactive,
         height: controlSize,
         opacity: pressed ? 0.85 : 1,
         width: controlSize,
@@ -327,7 +345,7 @@ export function ComposerCapsule({
         <StopCircle color="#FFFFFF" size={20} />
       ) : (
         <TablerArrowUp
-          color={sendActive ? "#FFFFFF" : COMPOSER_COLORS.sendArrowInactive}
+          color={sendActive ? "#FFFFFF" : colors.sendArrowInactive}
           size={glyphSend}
         />
       )}
@@ -342,7 +360,7 @@ export function ComposerCapsule({
       }}
       size={controlSize}
     >
-      <Maximize2 color={COMPOSER_COLORS.icon} size={px(56)} strokeWidth={2} />
+      <Maximize2 color={colors.icon} size={px(56)} strokeWidth={2} />
     </IconButton>
   );
 
@@ -355,8 +373,8 @@ export function ComposerCapsule({
         style={[
           capsuleStyle,
           {
-            backgroundColor: COMPOSER_COLORS.capsule,
-            borderColor: COMPOSER_COLORS.border,
+            backgroundColor: colors.capsule,
+            borderColor: colors.border,
             borderWidth: 1,
           },
         ]}
@@ -454,10 +472,10 @@ export function ComposerCapsule({
               lineHeight: 26,
               textAlignVertical: "top",
             }}
-            cursorColor={COMPOSER_COLORS.cursor}
-            selectionColor={COMPOSER_COLORS.selection}
+            cursorColor={colors.cursor}
+            selectionColor={colors.selection}
             placeholder={placeholder}
-            placeholderTextColor={COMPOSER_COLORS.placeholder}
+            placeholderTextColor={colors.placeholder}
             multiline
             onChangeText={onChangeText}
             scrollEnabled

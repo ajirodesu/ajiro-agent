@@ -61,6 +61,7 @@ object RootfsExtractor {
   fun extract(
     archive: File,
     dest: File,
+    stripComponents: Int = 0,
     onProgress: (bytesRead: Long, totalBytes: Long) -> Unit,
   ): Result {
     require(archive.isFile) { "archive missing: ${archive.absolutePath}" }
@@ -94,49 +95,26 @@ object RootfsExtractor {
       }
     }
 
-    val copyBuffer = ByteArray(COPY_BUFFER_BYTES)
     TarArchiveInputStream(decompressed).use { tar ->
       var entry: TarArchiveEntry? = tar.nextEntry
       while (entry != null) {
         val current = entry
         try {
-          val out = File(dest, current.name)
-          if (!out.canonicalPath.startsWith(destCanonical + File.separator)) {
-            Log.w(TAG, "Skipping path-traversal entry: ${current.name}")
+          // Strip leading components (proot-distro tarballs nest the
+          // filesystem one directory deep); entries that vanish are skipped.
+          val strippedName = stripLeading(current.name, stripComponents)
+          if (strippedName == null) {
             skipped++
-          } else if (current.isDirectory) {
-            out.mkdirs()
-            dirs++
-          } else if (current.isSymbolicLink) {
-            out.parentFile?.mkdirs()
-            if (out.exists() || isDanglingLink(out)) out.delete()
-            Os.symlink(current.linkName, out.absolutePath)
-            links++
-          } else if (current.isLink) {
-            // Hard link: target is archive-relative like a symlink target.
-            out.parentFile?.mkdirs()
-            if (out.exists()) out.delete()
-            val target = File(dest, current.linkName)
-            Os.link(target.absolutePath, out.absolutePath)
-            links++
-          } else if (current.isFile) {
-            out.parentFile?.mkdirs()
-            FileOutputStream(out).use { fos ->
-              var remaining = current.size
-              while (remaining > 0) {
-                val want = minOf(copyBuffer.size.toLong(), remaining).toInt()
-                val read = tar.read(copyBuffer, 0, want)
-                if (read < 0) break
-                fos.write(copyBuffer, 0, read)
-                remaining -= read
-              }
-            }
-            applyMode(out, current.mode)
-            files++
           } else {
-            // Character/block devices, fifos, sockets: cannot materialize in
-            // app-private storage; PRoot provides /dev itself.
-            skipped++
+            val out = File(dest, strippedName)
+            extractOne(tar, current, out, destCanonical)?.let { outcome ->
+              when (outcome) {
+                Outcome.FILE -> files++
+                Outcome.DIR -> dirs++
+                Outcome.LINK -> links++
+                Outcome.SKIPPED -> skipped++
+              }
+            } ?: run { skipped++ }
           }
         } catch (e: Exception) {
           Log.w(TAG, "Skipping unreadable entry ${current.name}: ${e.message}")
@@ -150,11 +128,78 @@ object RootfsExtractor {
     return Result(files, dirs, links, skipped)
   }
 
+  private enum class Outcome { FILE, DIR, LINK, SKIPPED }
+
+  /** Returns the stripped relative name, or null when nothing remains. */
+  private fun stripLeading(name: String, strip: Int): String? {
+    if (strip <= 0) return name.trimStart('/')
+    val segments = name.trimStart('/').split('/').filter { it.isNotEmpty() }
+    if (segments.size <= strip) return null
+    return segments.drop(strip).joinToString("/")
+  }
+
+  private fun extractOne(
+    tar: TarArchiveInputStream,
+    entry: TarArchiveEntry,
+    out: File,
+    destCanonical: String,
+  ): Outcome? {
+    if (!out.canonicalPath.startsWith(destCanonical + File.separator)) {
+      Log.w(TAG, "Skipping path-traversal entry: ${entry.name}")
+      return Outcome.SKIPPED
+    }
+    return when {
+      entry.isDirectory -> {
+        out.mkdirs()
+        Outcome.DIR
+      }
+      entry.isSymbolicLink -> {
+        out.parentFile?.mkdirs()
+        if (out.exists() || isDanglingLink(out)) out.delete()
+        Os.symlink(entry.linkName, out.absolutePath)
+        Outcome.LINK
+      }
+      entry.isLink -> {
+        // Hard link: target is archive-relative like a symlink target.
+        out.parentFile?.mkdirs()
+        if (out.exists()) out.delete()
+        val target = File(destCanonical, entry.linkName)
+        Os.link(target.absolutePath, out.absolutePath)
+        Outcome.LINK
+      }
+      entry.isFile -> {
+        out.parentFile?.mkdirs()
+        copyStream(tar, out, entry.size)
+        applyMode(out, entry.mode)
+        Outcome.FILE
+      }
+      else -> {
+        // Character/block devices, fifos, sockets: cannot materialize in
+        // app-private storage; PRoot provides /dev itself.
+        Outcome.SKIPPED
+      }
+    }
+  }
+
+  private fun copyStream(tar: TarArchiveInputStream, out: File, size: Long) {
+    val copyBuffer = ByteArray(COPY_BUFFER_BYTES)
+    FileOutputStream(out).use { fos ->
+      var remaining = size
+      while (remaining > 0) {
+        val want = minOf(copyBuffer.size.toLong(), remaining).toInt()
+        val read = tar.read(copyBuffer, 0, want)
+        if (read < 0) break
+        fos.write(copyBuffer, 0, read)
+        remaining -= read
+      }
+    }
+  }
+
   private fun isDanglingLink(file: File): Boolean {
     return try {
       // A symlink to a missing target reports exists()==false but is still
       // an entry that Os.symlink/delete must handle explicitly.
-      file.canonicalPath != file.absolutePath && !file.exists
+      file.canonicalPath != file.absolutePath && !file.exists()
     } catch (_: Exception) {
       false
     }

@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
 
 import { Container } from "@/components/shared/container";
-import { Button } from "@/components/ui/button";
+import { AppHeader, CircleIconButton } from "@/components/ui/chrome";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/core/utils";
@@ -115,19 +115,19 @@ export default function CodingSettingsScreen() {
       includeBottomTabInset={false}
       scroll
     >
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={() => {
-            router.back();
-          }}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-          Coding
-        </Text>
-      </View>
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
+            onPress={() => {
+              router.back();
+            }}
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Coding"
+      />
 
       <Card className="overflow-hidden">
         <View className="flex-row items-center gap-sp-3 px-sp-4 py-sp-3">

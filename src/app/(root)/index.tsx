@@ -52,6 +52,8 @@ import {
 
 import { Container } from "@/components/shared/container";
 import { SkillImportDrawer } from "@/components/skills/skill-import-drawer";
+import { ComposerSkillsModal } from "@/components/skills/composer-skills-modal";
+import { ComposerModelModal } from "@/components/models/composer-model-modal";
 import {
   Attachment,
   AttachmentAction,
@@ -82,9 +84,17 @@ import {
   MessageScrollerList,
   MessageScrollerProvider,
   useMessageScrollerActions,
+  useMessageScrollerContext,
 } from "@/components/ui/message-scroller";
 import { Separator } from "@/components/ui/separator";
 import { useSidebar } from "@/components/ui/sidebar";
+import {
+  AppHeader,
+  CapsuleContainer,
+  CONTAINER_BORDER,
+  HeaderShadow,
+  ICON_INNER,
+} from "@/components/ui/chrome";
 import {
   ContextUsageDrawer,
   UsageCapsule,
@@ -417,6 +427,7 @@ export default function Screen() {
     currentExternalFolderSession,
     currentSelectedFileIds,
     currentSelectedSkillIds,
+    deleteMessage,
     editAndResendMessage,
     messages,
     pendingToolApproval,
@@ -494,6 +505,8 @@ export default function Screen() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<string | null>(null);
   const [editNonce, setEditNonce] = useState(0);
+  const [seedDraft, setSeedDraft] = useState<string | null>(null);
+  const [seedNonce, setSeedNonce] = useState(0);
   const [historyDrawerMessageId, setHistoryDrawerMessageId] = useState<
     string | null
   >(null);
@@ -501,12 +514,58 @@ export default function Screen() {
   useEffect(() => {
     setEditDraft(null);
     setEditingMessageId(null);
+    setSeedDraft(null);
   }, [currentConversation?.id]);
 
   const handleEditMessage = useCallback((content: string) => {
     setEditDraft(content);
     setEditNonce((current) => current + 1);
     setEditingMessageId(latestUserMessageIdRef.current);
+  }, []);
+  const handleDeleteMessage = useCallback(
+    async (message: StoredMessage) => {
+      try {
+        await deleteMessage(message.id);
+      } catch (error) {
+        Alert.alert(
+          "Delete failed",
+          error instanceof Error ? error.message : "Could not delete the message.",
+        );
+      }
+    },
+    [deleteMessage],
+  );
+  const handleRegenerateMessage = useCallback(
+    async (assistantMessage: StoredMessage) => {
+      if (currentConversationBusy) {
+        return;
+      }
+      const ordered = [...messagesRef.current];
+      const assistantIndex = ordered.findIndex(
+        (item) => item.id === assistantMessage.id,
+      );
+      for (let index = assistantIndex - 1; index >= 0; index -= 1) {
+        const candidate = ordered[index];
+        if (candidate.role === "user") {
+          try {
+            await editAndResendMessage(candidate.id, candidate.content);
+          } catch (retryError) {
+            Alert.alert(
+              "Retry failed",
+              retryError instanceof Error
+                ? retryError.message
+                : "Could not resend the message.",
+            );
+          }
+          return;
+        }
+      }
+    },
+    [currentConversationBusy, editAndResendMessage],
+  );
+  const handleEditAiText = useCallback((content: string) => {
+    setSeedDraft(content);
+    setSeedNonce((current) => current + 1);
   }, []);
   const handleSavePrompt = useCallback(
     (content: string) => {
@@ -620,13 +679,36 @@ export default function Screen() {
           message.id === latestUserMessageId && !currentConversationBusy
         }
         message={message}
+        onDeleteMessage={
+          message.status === "streaming" || currentConversationBusy
+            ? undefined
+            : () => {
+                handleDeleteMessage(message).catch(console.error);
+              }
+        }
         onEditMessage={handleEditMessage}
+        onEditText={
+          message.role === "assistant" && message.content.trim()
+            ? () => {
+                handleEditAiText(message.content);
+              }
+            : undefined
+        }
         onInterrupt={() => {
           stopSending().catch(console.error);
         }}
         onOpenHistory={() => {
           setHistoryDrawerMessageId(message.id);
         }}
+        onRegenerate={
+          message.role === "assistant" &&
+          message.status === "completed" &&
+          !currentConversationBusy
+            ? () => {
+                handleRegenerateMessage(message).catch(console.error);
+              }
+            : undefined
+        }
         onRetry={
           message.status === "failed" && !currentConversationBusy
             ? () => {
@@ -644,7 +726,10 @@ export default function Screen() {
     ),
     [
       currentConversationBusy,
+      handleDeleteMessage,
+      handleEditAiText,
       handleEditMessage,
+      handleRegenerateMessage,
       handleRetryMessage,
       handleSavePrompt,
       latestUserMessageId,
@@ -669,81 +754,74 @@ export default function Screen() {
           contentClassName="flex-1 gap-sp-4 !px-4"
           includeBottomTabInset={false}
         >
-          <View className="flex-row items-center" style={{ gap: 12, height: 64 }}>
-            <Pressable
-              accessibilityLabel="Open sidebar"
-              accessibilityRole="button"
-              onPress={() => {
-                setSidebarOpen(true);
-              }}
-              className="items-center justify-center rounded-full"
-              style={({ pressed }) => ({
-                width: 48,
-                height: 48,
-                backgroundColor: "#212121",
-                borderWidth: 1,
-                borderColor: "#424242",
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Svg
-                width={24}
-                height={24}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#FFFFFF"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <Path d="M3 8H21" />
-                <Path d="M3 16H16" />
-              </Svg>
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Get Plus"
-              accessibilityRole="button"
-              onPress={() => {
-                router.push("/settings/providers");
-              }}
-              className="flex-row items-center rounded-full"
-              style={({ pressed }) => ({
-                height: 46,
-                paddingHorizontal: 22,
-                gap: 8,
-                backgroundColor: "#212121",
-                borderWidth: 1,
-                borderColor: "#424242",
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Sparkle color="#2D9CDB" size={20} strokeWidth={2} />
-              <Text
-                className="font-sans"
-                style={{ fontSize: 17, fontWeight: "600", color: "#2D9CDB" }}
-              >
-                Get Plus
-              </Text>
-            </Pressable>
-            <View className="flex-1" />
-            <UsageCapsule
-              expanded={messages.length > 0}
-              percent={contextUsage.percent}
-              onPressRing={() => {
-                setSidebarOpen(false);
-                setContextDrawerOpen(true);
-              }}
-              onNewChat={() => {
-                createConversation().catch(console.error);
-              }}
-            />
-          </View>
+          <AppHeader
+            left={
+              <CapsuleContainer accessibilityLabel="Chat actions">
+                <Pressable
+                  accessibilityLabel="Open sidebar"
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setSidebarOpen(true);
+                  }}
+                  className="items-center justify-center rounded-full"
+                  style={({ pressed }) => ({
+                    width: ICON_INNER,
+                    height: ICON_INNER,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Svg
+                    width={24}
+                    height={24}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={theme.text}
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <Path d="M3 8H21" />
+                    <Path d="M3 16H16" />
+                  </Svg>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="Get Plus"
+                  accessibilityRole="button"
+                  onPress={() => {
+                    router.push("/settings/providers");
+                  }}
+                  className="items-center justify-center rounded-full"
+                  style={({ pressed }) => ({
+                    width: ICON_INNER,
+                    height: ICON_INNER,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Sparkle color={theme.accent} size={20} strokeWidth={2} />
+                </Pressable>
+              </CapsuleContainer>
+            }
+            right={
+              <UsageCapsule
+                expanded={messages.length > 0}
+                percent={contextUsage.percent}
+                onPressRing={() => {
+                  setSidebarOpen(false);
+                  setContextDrawerOpen(true);
+                }}
+                onNewChat={() => {
+                  createConversation().catch(console.error);
+                }}
+              />
+            }
+          />
 
           <MessageScrollerProvider
             key={currentConversation?.id ?? "new-chat"}
             initialScrollToEnd
           >
-            <MessageScroller className="flex-1 rounded-none border-0">
+            <View className="relative min-h-0 flex-1">
+              <MessageScroller className="flex-1 rounded-none border-0">
               {!ready ? (
                 <View
                   accessibilityLiveRegion="polite"
@@ -767,15 +845,15 @@ export default function Screen() {
                   }}
                 >
                   <Image
-                    source={require("../../../assets/images/icon.png")}
+                    source={require("../../../assets/images/new-icon.png")}
                     contentFit="contain"
                     style={{
                       width: 62,
                       height: 62,
                       borderRadius: 14,
                       borderWidth: 1,
-                      borderColor: "rgba(255,255,255,0.08)",
-                      backgroundColor: "#212121",
+                      borderColor: theme.border,
+                      backgroundColor: theme.backgroundElement,
                     }}
                   />
                   <View className="items-center" style={{ gap: 6 }}>
@@ -851,7 +929,11 @@ export default function Screen() {
                   {messages.length > 0 ? (
                     <MessageScrollerButton
                       accessibilityLabel="Jump to latest"
-                      className="h-10 w-10 rounded-full px-0"
+                      className="bottom-sp-2 left-1/2 right-auto -ml-5 h-10 w-10 rounded-full px-0"
+                      style={{
+                        borderWidth: CONTAINER_BORDER,
+                        borderColor: theme.border,
+                      }}
                     >
                       <ArrowDown color={theme.text} size={18} />
                     </MessageScrollerButton>
@@ -859,6 +941,8 @@ export default function Screen() {
                 </>
               )}
             </MessageScroller>
+            <ChatHeaderShadow />
+          </View>
 
             {error ? (
               <Text className="font-sans text-sm text-destructive dark:text-destructive-dark">
@@ -888,6 +972,8 @@ export default function Screen() {
               currentModelRef={currentModel?.ref ?? null}
               editDraft={editDraft}
               editNonce={editNonce}
+              seedDraft={seedDraft}
+              seedNonce={seedNonce}
               importFiles={importFiles}
               loading={currentConversationBusy}
               onEditSend={handleEditSend}
@@ -1087,6 +1173,11 @@ function formatToolName(toolName: string) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function ChatHeaderShadow() {
+  const { scrollable } = useMessageScrollerContext();
+  return <HeaderShadow visible={scrollable.start} />;
+}
+
 const ChatInput = memo(function ChatInput({
   activeModels,
   canSend,
@@ -1095,6 +1186,8 @@ const ChatInput = memo(function ChatInput({
   currentModelRef,
   editDraft,
   editNonce,
+  seedDraft,
+  seedNonce,
   importFiles,
   loading,
   mcpServers,
@@ -1149,6 +1242,8 @@ const ChatInput = memo(function ChatInput({
   currentModelRef: ModelRef | null;
   editDraft: string | null;
   editNonce: number;
+  seedDraft: string | null;
+  seedNonce: number;
   importFiles: typeof useChat extends () => infer T
     ? T extends { importFiles: infer F }
       ? F
@@ -1261,6 +1356,14 @@ const ChatInput = memo(function ChatInput({
     setPrompt("");
   }, [editDraft, editNonce]);
 
+  useEffect(() => {
+    if (seedDraft !== null) {
+      setPrompt(seedDraft);
+      composerRef.current?.focus();
+      KeyboardController.setFocusTo("current");
+    }
+  }, [seedDraft, seedNonce]);
+
   // Keyboard height drives the capsule's own viewport cap (inside
   // ComposerCapsule). Cursor and draft live in React state (prompt +
   // selection sync), so resizing never disturbs them.
@@ -1286,17 +1389,6 @@ const ChatInput = memo(function ChatInput({
   };
 
   const composerTrigger = useMemo(() => getComposerTrigger(prompt), [prompt]);
-  const modelGroups = useMemo(() => {
-    const groups = new Map<string, typeof activeModels>();
-
-    for (const model of activeModels) {
-      const providerModels = groups.get(model.providerLabel) ?? [];
-      providerModels.push(model);
-      groups.set(model.providerLabel, providerModels);
-    }
-
-    return [...groups.entries()];
-  }, [activeModels]);
   const mergedWorkspaceFiles = useMemo(() => {
     const map = new Map(workspaceFiles.map((file) => [file.id, file]));
 
@@ -2401,120 +2493,31 @@ const ChatInput = memo(function ChatInput({
         </DrawerContent>
       </Drawer>
 
-      <Drawer onOpenChange={setModelsDrawerOpen} open={modelsDrawerOpen}>
-        <DrawerContent showCloseButton showHandle>
-          <DrawerHeader>
-            <DrawerTitle>Select model</DrawerTitle>
-            <DrawerDescription>
-              Switch the current model for this chat.
-            </DrawerDescription>
-          </DrawerHeader>
-          <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-            {activeModels.length > 0 ? (
-              modelGroups.map(([providerLabel, models]) => (
-                <View className="gap-sp-2" key={providerLabel}>
-                  <Text className="font-sans text-sm font-semibold text-foreground dark:text-foreground-dark">
-                    {providerLabel}
-                  </Text>
-                  {models.map((model) => (
-                    <DrawerSelectRow
-                      key={model.ref}
-                      onPress={() => {
-                        selectModel(model.ref)
-                          .then(() => {
-                            setModelsDrawerOpen(false);
-                          })
-                          .catch(console.error);
-                      }}
-                      selected={currentModelRef === model.ref}
-                      title={model.label}
-                    />
-                  ))}
-                </View>
-              ))
-            ) : (
-              <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                No active models
-              </Text>
-            )}
-          </DrawerBody>
-          <DrawerFooter>
-            <Button
-              onPress={() => {
-                setModelsDrawerOpen(false);
-                onOpenSettings();
-              }}
-              variant="outline"
-            >
-              Manage models
-            </Button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+      <ComposerModelModal
+        onOpenChange={setModelsDrawerOpen}
+        open={modelsDrawerOpen}
+      />
 
-      <Drawer onOpenChange={setSkillsDrawerOpen} open={skillsDrawerOpen}>
-        <DrawerContent showCloseButton showHandle>
-          <DrawerHeader>
-            <DrawerTitle>Skills</DrawerTitle>
-            <DrawerDescription>
-              {selectedSkills.length} selected for this chat.
-            </DrawerDescription>
-          </DrawerHeader>
-          <DrawerBody contentContainerClassName="gap-sp-2 pb-sp-4">
-            {enabledSkills.length > 0 ? (
-              enabledSkills.map((skill) => {
-                const selected = selectedSkillIds.includes(skill.id);
-
-                return (
-                  <DrawerSelectRow
-                    key={skill.id}
-                    onPress={() => {
-                      setSelectedSkillIds(
-                        selected
-                          ? selectedSkillIds.filter((id) => id !== skill.id)
-                          : [...selectedSkillIds, skill.id],
-                      ).catch(console.error);
-                    }}
-                    selected={selected}
-                    subtitle={
-                      skill.autoMatch
-                        ? skill.description
-                          ? `Auto · ${skill.description}`
-                          : "Auto"
-                        : (skill.description ?? undefined)
-                    }
-                    title={skill.title}
-                  />
-                );
-              })
-            ) : (
-              <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
-                No enabled skills
-              </Text>
-            )}
-          </DrawerBody>
-          <DrawerFooter>
-            <Button
-              onPress={() => {
-                setSkillsDrawerOpen(false);
-                setSkillImportOpen(true);
-              }}
-              variant="outline"
-            >
-              Import skill
-            </Button>
-            <Button
-              onPress={() => {
-                setSkillsDrawerOpen(false);
-                onOpenSettings();
-              }}
-              variant="outline"
-            >
-              Manage skills
-            </Button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+      <ComposerSkillsModal
+        onImportSkill={() => {
+          setSkillImportOpen(true);
+        }}
+        onManageSkills={() => {
+          setSkillsDrawerOpen(false);
+          onOpenSettings();
+        }}
+        onOpenChange={setSkillsDrawerOpen}
+        onToggleSkill={(id) => {
+          const selected = selectedSkillIds.includes(id);
+          setSelectedSkillIds(
+            selected
+              ? selectedSkillIds.filter((entry) => entry !== id)
+              : [...selectedSkillIds, id],
+          ).catch(console.error);
+        }}
+        open={skillsDrawerOpen}
+        selectedSkillIds={selectedSkillIds}
+      />
 
       <SkillImportDrawer
         onOpenChange={setSkillImportOpen}

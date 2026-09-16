@@ -27,7 +27,7 @@ export interface TerminalBridge {
   resize(id: string, cols: number, rows: number): Promise<void>;
   killSession(id: string): Promise<void>;
   executeHeadless(command: string, timeoutMs?: number): Promise<CommandResult>;
-  extractRootfs(archivePath: string, destPath: string): Promise<ExtractRootfsResult>;
+  extractRootfs(archivePath: string, destPath: string, stripComponents?: number): Promise<ExtractRootfsResult>;
 }
 
 export class TerminalBridgeError extends Error {
@@ -155,12 +155,20 @@ class TerminalBridgeImpl implements TerminalBridge {
     }
   }
 
-  async extractRootfs(archivePath: string, destPath: string): Promise<ExtractRootfsResult> {
+  async extractRootfs(
+    archivePath: string,
+    destPath: string,
+    stripComponents = 0,
+  ): Promise<ExtractRootfsResult> {
     if (!archivePath || !destPath) {
       throw new TerminalBridgeError("invalid-args", "extractRootfs requires an archive path and destination.");
     }
     try {
-      const result = await this.ensureAvailable().extractRootfs(archivePath, destPath);
+      const result = await this.ensureAvailable().extractRootfs(
+        archivePath,
+        destPath,
+        Math.max(0, Math.floor(stripComponents)),
+      );
       return {
         extractedFiles: Number(result.extractedFiles ?? 0),
         extractedDirs: Number(result.extractedDirs ?? 0),

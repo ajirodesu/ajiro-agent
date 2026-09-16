@@ -14,6 +14,7 @@ import { Text, View } from "react-native";
 import { Container } from "@/components/shared/container";
 import { McpServerRow } from "@/components/settings/mcp/server-row";
 import { Button } from "@/components/ui/button";
+import { AppHeader, CircleIconButton } from "@/components/ui/chrome";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,25 +62,25 @@ export default function McpServersScreen() {
       includeBottomTabInset={false}
       scroll
     >
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={() => router.back()}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <Text className="min-w-0 flex-1 font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-          MCP servers
-        </Text>
-        <Button
-          leftIcon={<Plus color={theme.text} size={16} />}
-          onPress={() => router.push("/settings/mcp/add" as never)}
-          size="sm"
-          variant="outline"
-        >
-          Add server
-        </Button>
-      </View>
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
+            onPress={() => router.back()}
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="MCP servers"
+        right={
+          <CircleIconButton
+            accessibilityLabel="Add server"
+            onPress={() => router.push("/settings/mcp/add" as never)}
+          >
+            <Plus color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+      />
 
       {!ready ? (
         <Card

@@ -25,7 +25,12 @@ import {
 } from "react-native";
 
 import { Container } from "@/components/shared/container";
-import { Button } from "@/components/ui/button";
+import {
+  AppHeader,
+  AppTabs,
+  CircleIconButton,
+  HeaderShadow,
+} from "@/components/ui/chrome";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -33,7 +38,6 @@ import {
   resolveWorkspaceFile,
 } from "@/core/services/workspace-file-service";
 import type { WorkspaceFile } from "@/core/types/app-state";
-import { cn } from "@/core/utils";
 import { useChat } from "@/hooks/use-chat";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -48,6 +52,7 @@ const CATEGORIES: { id: LibraryCategory; label: string }[] = [
 export default function LibraryScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const [scrolled, setScrolled] = useState(false);
   const { deleteWorkspaceFile, refreshWorkspaceFiles, workspaceFiles } =
     useChat();
   const params = useLocalSearchParams<{ category?: string }>();
@@ -196,59 +201,36 @@ export default function LibraryScreen() {
       scroll
       contentClassName="gap-sp-4 py-sp-4"
       includeBottomTabInset={false}
+      overlay={<HeaderShadow visible={scrolled} />}
+      onScroll={(event) => {
+        setScrolled(event.nativeEvent.contentOffset.y > 4);
+      }}
     >
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/");
-            }
-          }}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-          Library
-        </Text>
-      </View>
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push("/");
+              }
+            }}
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Library"
+      />
 
-      <View className="flex-row gap-sp-2">
-        {CATEGORIES.map((item) => {
-          const active = category === item.id;
-
-          return (
-            <Pressable
-              key={item.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              className={cn(
-                "flex-1 items-center rounded-ui border px-sp-3 py-sp-2",
-                active
-                  ? "border-foreground bg-secondary dark:border-foreground-dark dark:bg-secondary-dark"
-                  : "border-border bg-card dark:border-border-dark dark:bg-card-dark",
-              )}
-              onPress={() => {
-                setCategory(item.id);
-              }}
-              style={({ pressed }) => (pressed ? { opacity: 0.82 } : null)}
-            >
-              <Text
-                className={cn(
-                  "font-sans text-sm font-medium",
-                  active
-                    ? "text-foreground dark:text-foreground-dark"
-                    : "text-muted-foreground dark:text-muted-foreground-dark",
-                )}
-              >
-                {item.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <AppTabs
+        tabs={CATEGORIES.map((item) => ({ key: item.id, label: item.label }))}
+        activeKey={category}
+        onChange={(key) => {
+          setCategory(key as LibraryCategory);
+        }}
+      />
 
       {filteredFiles.length > 0 ? (
         <Card className="overflow-hidden">

@@ -1,0 +1,160 @@
+{
+  "$schema": "https://ajiro-agent.local/schemas/skills-catalog.json",
+  "version": 1,
+  "source": "https://github.com/anthropics/skills",
+  "sourceNote": "Official Anthropic skills repository (main branch). Each entry installs live through the existing SKILL.md import pipeline — descriptions below are short teasers; the full live description loads on detail open and at install time.",
+  "skills": [
+    {
+      "slug": "pdf",
+      "name": "PDF",
+      "description": "Read, extract, merge, split, rotate, watermark, and create PDF files with Python and command-line tools.",
+      "author": "Anthropic",
+      "category": "Documents",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/pdf/SKILL.md"
+    },
+    {
+      "slug": "docx",
+      "name": "Word Documents",
+      "description": "Create, read, and edit .docx Word documents.",
+      "author": "Anthropic",
+      "category": "Documents",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/docx/SKILL.md"
+    },
+    {
+      "slug": "pptx",
+      "name": "Presentations",
+      "description": "Create and edit PowerPoint presentations.",
+      "author": "Anthropic",
+      "category": "Documents",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/pptx/SKILL.md"
+    },
+    {
+      "slug": "xlsx",
+      "name": "Spreadsheets",
+      "description": "Create, read, and edit Excel spreadsheets.",
+      "author": "Anthropic",
+      "category": "Documents",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/xlsx/SKILL.md"
+    },
+    {
+      "slug": "mcp-builder",
+      "name": "MCP Builder",
+      "description": "Guide for creating high-quality MCP servers in TypeScript or Python.",
+      "author": "Anthropic",
+      "category": "Development",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/mcp-builder/SKILL.md"
+    },
+    {
+      "slug": "skill-creator",
+      "name": "Skill Creator",
+      "description": "Guide for authoring new agent skills with effective structure.",
+      "author": "Anthropic",
+      "category": "Development",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md"
+    },
+    {
+      "slug": "webapp-testing",
+      "name": "Web App Testing",
+      "description": "Test web applications end to end and report findings.",
+      "author": "Anthropic",
+      "category": "Development",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/webapp-testing/SKILL.md"
+    },
+    {
+      "slug": "frontend-design",
+      "name": "Frontend Design",
+      "description": "Design and build web frontends with strong visual quality.",
+      "author": "Anthropic",
+      "category": "Development",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md"
+    },
+    {
+      "slug": "claude-api",
+      "name": "Claude API",
+      "description": "Use the Claude API effectively in code and integrations.",
+      "author": "Anthropic",
+      "category": "Development",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/claude-api/SKILL.md"
+    },
+    {
+      "slug": "algorithmic-art",
+      "name": "Algorithmic Art",
+      "description": "Create generative and algorithmic visual art with code.",
+      "author": "Anthropic",
+      "category": "Creative",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/algorithmic-art/SKILL.md"
+    },
+    {
+      "slug": "canvas-design",
+      "name": "Canvas Design",
+      "description": "Design expressive canvas-based creative work.",
+      "author": "Anthropic",
+      "category": "Creative",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/canvas-design/SKILL.md"
+    },
+    {
+      "slug": "theme-factory",
+      "name": "Theme Factory",
+      "description": "Create reusable visual themes and design tokens.",
+      "author": "Anthropic",
+      "category": "Creative",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/theme-factory/SKILL.md"
+    },
+    {
+      "slug": "slack-gif-creator",
+      "name": "Slack GIF Creator",
+      "description": "Create animated GIFs ready to share in Slack.",
+      "author": "Anthropic",
+      "category": "Creative",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/slack-gif-creator/SKILL.md"
+    },
+    {
+      "slug": "web-artifacts-builder",
+      "name": "Web Artifacts",
+      "description": "Build interactive web artifacts and pages.",
+      "author": "Anthropic",
+      "category": "Creative",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/web-artifacts-builder/SKILL.md"
+    },
+    {
+      "slug": "brand-guidelines",
+      "name": "Brand Guidelines",
+      "description": "Apply brand guidelines consistently across content.",
+      "author": "Anthropic",
+      "category": "Communication",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/brand-guidelines/SKILL.md"
+    },
+    {
+      "slug": "internal-comms",
+      "name": "Internal Comms",
+      "description": "Write internal communications: announcements, updates, and memos.",
+      "author": "Anthropic",
+      "category": "Communication",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/internal-comms/SKILL.md"
+    },
+    {
+      "slug": "doc-coauthoring",
+      "name": "Doc Co-Authoring",
+      "description": "Co-author documents iteratively with the agent.",
+      "author": "Anthropic",
+      "category": "Communication",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md"
+    },
+    {
+      "slug": "academy-guide",
+      "name": "Academy Guide",
+      "description": "Create structured learning content and courses.",
+      "author": "Anthropic",
+      "category": "Communication",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/academy-guide/SKILL.md"
+    },
+    {
+      "slug": "discernment-nudge",
+      "name": "Discernment",
+      "description": "Encourage careful, discerning judgment on ambiguous tasks.",
+      "author": "Anthropic",
+      "category": "Behavior",
+      "sourceUrl": "https://github.com/anthropics/skills/blob/main/skills/discernment-nudge/SKILL.md"
+    }
+  ]
+}

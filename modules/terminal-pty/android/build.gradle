@@ -19,6 +19,10 @@ android {
       cmake {
         cppFlags "-std=c++17 -fexceptions"
         abiFilters "arm64-v8a"
+        // The C++ bridge uses STL (string/vector/mutex/exceptions): link the
+        // shared runtime explicitly (Gradle also packages libc++_shared.so).
+        // Without this the link fails with undefined `operator new`/`std::*`.
+        arguments "-DANDROID_STL=c++_shared"
       }
     }
   }

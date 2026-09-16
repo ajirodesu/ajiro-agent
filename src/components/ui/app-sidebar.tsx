@@ -1,27 +1,23 @@
 /**
- * Ajiro Agent sidebar — port of sidebar.html: solid black panel, 26px
- * semibold wordmark, 38px bordered search circle, 22px nav icons with
- * 16px medium labels, pinned rows with chat icons, plain recent rows, and a
- * #3b82f6 Chat pill + 44px settings circle pinned to the bottom.
+ * Ajiro Agent sidebar: shared-chrome header, theme-aware nav rows, and a
+ * merged new-chat + settings capsule pinned to the bottom.
  *
  * Author: AjiroDesu
  */
 import { usePathname, useRouter } from "expo-router";
 import {
   AtSign,
-  Archive,
   Clock,
-  EllipsisVertical,
   FolderGit,
   FolderOpen,
   GitBranch,
-  GitFork,
   Images,
   Library,
   MessageCircle,
   Pencil,
   Pin,
   PinOff,
+  Play,
   Search,
   Settings,
   SquarePen,
@@ -29,7 +25,7 @@ import {
   Trash2,
   X,
 } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal as ReactNativeModal,
@@ -44,20 +40,24 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useElapsedSeconds } from "@/components/ui/processing-status";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppHeader,
+  CapsuleContainer,
+  CircleIconButton,
+  FOOTER_ICON_SIZE,
+} from "@/components/ui/chrome";
+import { withAlpha } from "@/components/ui/chrome-spec";
+import {
+  MessageMenu,
+  type MenuAnchor,
+} from "@/components/chat/message-menu";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { formatMessageDate } from "@/modules/chat/message-dates";
 import type { Conversation } from "@/core/types/app-state";
-import { cn } from "@/core/utils";
 import { useAppState } from "@/hooks/use-app-state";
 import { useChat } from "@/hooks/use-chat";
 import { useTheme } from "@/hooks/use-theme";
@@ -65,10 +65,11 @@ import { useIdeWorkspace } from "@/providers/ide-workspace";
 import {
   markSidebarReturnPending,
 } from "@/modules/navigation/sidebar-return";
+import {
+  splitPinnedRecents,
+  visibleConversations,
+} from "@/modules/chat/conversation-list";
 import { ACTIVE_AGENT_RUN_STATUSES } from "@/modules/runtime/run-manager";
-
-/** Accent used by the Chat pill, matching sidebar.html. */
-const ACCENT_BLUE = "#3B82F6";
 
 /**
  * Downward header fling dismisses a fullscreen modal. Native-rate velocity
@@ -109,6 +110,7 @@ const NAV_ITEMS: { label: string; route: string; icon: typeof Library }[] = [
   { label: "Git", route: "/git", icon: GitBranch },
   { label: "Projects", route: "/settings/coding", icon: FolderOpen },
   { label: "Terminal", route: "/terminal", icon: Terminal },
+  { label: "Run", route: "/run", icon: Play },
   { label: "Scheduled", route: "/settings/jobs", icon: Clock },
   { label: "Plugins", route: "/settings/mcp", icon: AtSign },
 ];
@@ -194,21 +196,13 @@ export function AppSidebar() {
   }, [activeRuns]);
 
   const visibleChats = useMemo(
-    () =>
-      [...conversations]
-        .filter((conversation) => !conversation.archivedAt)
-        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)),
+    () => visibleConversations(conversations),
     [conversations],
   );
 
-  const pinnedChats = useMemo(
-    () => visibleChats.filter((conversation) => conversation.pinnedAt),
-    [visibleChats],
-  );
-
-  const recentChats = useMemo(
-    () => visibleChats.filter((conversation) => !conversation.pinnedAt),
-    [visibleChats],
+  const { pinned: pinnedChats, recents: recentChats } = useMemo(
+    () => splitPinnedRecents(conversations),
+    [conversations],
   );
 
   const searchResults = useMemo(() => {
@@ -269,28 +263,22 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar>
-        {/* Fixed header — 26px semibold wordmark + 38px search circle. */}
-        <SidebarHeader className="h-14 shrink-0 flex-row items-center justify-between pb-0">
-          <Text
-            className="font-sans font-semibold text-foreground dark:text-foreground-dark"
-            style={{ fontSize: 26, letterSpacing: -0.3 }}
-          >
-            Ajiro Agent
-          </Text>
-          <View className="flex-row items-center gap-sp-2">
-            <CircularIconButton
+        {/* Fixed header — shared chrome: centered wordmark + search circle. */}
+        <AppHeader
+          title="Ajiro Agent"
+          right={
+            <CircleIconButton
               accessibilityLabel="Search chats"
               onPress={() => setSearchOpen(true)}
-              size={38}
             >
               <Search
                 color={theme.text}
                 size={18}
                 strokeWidth={2}
               />
-            </CircularIconButton>
-          </View>
-        </SidebarHeader>
+            </CircleIconButton>
+          }
+        />
 
         <SidebarContent
           contentContainerClassName="gap-sp-4 pb-sp-3"
@@ -318,9 +306,9 @@ export function AppSidebar() {
                   style={({ pressed }) => ({
                     paddingVertical: 11,
                     backgroundColor: pressed
-                      ? "rgba(255,255,255,0.06)"
+                      ? withAlpha(theme.text, 0.08)
                       : isActive
-                        ? "rgba(255,255,255,0.06)"
+                        ? withAlpha(theme.text, 0.08)
                         : "transparent",
                   })}
                   onPress={() => {
@@ -367,6 +355,8 @@ export function AppSidebar() {
                   }
                   conversation={conversation}
                   leadingIcon
+                  pinned
+                  pinnedCount={pinnedChats.length}
                   run={runByConversation.get(conversation.id)}
                   onSelect={() => {
                     openChat(conversation.id);
@@ -391,6 +381,8 @@ export function AppSidebar() {
                   currentConversation?.id === conversation.id && pathname === "/"
                 }
                 conversation={conversation}
+                pinned={false}
+                pinnedCount={pinnedChats.length}
                 run={runByConversation.get(conversation.id)}
                 onSelect={() => {
                   openChat(conversation.id);
@@ -418,7 +410,7 @@ export function AppSidebar() {
           </View>
         </SidebarContent>
 
-        {/* Fixed bottom bar — Chat pill + settings circle, never scroll away. */}
+        {/* Fixed bottom bar — merged new-chat + settings capsule. */}
         <SidebarFooter
           className="flex-row items-center justify-between gap-sp-3"
           style={{
@@ -426,41 +418,37 @@ export function AppSidebar() {
             paddingBottom: insets.bottom + 8,
           }}
         >
-          <Pressable
-            accessibilityLabel="Chat"
-            accessibilityRole="button"
-            className="flex-row items-center rounded-3xl"
-            onPress={startNewChat}
-            style={({ pressed }) => ({
-              backgroundColor: ACCENT_BLUE,
-              gap: 10,
-              opacity: pressed ? 0.85 : 1,
-              paddingHorizontal: 22,
-              paddingVertical: 12,
-            })}
-          >
-            <SquarePen color="#FFFFFF" size={19} strokeWidth={2} />
-            <Text
-              className="font-sans text-white"
-              style={{ fontSize: 16, fontWeight: "500" }}
+          <CapsuleContainer accessibilityLabel="Chat actions">
+            <Pressable
+              accessibilityLabel="New chat"
+              accessibilityRole="button"
+              className="items-center justify-center rounded-full"
+              onPress={startNewChat}
+              style={({ pressed }) => ({
+                width: FOOTER_ICON_SIZE,
+                height: FOOTER_ICON_SIZE,
+                opacity: pressed ? 0.85 : 1,
+              })}
             >
-              Chat
-            </Text>
-          </Pressable>
-          <CircularIconButton
-            accessibilityLabel="Settings"
-            size={44}
-            onPress={() => {
-              setSearchOpen(false);
-              openRoute("/settings");
-            }}
-          >
-            <Settings
-              color={theme.text}
-              size={20}
-              strokeWidth={2}
-            />
-          </CircularIconButton>
+              <SquarePen color={theme.text} size={19} strokeWidth={2} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Settings"
+              accessibilityRole="button"
+              className="items-center justify-center rounded-full"
+              onPress={() => {
+                setSearchOpen(false);
+                openRoute("/settings");
+              }}
+              style={({ pressed }) => ({
+                width: FOOTER_ICON_SIZE,
+                height: FOOTER_ICON_SIZE,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Settings color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+          </CapsuleContainer>
         </SidebarFooter>
       </Sidebar>
 
@@ -605,43 +593,14 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
-function CircularIconButton({
-  accessibilityLabel,
-  children,
-  onPress,
-  size = 38,
-}: {
-  accessibilityLabel: string;
-  children: React.ReactNode;
-  onPress: () => void;
-  size?: number;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      className="items-center justify-center rounded-full"
-      style={({ pressed }) => ({
-        width: size,
-        height: size,
-        backgroundColor: "#1A1A1A",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.12)",
-        opacity: pressed ? 0.7 : 1,
-      })}
-      onPress={onPress}
-    >
-      {children}
-    </Pressable>
-  );
-}
-
 function ConversationRow({
   active,
   conversation,
   leadingIcon,
   onRename,
   onSelect,
+  pinned,
+  pinnedCount,
   run,
 }: {
   active: boolean;
@@ -649,35 +608,57 @@ function ConversationRow({
   leadingIcon?: boolean;
   onRename: () => void;
   onSelect: () => void;
+  pinned: boolean;
+  pinnedCount: number;
   run?: { startedAt: string };
 }) {
   const theme = useTheme();
+  const { deleteConversation, setConversationPinned } = useChat();
   const elapsed = useElapsedSeconds(
     run?.startedAt ?? conversation.createdAt,
     Boolean(run),
   );
+  const [highlighted, setHighlighted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<MenuAnchor | null>(null);
+  const rowRef = useRef<View>(null);
+  const longPressFired = useRef(false);
+  const pinDisabled = !pinned && pinnedCount >= 3;
 
   return (
-    <View className="flex-row items-center" style={{ gap: 14 }}>
+    <View>
       <Pressable
+        ref={rowRef}
         accessibilityRole="button"
-        className={cn(
-          "min-w-0 flex-1 flex-row items-center rounded-xl",
-          active && "bg-secondary dark:bg-secondary-dark",
-        )}
-        style={({ pressed }) => ({
-          paddingVertical: 9,
-          opacity: pressed ? 0.85 : 1,
-        })}
+        delayLongPress={350}
         onPress={onSelect}
+        onLongPress={() => {
+          longPressFired.current = true;
+          setHighlighted(true);
+        }}
+        onPressOut={() => {
+          if (!longPressFired.current) return;
+          longPressFired.current = false;
+          setHighlighted(false);
+          rowRef.current?.measureInWindow((x, y, width, height) => {
+            setMenuAnchor({ x, y, width, height });
+            setMenuOpen(true);
+          });
+        }}
+        className="min-w-0 w-full flex-row items-center"
+        style={{
+          gap: 14,
+          paddingVertical: 9,
+          paddingHorizontal: 8,
+          backgroundColor: highlighted
+            ? withAlpha(theme.accent, 0.22)
+            : active
+              ? theme.backgroundSelected
+              : "transparent",
+        }}
       >
         {leadingIcon ? (
-          <MessageCircle
-            color={theme.text}
-            size={22}
-            strokeWidth={2}
-            style={{ marginRight: 14 }}
-          />
+          <MessageCircle color={theme.text} size={22} strokeWidth={2} />
         ) : null}
         <Text
           numberOfLines={1}
@@ -686,122 +667,55 @@ function ConversationRow({
         >
           {conversation.title}
         </Text>
+        {run ? (
+          <Text className="px-sp-1 font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
+            {elapsed}s
+          </Text>
+        ) : null}
       </Pressable>
-      {run ? (
-        <Text className="px-sp-1 font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
-          {elapsed}s
-        </Text>
-      ) : null}
-      <ChatOptions
-        conversationId={conversation.id}
-        onRename={onRename}
-        pinned={Boolean(conversation.pinnedAt)}
-        pinnedCount={2}
+      <MessageMenu
+        actions={[
+          {
+            key: "pin",
+            label: pinned ? "Unpin" : "Pin",
+            icon: pinned ? (
+              <PinOff color={theme.text} size={18} />
+            ) : (
+              <Pin color={theme.text} size={18} />
+            ),
+            disabled: pinDisabled,
+            onPress: () => {
+              setConversationPinned(conversation.id, !pinned).catch(
+                console.error,
+              );
+            },
+          },
+          {
+            key: "rename",
+            label: "Rename",
+            icon: <Pencil color={theme.text} size={18} />,
+            onPress: onRename,
+          },
+          {
+            key: "delete",
+            label: "Delete",
+            icon: <Trash2 color={theme.destructive} size={18} />,
+            destructive: true,
+            onPress: () => {
+              deleteConversation(conversation.id).catch(console.error);
+            },
+          },
+        ]}
+        align="end"
+        anchor={menuAnchor}
+        dateLabel={formatMessageDate(conversation.updatedAt)}
+        onClose={() => {
+          setMenuOpen(false);
+        }}
+        visible={menuOpen}
       />
     </View>
   );
 }
-
-function ChatOptions({
-  conversationId,
-  onRename,
-  pinned,
-  pinnedCount,
-}: {
-  conversationId: string;
-  onRename: () => void;
-  pinned: boolean;
-  pinnedCount: number;
-}) {
-  const {
-    archiveConversation,
-    deleteConversation,
-    forkConversation,
-    setConversationPinned,
-  } = useChat();
-  const theme = useTheme();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger>
-        <Pressable hitSlop={8} className="px-sp-1 py-sp-2">
-          <EllipsisVertical size={18} color={theme.textSecondary} />
-        </Pressable>
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent width={190}>
-        <DropdownMenuItem onPress={onRename}>
-          <View className="flex-row items-center gap-sp-2">
-            <Pencil color={theme.text} size={16} />
-            <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-              Rename
-            </Text>
-          </View>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={!pinned && pinnedCount >= 3}
-          onPress={() => {
-            setConversationPinned(conversationId, !pinned).catch(console.error);
-          }}
-        >
-          <View className="flex-row items-center gap-sp-2">
-            {pinned ? (
-              <PinOff color={theme.text} size={16} />
-            ) : (
-              <Pin color={theme.text} size={16} />
-            )}
-            <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-              {pinned
-                ? "Unpin"
-                : pinnedCount >= 3
-                  ? "Pin limit reached"
-                  : "Pin"}
-            </Text>
-          </View>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onPress={() => {
-            forkConversation(conversationId).catch(console.error);
-          }}
-        >
-          <View className="flex-row items-center gap-sp-2">
-            <GitFork color={theme.text} size={16} />
-            <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-              Fork
-            </Text>
-          </View>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onPress={() => {
-            archiveConversation(conversationId, true).catch(console.error);
-          }}
-        >
-          <View className="flex-row items-center gap-sp-2">
-            <Archive color={theme.text} size={16} />
-            <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-              Archive
-            </Text>
-          </View>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onPress={() => {
-            deleteConversation(conversationId).catch(console.error);
-          }}
-        >
-          <View className="flex-row items-center gap-sp-2">
-            <Trash2 color={theme.destructive} size={16} />
-            <Text className="font-sans text-base text-destructive dark:text-destructive-dark">
-              Delete
-            </Text>
-          </View>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-
-
-
-
 
 

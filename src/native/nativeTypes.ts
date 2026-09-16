@@ -40,7 +40,7 @@ export interface NativeTerminalPtyModule {
   resize(id: string, cols: number, rows: number): Promise<void>;
   killSession(id: string): Promise<void>;
   executeHeadless(cmd: string, timeoutMs?: number): Promise<CommandResult>;
-  extractRootfs(archivePath: string, destPath: string): Promise<ExtractRootfsResult>;
+  extractRootfs(archivePath: string, destPath: string, stripComponents?: number): Promise<ExtractRootfsResult>;
   /** Number of live PTY sessions (diagnostics). */
   sessionCount?(): Promise<number>;
 }

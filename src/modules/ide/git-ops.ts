@@ -536,6 +536,67 @@ export async function getRemoteUrl(
   });
 }
 
+/** Point `origin` at a new URL (creates the remote entry if missing). */
+export async function setRemoteUrl(
+  session: ExternalFolderSession,
+  url: string,
+): Promise<void> {
+  const trimmed = url.trim();
+  if (!trimmed) throw new Error("Enter a remote URL.");
+  const { parseRemoteRepo } = await import("@/modules/ide/git-display");
+  if (!parseRemoteRepo(trimmed)) {
+    throw new Error("That remote URL is not valid.");
+  }
+  return withMirror(session, async (fs, _root, git) => {
+    await git.setConfig({
+      fs,
+      dir: "/",
+      path: "remote.origin.url",
+      value: trimmed,
+    });
+  });
+}
+
+export type CommitAuthor = {
+  name: string | null;
+  email: string | null;
+};
+
+/** Read the repo-local commit identity (`user.name` / `user.email`). */
+export async function getCommitAuthor(
+  session: ExternalFolderSession,
+): Promise<CommitAuthor> {
+  return withMirror(session, async (fs, _root, git) => {
+    const [name, email] = await Promise.all([
+      git.getConfig({ fs, dir: "/", path: "user.name" }).catch(() => null),
+      git.getConfig({ fs, dir: "/", path: "user.email" }).catch(() => null),
+    ]);
+    return {
+      name: typeof name === "string" && name.trim() ? name.trim() : null,
+      email: typeof email === "string" && email.trim() ? email.trim() : null,
+    };
+  });
+}
+
+/** Write the repo-local commit identity. */
+export async function setCommitAuthor(
+  session: ExternalFolderSession,
+  name: string,
+  email: string,
+): Promise<void> {
+  if (!name.trim()) throw new Error("Author name is required.");
+  if (!email.trim()) throw new Error("Author email is required.");
+  return withMirror(session, async (fs, _root, git) => {
+    await git.setConfig({ fs, dir: "/", path: "user.name", value: name.trim() });
+    await git.setConfig({
+      fs,
+      dir: "/",
+      path: "user.email",
+      value: email.trim(),
+    });
+  });
+}
+
 export type CloneRequest = {
   url: string;
   branch?: string;

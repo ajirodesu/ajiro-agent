@@ -14,6 +14,11 @@ import {
 } from "@/modules/skills/skill-markdown";
 import { fetchSkillMarkdownFromUrl } from "@/modules/skills/skill-github";
 import { fetchSkillFiles } from "@/modules/skills/skill-files";
+import { selectRuntimeFor } from "@/modules/runtime/device-runtime";
+import { executePrivileged } from "@/modules/runtime/execution-broker";
+import { PermissionStore } from "@/modules/permissions/engine";
+import { linuxAgentRuntime } from "@/runtime/LinuxAgentRuntime";
+import { rootfsManager } from "@/runtime/RootfsManager";
 import { createRecord, summarizeValue } from "@/modules/tools/built-in/shared";
 
 const MAX_INSTRUCTIONS_LENGTH = 40_000;
@@ -40,6 +45,11 @@ function normalizeToolKeys(values: string[] | undefined): BuiltInToolKey[] {
       ),
     ),
   );
+}
+
+/** POSIX shell single-quote escaping for staged paths and model args. */
+function quoteArg(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function formatSkillForCatalog(skill: {
@@ -218,7 +228,7 @@ export function createSkillTools(input: {
           const input = {
             autoMatch: parsed.autoMatch,
             description: parsed.description?.trim() || null,
-            files: relatedFiles.map((file) => ({
+            skillFiles: relatedFiles.map((file) => ({
               path: file.path,
               content: file.content,
               mimeType: file.mimeType,
@@ -229,6 +239,7 @@ export function createSkillTools(input: {
             recommendedBuiltInToolKeys: parsed.recommendedBuiltInToolKeys,
             recommendedMcpServerIds: parsed.recommendedMcpServerIds,
             sourceMarkdown: content,
+            sourceUrl: url,
             title,
           };
 
@@ -264,6 +275,127 @@ export function createSkillTools(input: {
             description: skill?.description ?? null,
             fileCount: relatedFiles.length,
           };
+        },
+      }),
+      skillRunScript: tool({
+        description:
+          "Run a shell script that belongs to a skill (e.g. 'scripts/setup.sh'). The script must be one of the skill's own registered files. Executes on-device in the Linux userspace via bash; requires approval like any destructive action and fails closed when Linux is not provisioned.",
+        inputSchema: z.object({
+          name: z
+            .string()
+            .trim()
+            .min(1)
+            .max(MAX_TITLE_LENGTH)
+            .describe("The skill name that owns the script."),
+          path: z
+            .string()
+            .trim()
+            .min(1)
+            .describe(
+              "The relative script path within the skill, e.g. 'scripts/setup.sh'.",
+            ),
+          args: z
+            .array(z.string().max(500))
+            .max(20)
+            .optional()
+            .describe("Command-line arguments passed to the script."),
+          timeoutMs: z
+            .number()
+            .int()
+            .min(1_000)
+            .max(300_000)
+            .optional()
+            .describe("Execution timeout in milliseconds."),
+        }),
+        execute: async ({ name, path, args, timeoutMs }) => {
+          const inputSummary = summarizeValue({ name, path });
+          const fail = (
+            message: string,
+          ): { ok: false; output: null; error: string } => {
+            onRecord?.(
+              createRecord({
+                toolName: "skillRunScript",
+                status: "failed",
+                inputSummary,
+                error: message,
+              }),
+            );
+            return { ok: false as const, output: null, error: message };
+          };
+          const skill = await findSkillBySlug(name);
+          if (!skill) {
+            return fail(`No skill named "${name}" exists.`);
+          }
+          const file = skill.skillFiles.find((item) => item.path === path);
+          if (!file) {
+            return fail(
+              `No file "${path}" found in skill "${skill.title}". Runnable scripts: ${
+                skill.skillFiles
+                  .map((item) => item.path)
+                  .filter((itemPath) => /\.sh$/i.test(itemPath))
+                  .join(", ") || "(none)"
+              }.`,
+            );
+          }
+          // Mobile-safe subset: shell scripts only, from the skill's own
+          // registered files (path allow-list, no traversal possible).
+          if (!/\.sh$/i.test(file.path) && !/^[^.]+$/.test(file.path.split("/").pop() ?? "")) {
+            return fail(
+              `Only shell scripts (.sh) can run on-device. "${file.path}" is not runnable here.`,
+            );
+          }
+          if (!linuxAgentRuntime.isStarted()) {
+            const selection = selectRuntimeFor("exec.shell");
+            return fail(
+              selection.backend === null
+                ? selection.limitation
+                : "On-device Linux is not provisioned.",
+            );
+          }
+          // Stage into runtime scratch (excluded from project sync) and run
+          // from the script's own directory so sibling resources resolve.
+          const slug = slugifySkillName(skill.title) || "skill";
+          const segments = file.path.split("/");
+          const base = segments.pop() as string;
+          let stagedDir: string;
+          let command: string;
+          try {
+            const { Directory, File } = await import("expo-file-system");
+            const rootfsPath = rootfsManager.getRootfsPath();
+            stagedDir = [rootfsPath, "workspace", ".ajiro-skills", slug, ...segments].join("/");
+            const dir = new Directory(stagedDir);
+            if (!dir.exists) dir.create({ intermediates: true });
+            const staged = new File(`${stagedDir}/${base}`);
+            if (!staged.exists) staged.create();
+            staged.write(file.content);
+            command = `cd ${quoteArg(stagedDir)} && bash ${quoteArg(base)}${(args ?? []).map((arg) => ` ${quoteArg(arg)}`).join("")}`;
+          } catch (error) {
+            return fail(
+              `Could not stage the script: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+          const result = await executePrivileged({
+            action: {
+              id: "skillRunScript",
+              actionClass: "destructive",
+              description: `Run skill script ${skill.title}:${file.path}`,
+              command,
+            },
+            operation: "exec.shell",
+            policy: { defaultDecision: "allow_once", perClass: {} },
+            permissions: { store: new PermissionStore() },
+            shellInput: { command, timeoutMs },
+          });
+          onRecord?.(
+            createRecord({
+              toolName: "skillRunScript",
+              status: result.ok ? "completed" : "failed",
+              inputSummary,
+              outputSummary: result.output ? summarizeValue(result.output.slice(0, 200)) : undefined,
+              error: result.error ?? undefined,
+            }),
+          );
+          return { ok: result.ok, output: result.output, error: result.error };
         },
       }),
       manageSkill: tool({

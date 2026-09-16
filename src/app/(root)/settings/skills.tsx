@@ -1,11 +1,15 @@
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { ChevronLeft, Copy, FileDown, Trash2 } from "lucide-react-native";
+import { ChevronLeft, Copy, FileDown, Plus, Store, Trash2 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { Container } from "@/components/shared/container";
 import { SkillImportDrawer } from "@/components/skills/skill-import-drawer";
+import {
+  AppHeader,
+  CircleIconButton,
+} from "@/components/ui/chrome";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -55,36 +59,79 @@ export default function SettingsSkillsScreen() {
       contentClassName="gap-sp-4 py-sp-4"
       includeBottomTabInset={false}
     >
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/settings");
-            }
-          }}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <View className="min-w-0 flex-1">
-          <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-            Skills
-          </Text>
-          <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
-            {enabledSkills} active
-          </Text>
-        </View>
-        <Button
-          leftIcon={<FileDown color={theme.text} size={16} />}
-          onPress={() => setImportOpen(true)}
-          size="sm"
-          variant="outline"
-        >
-          Import
-        </Button>
-      </View>
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push("/settings");
+              }
+            }}
+          >
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Skills"
+        subtitle={`${enabledSkills} active`}
+        right={
+          <View
+            accessibilityLabel="Skill actions"
+            className="flex-row items-center overflow-hidden rounded-full"
+            style={{
+              width: 144,
+              height: 48,
+              backgroundColor: theme.backgroundElement,
+              borderWidth: 1,
+              borderColor: theme.border,
+              paddingHorizontal: 4,
+              gap: 4,
+            }}
+          >
+            <Pressable
+              accessibilityLabel="New skill"
+              accessibilityRole="button"
+              onPress={() => router.push("/settings/skills/new")}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: 40,
+                height: 40,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Plus color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Import skill"
+              accessibilityRole="button"
+              onPress={() => setImportOpen(true)}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: 40,
+                height: 40,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <FileDown color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Skill store"
+              accessibilityRole="button"
+              onPress={() => router.push("/settings/skill-store")}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: 40,
+                height: 40,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Store color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+          </View>
+        }
+      />
 
       {skills.length === 0 ? (
         <Card className="px-sp-4 py-sp-4">

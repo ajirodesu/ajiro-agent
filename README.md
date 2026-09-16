@@ -54,6 +54,71 @@ https://github.com/ajirodesu/ajiro-agent
 
 All subsequent modifications and additions specific to Ajiro Agent are maintained by **AjiroDesu**.
 
+## 📚 Technical References & Attribution
+
+The Skills ecosystem and on-device terminal were designed with the following
+projects as **functional references**. Unless noted otherwise, behavior was
+re-implemented for Ajiro Agent — no third-party application code is vendored
+in `src/`, and Ajiro's UI, branding, and architecture remain its own.
+
+### LobeHub (Skills functional reference)
+
+- **Repository:** https://github.com/lobehub/lobehub (`canary` branch)
+- **Adapted subsystems:** SKILL.md frontmatter rules and metadata validation
+  (`src/utils/skillMarkdown.ts`,
+  `apps/server/src/services/skillManagement/frontmatter.ts`), skill import
+  route classification
+  (`packages/context-engine/src/providers/SkillImportRouteInjector.ts`),
+  project skill resolution concepts (`src/features/SkillsList`), Skill Store
+  / Composer Skills / skill management structure
+  (`src/features/SkillStore`, `src/features/ChatInput`,
+  `src/features/SkillsList`, `src/features/AgentSkillEdit`,
+  `src/features/AgentSkillDetail`), skill script execution model
+  (  `src/store/tool/slices/builtin/executors/lobe-skills.ts`).
+- **Not ported:** cloud sandbox execution, Electron/desktop transports and
+  APIs, web-only UI, marketplace/registry backend, and all
+  `.agents/skills/*` repository-development workflows.
+- **License:** LobeHub Community License (Apache-2.0 based with additional
+  conditions — notably, distributing a *derivative work* commercially
+  requires a commercial license from the producer; see
+  https://github.com/lobehub/lobehub/blob/canary/LICENSE). Verify these
+  requirements before distribution.
+
+### LobeHub (model selection functional reference)
+
+- **Repository:** https://github.com/lobehub/lobehub (`canary` branch)
+- **Adapted behavior:** ModelSwitchPanel information architecture (provider
+  group headers with settings affordance, model rows with ability badges
+  and active state, detail panel with context/pricing/abilities sections),
+  ModelSelect capability representation, and provider configuration
+  concepts. Rebuilt as a native React Native bottom sheet on Ajiro Agent's
+  own provider registry, model catalogs, secure credential storage, and
+  runtime — no LobeHub code or branding is shipped.
+- Same LobeHub Community License terms and verification duty as above.
+
+### Acode (terminal UI behavior reference)
+
+- **Repository:** https://github.com/Acode-Foundation/Acode
+- **Adapted:** terminal interaction behavior (touch scrolling with momentum,
+  long-press selection, defaults, theme management). Re-implemented in
+  TypeScript + local xterm; no Acode code is shipped.
+- **License:** MIT License, Copyright 2020 Foxdebug (Ajit Kumar).
+
+### PRoot (shipped binary)
+
+- The `arm64-v8a` PRoot binary bundled under
+  `modules/terminal-pty/android/src/main/jniLibs/` (built from
+  https://github.com/termux/proot) is **GPL-2.0**. Shipping it inside the
+  APK carries GPL obligations for that component — see the README next to
+  the binary and resolve before store distribution.
+
+### Community skills (installable content)
+
+- The bundled Skill Store catalog (`catalog/skills.json`) links installable
+  skills from https://github.com/anthropics/skills. Installed skills carry
+  **their own licenses** (check the skill's `LICENSE` / frontmatter
+  `license:` field, shown in Skill Store detail when present).
+
 ## Contributing
 
 Contributions are welcome. Feel free to open an issue for bug reports, feature requests, or submit a pull request if you'd like to contribute.

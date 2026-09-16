@@ -7,6 +7,7 @@ import {
   ChevronRight,
   FileText,
   Plus,
+  RefreshCw,
   Search,
   X,
 } from "lucide-react-native";
@@ -29,11 +30,22 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { WebView } from "react-native-webview";
 import Markdown from "react-native-markdown-display";
 
 import { Container } from "@/components/shared/container";
 import { Button } from "@/components/ui/button";
-import { CodeEditor } from "@/components/ui/code-editor";
+import {
+  AppHeader,
+  AppTabs,
+  CapsuleContainer,
+  CircleIconButton,
+  HeaderShadow,
+  ICON_INNER,
+} from "@/components/ui/chrome";
+import { withAlpha } from "@/components/ui/chrome-spec";
+import { CodeMirrorEditor } from "@/editor/CodeMirrorEditor";
+import { FileTypeIcon } from "@/file-icons/FileTypeIcon";
 import {
   Drawer,
   DrawerBody,
@@ -53,7 +65,6 @@ import {
   extensionOf,
   fingerprintForBytes,
   fingerprintKey,
-  languageForPath,
   previewKindFor,
   readProjectText,
   searchProject,
@@ -107,9 +118,9 @@ const TreeRowView = memo(function TreeRowView({
         paddingVertical: 9,
         paddingLeft: 8 + row.depth * 18,
         backgroundColor: pressed
-          ? "rgba(255,255,255,0.06)"
+          ? withAlpha(theme.text, 0.08)
           : active
-            ? "rgba(59,130,246,0.18)"
+            ? withAlpha(theme.accent, 0.18)
             : "transparent",
       })}
     >
@@ -118,7 +129,7 @@ const TreeRowView = memo(function TreeRowView({
       ) : glyph === "chevron-right" ? (
         <ChevronRight color={theme.textSecondary} size={17} strokeWidth={2} />
       ) : (
-        <FileText color={theme.textSecondary} size={17} strokeWidth={2} />
+        <FileTypeIcon fileName={row.name} size={17} />
       )}
       <Text
         numberOfLines={1}
@@ -155,6 +166,7 @@ export default function FilesScreen() {
   const [tree, setTree] = useState<Record<string, TreeEntry[]>>({ "": [] });
   const [treeTruncated, setTreeTruncated] = useState(false);
   const [loadingTree, setLoadingTree] = useState(false);
+  const [treeScrolled, setTreeScrolled] = useState(false);
   const [treeError, setTreeError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
@@ -828,57 +840,60 @@ export default function FilesScreen() {
       contentStyle={{ paddingBottom: 0 }}
       includeBottomTabInset={false}
     >
-      <ProjectTabsBar />
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.push("/");
-            }
-          }}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <View className="min-w-0 flex-1">
-          <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-            Files
-          </Text>
-          <Text
-            numberOfLines={1}
-            className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark"
+      <AppHeader
+        left={
+          <CircleIconButton
+            accessibilityLabel="Back"
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.push("/");
+              }
+            }}
           >
-            {project.displayName}
-            {gitBadge ? ` · ${gitBadge}` : ""}
-            {treeTruncated ? " · list truncated" : ""}
-          </Text>
-        </View>
-        <Pressable
-          accessibilityLabel="Refresh files"
-          accessibilityRole="button"
-          onPress={refreshAll}
-          hitSlop={8}
-          className="h-10 w-10 items-center justify-center rounded-full"
-        >
-          <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
-            ⟳
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="New file or folder"
-          accessibilityRole="button"
-          onPress={() => {
-            setCreateName("");
-            setCreateOpen({ kind: "file", parent: "" });
-          }}
-          hitSlop={8}
-          className="h-10 w-10 items-center justify-center rounded-full bg-secondary dark:bg-secondary-dark"
-        >
-          <Plus color={theme.text} size={20} />
-        </Pressable>
-      </View>
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Files"
+        subtitle={`${project.displayName}${gitBadge ? ` · ${gitBadge}` : ""}${treeTruncated ? " · list truncated" : ""}`}
+        right={
+          <CapsuleContainer accessibilityLabel="File actions">
+            <Pressable
+              accessibilityLabel="Refresh files"
+              accessibilityRole="button"
+              onPress={refreshAll}
+              hitSlop={8}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: ICON_INNER,
+                height: ICON_INNER,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <RefreshCw color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="New file or folder"
+              accessibilityRole="button"
+              onPress={() => {
+                setCreateName("");
+                setCreateOpen({ kind: "file", parent: "" });
+              }}
+              hitSlop={8}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: ICON_INNER,
+                height: ICON_INNER,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Plus color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+          </CapsuleContainer>
+        }
+      />
+      <ProjectTabsBar />
 
       <View className="flex-row items-center gap-sp-2">
         <View className="h-10 min-w-0 flex-1 flex-row items-center gap-sp-2 rounded-full border border-border bg-input px-sp-3 dark:border-border-dark dark:bg-input-dark">
@@ -917,7 +932,7 @@ export default function FilesScreen() {
         >
           <Text
             className="font-mono text-xs"
-            style={{ color: searchContent ? "#3B82F6" : theme.textSecondary }}
+            style={{ color: searchContent ? theme.accent : theme.textSecondary }}
           >
             {searchContent ? "aA●" : "aA"}
           </Text>
@@ -936,7 +951,8 @@ export default function FilesScreen() {
       ) : null}
 
       <View className="min-h-0 flex-1 gap-sp-2">
-        <View className="max-h-64">
+        <View className="relative max-h-64">
+          <HeaderShadow visible={treeScrolled} />
           {loadingTree ? (
             <View className="flex-row items-center gap-sp-2 py-sp-2">
               <ActivityIndicator size="small" color={theme.textSecondary} />
@@ -952,6 +968,10 @@ export default function FilesScreen() {
             <FlatList
               data={rows}
               keyExtractor={(row) => row.path}
+              scrollEventThrottle={32}
+              onScroll={(event) => {
+                setTreeScrolled(event.nativeEvent.contentOffset.y > 4);
+              }}
               renderItem={({ item }) => (
                 <TreeRowView
                   row={item}
@@ -999,10 +1019,12 @@ export default function FilesScreen() {
               return (
                 <View
                   key={path}
-                  className="flex-row items-center rounded-ui border border-border dark:border-border-dark"
+                  className="flex-row items-center rounded-full"
                   style={{
+                    borderWidth: selected ? 1 : 0,
+                    borderColor: selected ? theme.accent : "transparent",
                     backgroundColor: selected
-                      ? "rgba(59,130,246,0.18)"
+                      ? withAlpha(theme.accent, 0.18)
                       : "transparent",
                   }}
                 >
@@ -1648,17 +1670,28 @@ function ActiveFileView({
   }
 
   if (
-    (kind === "markdown" || kind === "json") &&
+    (kind === "markdown" || kind === "json" || kind === "html") &&
     previewMode !== "code"
   ) {
     return (
       <View className="min-h-0 flex-1 gap-sp-1">
-        <PreviewToggle
-          kind={kind}
-          mode={previewMode}
-          onChange={onPreviewModeChange}
-        />
-        {kind === "markdown" ? (
+        <PreviewTabs kind={kind} />
+        {kind === "html" ? (
+          <View className="min-h-0 flex-1 overflow-hidden rounded-ui border border-border dark:border-border-dark">
+            <WebView
+              originWhitelist={["*"]}
+              source={{ html: value, baseUrl: "about:blank" }}
+              javaScriptEnabled
+              domStorageEnabled={false}
+              allowFileAccess={false}
+              allowUniversalAccessFromFileURLs={false}
+              mixedContentMode="never"
+              cacheEnabled={false}
+              showsVerticalScrollIndicator={false}
+              showsHorizontalScrollIndicator={false}
+            />
+          </View>
+        ) : kind === "markdown" ? (
           <ScrollView className="min-h-0 flex-1">
             <Markdown
               style={{
@@ -1666,9 +1699,9 @@ function ActiveFileView({
                 heading1: { color: theme.text },
                 heading2: { color: theme.text },
                 heading3: { color: theme.text },
-                code_inline: { color: theme.text, backgroundColor: "#2C2C2E" },
-                fence: { color: theme.text, backgroundColor: "#1C1C1E" },
-                link: { color: "#3B82F6" },
+                code_inline: { color: theme.text, backgroundColor: theme.backgroundElement },
+                fence: { color: theme.text, backgroundColor: theme.backgroundElement },
+                link: { color: theme.accent },
               }}
             >
               {value}
@@ -1687,20 +1720,16 @@ function ActiveFileView({
 
   return (
     <View className="min-h-0 flex-1 gap-sp-1">
-      {(kind === "markdown" || kind === "json") && (
-        <PreviewToggle
-          kind={kind}
-          mode={previewMode}
-          onChange={onPreviewModeChange}
-        />
+      {(kind === "markdown" || kind === "json" || kind === "html") && (
+        <PreviewTabs kind={kind} />
       )}
-      <CodeEditor
+      <CodeMirrorEditor
+        path={entry.path}
         value={value}
         onChangeText={(text) => {
           ide.setBuffer(projectId, entry.path, text);
           ide.setPathDirty(projectId, entry.path, text !== disk?.text);
         }}
-        language={languageForPath(entry.path)}
         onSave={onSave}
       />
       {externalChanged ? (
@@ -1739,49 +1768,23 @@ function ActiveFileView({
     </View>
   );
 
-  function PreviewToggle({
-    kind: previewKind,
-    mode,
-    onChange,
-  }: {
-    kind: "markdown" | "json";
-    mode: PreviewMode;
-    onChange: (mode: PreviewMode) => void;
-  }) {
-    const left = previewKind === "markdown" ? "Code" : "Raw";
-    const right = previewKind === "markdown" ? "Preview" : "Formatted";
-    const leftMode: PreviewMode = "code";
-    const rightMode: PreviewMode = "preview";
+  function PreviewTabs({ kind: previewKind }: { kind: "markdown" | "json" | "html" }) {
+    const left = previewKind === "json" ? "Raw" : "Code";
+    const right =
+      previewKind === "markdown" || previewKind === "html"
+        ? "Preview"
+        : "Formatted";
     return (
-      <View className="flex-row gap-sp-1">
-        {(
-          [
-            [left, leftMode],
-            [right, rightMode],
-          ] as const
-        ).map(([label, target]) => (
-          <Pressable
-            key={label}
-            accessibilityRole="button"
-            onPress={() => {
-              onChange(target);
-            }}
-            className="rounded-ui border border-border px-sp-3 py-sp-1 dark:border-border-dark"
-            style={({ pressed }) => ({
-              backgroundColor:
-                mode === target
-                  ? "rgba(59,130,246,0.25)"
-                  : pressed
-                    ? "rgba(255,255,255,0.06)"
-                    : "transparent",
-            })}
-          >
-            <Text className="font-sans text-xs text-foreground dark:text-foreground-dark">
-              {label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <AppTabs
+        tabs={[
+          { key: "code", label: left },
+          { key: "preview", label: right },
+        ]}
+        activeKey={previewMode}
+        onChange={(key) => {
+          onPreviewModeChange(key as PreviewMode);
+        }}
+      />
     );
   }
 

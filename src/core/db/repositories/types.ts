@@ -4,6 +4,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import type { schema } from "@/core/db/schema";
 import type { MemoryStore } from "@/modules/memory/types";
 import type { CheckpointRepository } from "@/core/db/repositories/checkpoint-repository";
+import type { ProjectCodingSettings } from "@/core/services/coding/coding-settings";
 import type {
   AgentConfig,
   AgentMode,
@@ -132,6 +133,8 @@ export interface MessageRepository {
   /** Delete every message of a conversation with `sequence < given`. Used by
       context compaction to trim older history. */
   deleteBefore(conversationId: string, sequence: number): Promise<void>;
+  /** Delete a single message by id. Used by message deletion. */
+  deleteById(id: string): Promise<void>;
   recoverInterruptedStreams(): Promise<void>;
   updateContent(input: {
     content: string;
@@ -192,6 +195,8 @@ export interface AgentRunRepository {
   updatedAt?: string;
   autoApprove?: boolean;
   }): Promise<void>;
+  /** Delete a single agent run by id. Used by message deletion. */
+  deleteById(id: string): Promise<void>;
 }
 
 export interface WorkspaceRepository {
@@ -270,6 +275,7 @@ export interface McpServerRepository {
 
 export interface SkillRepository {
   create(input: {
+    author?: string | null;
     autoMatch?: boolean;
     description?: string | null;
     enabled?: boolean;
@@ -280,6 +286,7 @@ export interface SkillRepository {
     recommendedMcpServerIds?: string[];
     skillFiles?: Omit<SkillConfig["skillFiles"][number], "createdAt" | "updatedAt" | "id">[];
     sourceMarkdown?: string | null;
+    sourceUrl?: string | null;
     title: string;
   }): Promise<SkillConfig>;
   delete(id: string): Promise<void>;
@@ -288,6 +295,7 @@ export interface SkillRepository {
   update(
     id: string,
     input: {
+      author?: string | null;
       autoMatch?: boolean;
       description?: string | null;
       enabled?: boolean;
@@ -297,6 +305,7 @@ export interface SkillRepository {
       recommendedMcpServerIds?: string[];
       skillFiles?: Omit<SkillConfig["skillFiles"][number], "createdAt" | "updatedAt" | "id">[];
       sourceMarkdown?: string | null;
+      sourceUrl?: string | null;
       title?: string;
     },
   ): Promise<void>;
@@ -425,6 +434,13 @@ export interface ConfigRepository {
   setNotificationSettings(input: Partial<NotificationSettings>): Promise<void>;
   setCodingSettings(
     input: Partial<AppSettings["codingSettings"]>,
+  ): Promise<void>;
+  getProjectCodingSettings(
+    session: ExternalFolderSession,
+  ): Promise<ProjectCodingSettings | null>;
+  setProjectCodingSettings(
+    session: ExternalFolderSession,
+    input: Partial<ProjectCodingSettings>,
   ): Promise<void>;
   setDefaultModelPreset(modelPresetId: string): Promise<void>;
   updateProvider(

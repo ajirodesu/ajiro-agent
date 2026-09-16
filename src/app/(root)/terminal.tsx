@@ -5,6 +5,12 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { Container } from "@/components/shared/container";
 import { Button } from "@/components/ui/button";
+import {
+  AppHeader,
+  CircleIconButton,
+  CONTAINER_BORDER,
+} from "@/components/ui/chrome";
+import { withAlpha } from "@/components/ui/chrome-spec";
 import { useTheme } from "@/hooks/use-theme";
 import { useIdeWorkspace } from "@/providers/ide-workspace";
 import { linuxAgentRuntime } from "@/runtime/LinuxAgentRuntime";
@@ -224,41 +230,40 @@ export default function TerminalScreen() {
       safeArea
       edges={["top", "right", "bottom", "left"]}
     >
-      <View className="flex-row items-center gap-sp-2">
-        <Button
-          leftIcon={<ChevronLeft color={theme.text} size={16} />}
-          onPress={handleClose}
-          size="icon-xs"
-          variant="ghost"
-        />
-        <Text className="font-sans text-xl font-semibold text-foreground dark:text-foreground-dark">
-          Terminal
-        </Text>
-        {!transcriptMode ? (
-          <View className="ml-auto flex-row items-center gap-sp-1">
-            <Button
-              leftIcon={<Search color={theme.text} size={16} />}
-              onPress={toggleSearch}
-              size="icon-xs"
-              variant="ghost"
-            />
-            <Button
-              onPress={() => setFontSize((size) => Math.max(10, size - 2))}
-              size="xs"
-              variant="ghost"
-            >
-              A−
-            </Button>
-            <Button
-              onPress={() => setFontSize((size) => Math.min(22, size + 2))}
-              size="xs"
-              variant="ghost"
-            >
-              A+
-            </Button>
-          </View>
-        ) : null}
-      </View>
+      <AppHeader
+        left={
+          <CircleIconButton accessibilityLabel="Back" onPress={handleClose}>
+            <ChevronLeft color={theme.text} size={20} strokeWidth={2} />
+          </CircleIconButton>
+        }
+        title="Terminal"
+        right={
+          !transcriptMode ? (
+            <View className="ml-auto flex-row items-center gap-sp-1">
+              <CircleIconButton
+                accessibilityLabel="Search terminal"
+                onPress={toggleSearch}
+              >
+                <Search color={theme.text} size={18} strokeWidth={2} />
+              </CircleIconButton>
+              <Button
+                onPress={() => setFontSize((size) => Math.max(10, size - 2))}
+                size="xs"
+                variant="ghost"
+              >
+                A−
+              </Button>
+              <Button
+                onPress={() => setFontSize((size) => Math.min(22, size + 2))}
+                size="xs"
+                variant="ghost"
+              >
+                A+
+              </Button>
+            </View>
+          ) : undefined
+        }
+      />
 
       {!transcriptMode ? (
         <View className="flex-row items-center gap-sp-1">
@@ -273,7 +278,14 @@ export default function TerminalScreen() {
               return (
                 <View
                   key={tab.id}
-                  className={`flex-row items-center rounded-ui pr-1 ${selected ? "bg-secondary dark:bg-secondary-dark" : ""}`}
+                  className="flex-row items-center rounded-full pr-1"
+                  style={{
+                    borderWidth: selected ? CONTAINER_BORDER : 0,
+                    borderColor: selected ? theme.accent : "transparent",
+                    backgroundColor: selected
+                      ? withAlpha(theme.accent, 0.18)
+                      : "transparent",
+                  }}
                 >
                   <Pressable
                     accessibilityRole="button"

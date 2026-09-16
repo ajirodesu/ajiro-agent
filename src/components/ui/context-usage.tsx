@@ -252,6 +252,7 @@ export function UsageCapsule({
   onPressRing: () => void;
   percent: number | null;
 }) {
+  const theme = useTheme();
   const progress = useSharedValue(expanded ? 1 : 0);
 
   useEffect(() => {
@@ -277,9 +278,9 @@ export function UsageCapsule({
         containerStyle,
         {
           height: CAPSULE_COLLAPSED,
-          backgroundColor: "#212121",
+          backgroundColor: theme.backgroundElement,
           borderWidth: 1,
-          borderColor: "#424242",
+          borderColor: theme.border,
           paddingHorizontal: 4,
           gap: 8,
         },
@@ -297,7 +298,7 @@ export function UsageCapsule({
             opacity: pressed ? 0.7 : 1,
           })}
         >
-          <SquarePen color="#FFFFFF" size={20} strokeWidth={2} />
+          <SquarePen color={theme.text} size={20} strokeWidth={2} />
         </Pressable>
       </Animated.View>
       <Pressable

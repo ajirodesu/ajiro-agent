@@ -59,6 +59,12 @@ export function resolveSkillMarkdownUrl(input: string) {
     );
   }
 
+  if (/\.zip(?:[#?]|$)/i.test(trimmed)) {
+    throw new Error(
+      "ZIP skill packages are not supported on mobile. Link the SKILL.md file directly instead.",
+    );
+  }
+
   return githubBlobToRaw(trimmed) ?? trimmed.split(/[?#]/)[0]!;
 }
 

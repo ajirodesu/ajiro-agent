@@ -95,12 +95,54 @@ export const CODING_SETTINGS_DB_KEY = SETTINGS_KEY;
 
 /**
  * Per-project settings keyed by the granted folder URI. Lets a user keep an
- * allow-list per project instead of one global list.
+ * allow-list per project instead of one global list. Stored as JSON under
+ * `projectSettingsKey(session)` — extending this shape needs no migration.
  */
 export type ProjectCodingSettings = CodingSettings & {
   projectUri: string;
   projectName: string;
+  /** Skill ids pinned to this project (project scope). */
+  skillIds?: string[];
 };
+
+export function normalizeProjectCodingSettings(
+  input: Partial<ProjectCodingSettings> | null | undefined,
+): ProjectCodingSettings {
+  const raw = input ?? {};
+  const base = normalizeCodingSettings(raw);
+  const skillIds = Array.isArray(raw.skillIds)
+    ? Array.from(
+        new Set(
+          raw.skillIds.filter(
+            (id): id is string => typeof id === "string" && id.length > 0,
+          ),
+        ),
+      )
+    : [];
+  return {
+    ...base,
+    projectName: typeof raw.projectName === "string" ? raw.projectName : "",
+    projectUri: typeof raw.projectUri === "string" ? raw.projectUri : "",
+    skillIds,
+  };
+}
+
+export function parseProjectCodingSettings(
+  value: string | null | undefined,
+): ProjectCodingSettings | null {
+  if (!value) return null;
+  try {
+    return normalizeProjectCodingSettings(
+      JSON.parse(value) as Partial<ProjectCodingSettings>,
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function serializeProjectCodingSettings(settings: ProjectCodingSettings) {
+  return JSON.stringify(settings);
+}
 
 export function projectSettingsKey(session: ExternalFolderSession) {
   return `coding_project_${session.uri}`;

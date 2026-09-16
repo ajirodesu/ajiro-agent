@@ -5,7 +5,7 @@ import { getSupportedProviderDefinition } from "@/modules/providers";
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const CATALOG_TTL_MS = 5 * 60 * 1000;
 
-type ModelsDevModel = {
+export type ModelsDevModel = {
   cost?: {
     cache_read?: number;
     cache_write?: number;
@@ -27,7 +27,7 @@ type ModelsDevModel = {
   };
 };
 
-type ModelsDevProvider = {
+export type ModelsDevProvider = {
   api?: string;
   models?: Record<string, ModelsDevModel>;
 };

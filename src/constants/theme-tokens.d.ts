@@ -20,6 +20,7 @@ export const Colors: {
     syntaxString: string;
     destructive: string;
     destructiveForeground: string;
+    success: string;
   };
   dark: {
     text: string;
@@ -42,6 +43,7 @@ export const Colors: {
     syntaxString: string;
     destructive: string;
     destructiveForeground: string;
+    success: string;
   };
 };
 

@@ -12,7 +12,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private const val TAG = "TerminalPty"
 
@@ -88,16 +87,16 @@ class TerminalPtyModule : Module() {
       val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
       require(cmd.isNotBlank()) { "command must not be blank" }
       val timeout = (timeoutMs?.toLong() ?: 60_000L).coerceIn(1_000L, 300_000L)
-      withContext(Dispatchers.IO) {
-        val future = headlessPool.submit<Map<String, Any>> {
-          runHeadless(context, cmd, timeout)
-        }
-        try {
-          future.get(timeout + 5_000L, java.util.concurrent.TimeUnit.MILLISECONDS)
-        } catch (e: Exception) {
-          future.cancel(true)
-          throw IllegalStateException("Headless execution failed: ${e.message}", e)
-        }
+      // AsyncFunction bodies already run on a background thread; the pool
+      // only bounds concurrency, and get() bounds total wall time.
+      val future = headlessPool.submit<Map<String, Any>> {
+        runHeadless(context, cmd, timeout)
+      }
+      try {
+        future.get(timeout + 5_000L, java.util.concurrent.TimeUnit.MILLISECONDS)
+      } catch (e: Exception) {
+        future.cancel(true)
+        throw IllegalStateException("Headless execution failed: ${e.message}", e)
       }
     }
 
@@ -105,31 +104,31 @@ class TerminalPtyModule : Module() {
       liveSessions.size
     }
 
-    AsyncFunction("extractRootfs") { archivePath: String, destPath: String ->
+    AsyncFunction("extractRootfs") { archivePath: String, destPath: String, stripComponents: Int? ->
       val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
       val archive = File(archivePath)
       val dest = File(destPath)
       require(archive.isFile) { "rootfs archive missing: $archivePath" }
+      val strip = (stripComponents ?: 0).coerceIn(0, 8)
       // Hold the foreground service + wake lock across the (multi-minute)
       // extraction so backgrounding cannot interrupt it halfway.
+      // (AsyncFunction bodies run on a background thread; no withContext.)
       TerminalPtyService.acquire(context)
       try {
-        withContext(Dispatchers.IO) {
-          val result = RootfsExtractor.extract(archive, dest) { read, total ->
-            scope.launch(Dispatchers.Main) {
-              sendEvent(
-                "onRootfsProgress",
-                mapOf("bytesTransferred" to read, "totalBytes" to total),
-              )
-            }
+        val result = RootfsExtractor.extract(archive, dest, strip) { read, total ->
+          scope.launch(Dispatchers.Main) {
+            sendEvent(
+              "onRootfsProgress",
+              mapOf("bytesTransferred" to read, "totalBytes" to total),
+            )
           }
-          mapOf(
-            "extractedFiles" to result.extractedFiles,
-            "extractedDirs" to result.extractedDirs,
-            "extractedLinks" to result.extractedLinks,
-            "skippedEntries" to result.skippedEntries,
-          )
         }
+        mapOf(
+          "extractedFiles" to result.extractedFiles,
+          "extractedDirs" to result.extractedDirs,
+          "extractedLinks" to result.extractedLinks,
+          "skippedEntries" to result.skippedEntries,
+        )
       } finally {
         TerminalPtyService.release(context)
       }

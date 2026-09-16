@@ -143,6 +143,7 @@ type LegacyPalette = {
   syntaxString: string;
   destructive: string;
   destructiveForeground: string;
+  success: string;
 };
 
 /**
@@ -175,5 +176,6 @@ export function toLegacyPalette(theme: AppTheme): LegacyPalette {
     syntaxString: colors.success,
     destructive: colors.error,
     destructiveForeground: colors.onError,
+    success: colors.success,
   };
 }

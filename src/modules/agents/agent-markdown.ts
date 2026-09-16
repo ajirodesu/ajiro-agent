@@ -20,6 +20,7 @@ const NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MAX_DESCRIPTION_LENGTH = 1024;
 const MODES = new Set(["all", "primary", "subagent"]);
 export const MCP_TOOL_PREFIX = "mcp:";
+export const SKILL_TOOL_PREFIX = "skill:";
 
 export function slugifyAgentName(value: string) {
   return value
@@ -120,6 +121,7 @@ function mapTools(value: unknown): AgentToolPermissions {
 
   const builtInTools: NonNullable<AgentToolPermissions["builtInTools"]> = {};
   const mcpServers: NonNullable<AgentToolPermissions["mcpServers"]> = {};
+  const skills: NonNullable<AgentToolPermissions["skills"]> = {};
 
   for (const [rawName, rawEnabled] of Object.entries(
     value as Record<string, unknown>,
@@ -139,6 +141,15 @@ function mapTools(value: unknown): AgentToolPermissions {
       continue;
     }
 
+    if (lowerName.startsWith(SKILL_TOOL_PREFIX)) {
+      const skillId = rawName.trim().slice(SKILL_TOOL_PREFIX.length);
+
+      if (skillId) {
+        skills[skillId] = rawEnabled;
+      }
+      continue;
+    }
+
     const key =
       TOOL_ALIAS_TO_BUILT_IN_KEY[lowerName as string] ??
       TOOL_ALIAS_TO_BUILT_IN_KEY[lowerName.replace(/-/g, "") as string];
@@ -151,6 +162,7 @@ function mapTools(value: unknown): AgentToolPermissions {
   return {
     ...(Object.keys(builtInTools).length > 0 ? { builtInTools } : {}),
     ...(Object.keys(mcpServers).length > 0 ? { mcpServers } : {}),
+    ...(Object.keys(skills).length > 0 ? { skills } : {}),
   };
 }
 
@@ -234,6 +246,12 @@ function serializeToolPermissions(toolPermissions: AgentToolPermissions) {
     toolPermissions.mcpServers ?? {},
   )) {
     tools[`${MCP_TOOL_PREFIX}${serverId}`] = enabled;
+  }
+
+  for (const [skillId, enabled] of Object.entries(
+    toolPermissions.skills ?? {},
+  )) {
+    tools[`${SKILL_TOOL_PREFIX}${skillId}`] = enabled;
   }
 
   return Object.keys(tools).length > 0 ? tools : null;

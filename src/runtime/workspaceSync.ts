@@ -97,6 +97,8 @@ export const DEFAULT_SYNC_IGNORE_DIRS: readonly string[] = [
   ".venv",
   ".idea",
   ".vscode",
+  // Runtime scratch for skill script staging (never project content).
+  ".ajiro-skills",
 ];
 
 export const DEFAULT_MAX_FILE_BYTES = 8 * 1024 * 1024;
