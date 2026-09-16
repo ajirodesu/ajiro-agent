@@ -68,6 +68,7 @@ describe("editorDocument (offline CodeMirror factory)", () => {
       "set-doc",
       "grammar",
       "theme",
+      "autocomplete",
       "undo",
       "redo",
       "indent",

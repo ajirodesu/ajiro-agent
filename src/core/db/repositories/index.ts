@@ -5,6 +5,7 @@ import { createAgentRunRepository } from "@/core/db/repositories/agent-run-repos
 import { createCheckpointRepository } from "@/core/db/repositories/checkpoint-repository";
 import { createConfigRepository } from "@/core/db/repositories/config-repository";
 import { createConversationRepository } from "@/core/db/repositories/conversation-repository";
+import { createEditorRevisionRepository } from "@/core/db/repositories/editor-revision-repository";
 import { createFileMemoryStore } from "@/modules/memory/file-memory-store";
 import { createMcpServerRepository } from "@/core/db/repositories/mcp-server-repository";
 import { createMessageRepository } from "@/core/db/repositories/message-repository";
@@ -26,6 +27,7 @@ export function createRepositories(sqliteDb: SQLiteDatabase): Repositories {
     checkpointRepository: createCheckpointRepository(db),
     configRepository: createConfigRepository(db),
     conversationRepository: createConversationRepository(db),
+    editorRevisionRepository: createEditorRevisionRepository(db),
     memoryStore: createFileMemoryStore(db),
     mcpServerRepository: createMcpServerRepository(db),
     messageRepository: createMessageRepository(db),

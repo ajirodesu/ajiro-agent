@@ -14,13 +14,19 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
 import {
   fetchSkillMarkdownFromUrl,
 } from "@/modules/skills/skill-github";
 import { parseAgentMarkdown } from "@/modules/agents/agent-markdown";
+import {
+  MAX_PACK_URLS,
+  importAgentPackFromUrls,
+  splitPackUrls,
+  type PackSummary,
+} from "@/modules/agents/agent-pack-import";
 
 type BusyAction = "file" | "url" | "import";
 
@@ -38,12 +44,20 @@ export function AgentImportDrawer({
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState<string | null>(null);
   const [url, setUrl] = useState("");
+  const [packSummary, setPackSummary] = useState<PackSummary | null>(null);
+
+  const resetPreview = () => {
+    setContent(null);
+    setName(null);
+    setPackSummary(null);
+  };
 
   const applyMarkdown = (markdown: string) => {
     const parsed = parseAgentMarkdown(markdown);
 
     setContent(markdown);
     setName(parsed.name);
+    setPackSummary(null);
     setError(null);
   };
 
@@ -67,8 +81,7 @@ export function AgentImportDrawer({
         applyMarkdown(await file.text());
       }
     } catch (pickError) {
-      setName(null);
-      setContent(null);
+      resetPreview();
       setError(
         pickError instanceof Error
           ? pickError.message
@@ -84,15 +97,37 @@ export function AgentImportDrawer({
       return;
     }
 
+    const urls = splitPackUrls(url);
+
+    if (urls.length === 0) {
+      setError("Paste at least one AGENT.md URL.");
+      return;
+    }
+
     setBusy("url");
     setError(null);
 
     try {
-      const { content: markdown } = await fetchSkillMarkdownFromUrl(url);
+      // Pack flow: several URLs install in one pass with a per-URL report.
+      if (urls.length > 1) {
+        const summary = await importAgentPackFromUrls(urls, {
+          fetchMarkdown: fetchSkillMarkdownFromUrl,
+          importMarkdown: (input) => importAgentMarkdown(input),
+          listAgents: () =>
+            agents.map((agent) => ({ id: agent.id, name: agent.name })),
+        });
+        resetPreview();
+        setPackSummary(summary);
+        if (summary.imported.length > 0) {
+          setUrl("");
+        }
+        return;
+      }
+
+      const { content: markdown } = await fetchSkillMarkdownFromUrl(urls[0]!);
       applyMarkdown(markdown);
     } catch (fetchError) {
-      setName(null);
-      setContent(null);
+      resetPreview();
       setError(
         fetchError instanceof Error
           ? fetchError.message
@@ -125,8 +160,7 @@ export function AgentImportDrawer({
       });
 
       setUrl("");
-      setContent(null);
-      setName(null);
+      resetPreview();
       onOpenChange(false);
     } catch (importError) {
       setError(
@@ -147,7 +181,8 @@ export function AgentImportDrawer({
         <DrawerHeader>
           <DrawerTitle>Import agent</DrawerTitle>
           <DrawerDescription>
-            Pick an AGENT.md file or paste a URL to one.
+            Pick an AGENT.md file, or paste one AGENT.md URL per line (up to{" "}
+            {MAX_PACK_URLS}) to install several at once.
           </DrawerDescription>
         </DrawerHeader>
         <DrawerBody contentContainerClassName="gap-sp-3 pb-sp-4">
@@ -167,14 +202,15 @@ export function AgentImportDrawer({
             <View className="h-px flex-1 bg-border dark:bg-border-dark" />
           </View>
           <View className="gap-sp-2">
-            <Input
+            <Textarea
               autoCapitalize="none"
               autoCorrect={false}
+              numberOfLines={3}
               onChangeText={(value) => {
                 setUrl(value);
                 setError(null);
               }}
-              placeholder="AGENT.md URL"
+              placeholder="https://…/AGENT.md (one per line)"
               value={url}
             />
             <Button
@@ -182,7 +218,7 @@ export function AgentImportDrawer({
               onPress={handleFetchUrl}
               variant="outline"
             >
-              Install
+              Fetch
             </Button>
           </View>
           {error ? (
@@ -203,15 +239,47 @@ export function AgentImportDrawer({
               ) : null}
             </View>
           ) : null}
+          {packSummary ? (
+            <View className="gap-sp-1 rounded-ui border border-border bg-background px-sp-3 py-sp-3 dark:border-border-dark dark:bg-background-dark">
+              <Text className="font-sans text-sm font-medium text-foreground dark:text-foreground-dark">
+                Installed {packSummary.imported.length} of{" "}
+                {packSummary.imported.length + packSummary.skipped.length}
+              </Text>
+              {packSummary.imported.length > 0 ? (
+                <Text className="font-mono text-xs text-foreground dark:text-foreground-dark">
+                  {packSummary.imported.join(", ")}
+                </Text>
+              ) : null}
+              {packSummary.skipped.map((skipped) => (
+                <Text
+                  key={skipped.url}
+                  className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark"
+                >
+                  Skipped {skipped.url}: {skipped.error}
+                </Text>
+              ))}
+            </View>
+          ) : null}
         </DrawerBody>
         <DrawerFooter>
-          <Button
-            disabled={!name}
-            loading={busy === "import"}
-            onPress={handleImport}
-          >
-            Import
-          </Button>
+          {packSummary ? (
+            <Button
+              onPress={() => {
+                resetPreview();
+                onOpenChange(false);
+              }}
+            >
+              Done
+            </Button>
+          ) : (
+            <Button
+              disabled={!name}
+              loading={busy === "import"}
+              onPress={handleImport}
+            >
+              Import
+            </Button>
+          )}
         </DrawerFooter>
       </DrawerContent>
     </Drawer>

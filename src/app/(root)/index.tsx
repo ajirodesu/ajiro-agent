@@ -108,6 +108,7 @@ import type {
   AgentConfig,
   Conversation,
   ExternalFolderSession,
+  InteractionMode,
   McpServerConfig,
   ModelRef,
   ReasoningEffort,
@@ -1293,7 +1294,11 @@ const ChatInput = memo(function ChatInput({
   currentConversationId: string | null;
   updateConversationModes: (
     conversationId: string,
-    input: { skillMode?: SkillMode; webSearchMode?: WebSearchMode },
+    input: {
+      skillMode?: SkillMode;
+      webSearchMode?: WebSearchMode;
+      interactionMode?: InteractionMode;
+    },
   ) => Promise<void>;
   onOpenAgentSettings: () => void;
 }) {
@@ -2309,6 +2314,13 @@ const ChatInput = memo(function ChatInput({
           setConversationAgent(currentConversationId, name).catch(
             console.error,
           );
+        }}
+        interactionMode={currentConversation?.interactionMode ?? "agent"}
+        onInteractionModeChange={(mode) => {
+          if (!currentConversationId) return;
+          updateConversationModes(currentConversationId, {
+            interactionMode: mode,
+          }).catch(console.error);
         }}
         approvalMode={toolApprovalMode}
         onApprovalModeChange={(mode) => {

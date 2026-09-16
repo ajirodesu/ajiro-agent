@@ -15,6 +15,12 @@ export interface EditorTheme {
   foreground: string;
   gutterBackground: string;
   gutterForeground: string;
+  /** 1px gutter/code separator line (theme border token). */
+  gutterBorder: string;
+  /** Faint indentation-guide color (low-contrast theme token). */
+  indentGuide: string;
+  /** Warning/attention color for the footer warning count. */
+  warning: string;
   cursor: string;
   /** Selection background (any CSS color, rgba allowed). */
   selection: string;
@@ -45,8 +51,10 @@ export type EditorSearchAction =
 
 export type EditorWebViewInbound =
   | { type: "set-doc"; text: string }
+  | { type: "goto-line"; line: number; column?: number }
   | { type: "grammar"; key: string | null }
   | { type: "theme"; theme: EditorTheme }
+  | { type: "autocomplete"; enabled: boolean }
   | { type: "undo" }
   | { type: "redo" }
   | { type: "indent"; outdent: boolean }

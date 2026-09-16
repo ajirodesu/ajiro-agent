@@ -65,6 +65,9 @@ export function adaptAppThemeToEditorTheme(
     foreground: palette.text,
     gutterBackground: background,
     gutterForeground: palette.textSecondary,
+    gutterBorder: palette.border,
+    indentGuide: wash(palette.textSecondary, dark ? 0.28 : 0.22),
+    warning: theme.colors.warning,
     cursor: accent,
     selection: wash(accent, dark ? 0.35 : 0.28),
     activeLine: dark

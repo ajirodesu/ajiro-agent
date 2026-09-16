@@ -115,6 +115,7 @@ import type {
     SendMessageInput,
     SkillConfig,
     SkillMode,
+    InteractionMode,
     StoredMessage,
     WebSearchMode,
     WorkspaceFile,
@@ -133,6 +134,7 @@ import {
 import { executeClaimedAgentRun, executeSubagentTask, type AgentRunDeps } from "./agent-run";
 import { isNativeAgentId, resolveConversationAgent } from "@/modules/agents/registry";
 import { normalizeAgentName, parseAgentMarkdown, serializeAgentToMarkdown } from "@/modules/agents/agent-markdown";
+import { fetchSkillMarkdownFromUrl } from "@/modules/skills/skill-github";
 import { createRunUiPublisher } from "./run-ui-publisher";
 import { resolveConfig } from "./config-resolution";
 import {
@@ -424,7 +426,11 @@ type AppStateContextValue = {
     updateToolAllowList: (toolNames: string[]) => Promise<void>;
     updateConversationModes: (
         conversationId: string,
-        input: { skillMode?: SkillMode; webSearchMode?: WebSearchMode },
+        input: {
+            skillMode?: SkillMode;
+            webSearchMode?: WebSearchMode;
+            interactionMode?: InteractionMode;
+        },
     ) => Promise<void>;
     updateCodingSettings: (
         input: Partial<AppSettings["codingSettings"]>,
@@ -461,7 +467,12 @@ type AppStateContextValue = {
     importAgentMarkdown: (input: {
         markdown: string;
         replaceById?: string | null;
+        sourceUrl?: string | null;
     }) => Promise<AgentConfig>;
+    syncAgentFromSource: (agentId: string) => Promise<{
+        agent: AgentConfig;
+        unchanged: boolean;
+    }>;
     exportAgentMarkdown: (agentId: string) => string;
     updateMaxToolSteps: (maxToolSteps: number) => Promise<void>;
     updateThemeMode: (mode: AppSettings["themeMode"]) => Promise<void>;
@@ -2210,7 +2221,11 @@ Your output must be:
 
     async function updateConversationModes(
         conversationId: string,
-        input: { skillMode?: SkillMode; webSearchMode?: WebSearchMode },
+        input: {
+            skillMode?: SkillMode;
+            webSearchMode?: WebSearchMode;
+            interactionMode?: InteractionMode;
+        },
     ) {
         await repositoriesRef.current.conversationRepository.updateMetadata(
             conversationId,
@@ -2353,8 +2368,11 @@ Your output must be:
     async function importAgentMarkdown(input: {
         markdown: string;
         replaceById?: string | null;
+        sourceUrl?: string | null;
     }) {
         const parsed = parseAgentMarkdown(input.markdown);
+        const sourceUrl = input.sourceUrl?.trim() || null;
+        const lastSyncedAt = sourceUrl ? new Date().toISOString() : null;
         let agent: AgentConfig;
 
         if (input.replaceById) {
@@ -2368,6 +2386,8 @@ Your output must be:
                     name: normalizeAgentName(parsed.name),
                     prompt: parsed.prompt,
                     sourceMarkdown: parsed.sourceMarkdown,
+                    sourceUrl,
+                    lastSyncedAt,
                     temperature: parsed.temperature,
                     toolPermissions: parsed.toolPermissions,
                 },
@@ -2399,6 +2419,8 @@ Your output must be:
                 name,
                 prompt: parsed.prompt,
                 sourceMarkdown: parsed.sourceMarkdown,
+                sourceUrl,
+                lastSyncedAt,
                 temperature: parsed.temperature,
                 toolPermissions: parsed.toolPermissions,
             });
@@ -2406,6 +2428,46 @@ Your output must be:
 
         await hydrate();
         return agent;
+    }
+
+    /**
+     * Re-sync an imported agent from its stored sourceUrl. Byte-identical
+     * content only refreshes lastSyncedAt (no churn); changed content goes
+     * through the normal replace path. Agents without a sourceUrl throw.
+     */
+    async function syncAgentFromSource(agentId: string) {
+        const current =
+            await repositoriesRef.current.agentRepository.getById(agentId);
+
+        if (!current) {
+            throw new Error(`Agent not found: ${agentId}`);
+        }
+
+        if (!current.sourceUrl) {
+            throw new Error("This agent was not imported from a URL.");
+        }
+
+        const { content } = await fetchSkillMarkdownFromUrl(current.sourceUrl);
+
+        if (
+            current.sourceMarkdown &&
+            current.sourceMarkdown.trim() === content.trim()
+        ) {
+            await repositoriesRef.current.agentRepository.update(agentId, {
+                lastSyncedAt: new Date().toISOString(),
+            });
+            await hydrate();
+            const refreshed =
+                await repositoriesRef.current.agentRepository.getById(agentId);
+            return { agent: refreshed ?? current, unchanged: true };
+        }
+
+        const agent = await importAgentMarkdown({
+            markdown: content,
+            replaceById: agentId,
+            sourceUrl: current.sourceUrl,
+        });
+        return { agent, unchanged: false };
     }
 
     function exportAgentMarkdown(agentId: string) {
@@ -2500,6 +2562,7 @@ Your output must be:
             selectedSkillIds: [],
             skillMode: "auto",
             webSearchMode: "smart",
+            interactionMode: "agent",
             title: "New chat",
             updatedAt: now,
         };
@@ -4100,6 +4163,7 @@ Your output must be:
                 updateAgent,
                 deleteAgent,
                 importAgentMarkdown,
+                syncAgentFromSource,
                 exportAgentMarkdown,
                 updateCodingSettings,
                 approvePendingToolApproval: () => {
@@ -4365,6 +4429,7 @@ export function useConfig() {
         updateAgent: context.updateAgent,
         deleteAgent: context.deleteAgent,
         importAgentMarkdown: context.importAgentMarkdown,
+        syncAgentFromSource: context.syncAgentFromSource,
         exportAgentMarkdown: context.exportAgentMarkdown,
         updateMaxToolSteps: context.updateMaxToolSteps,
         maxToolSteps: context.settings.maxToolSteps,

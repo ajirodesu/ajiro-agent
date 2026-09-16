@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 
 import { serializeSkillToMarkdown } from "@/modules/skills/skill-markdown";
 
-const DATABASE_VERSION = 28;
+const DATABASE_VERSION = 31;
 
 const CORE_SCHEMA_REPAIR_SQL = `
   PRAGMA journal_mode = WAL;
@@ -161,6 +161,19 @@ const CORE_SCHEMA_REPAIR_SQL = `
   ON provenance_events(session_id, created_at);
   CREATE INDEX IF NOT EXISTS idx_provenance_events_created_at
   ON provenance_events(created_at);
+
+  CREATE TABLE IF NOT EXISTS editor_file_revisions (
+    id TEXT PRIMARY KEY NOT NULL,
+    project_uri TEXT NOT NULL,
+    path TEXT NOT NULL,
+    content TEXT NOT NULL,
+    author_name TEXT,
+    author_avatar_uri TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_editor_file_revisions_project_path_created_at
+  ON editor_file_revisions(project_uri, path, created_at);
 `;
 
 /**
@@ -249,6 +262,18 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
       `);
     }
 
+    // Interaction posture (v30): repairs databases whose conversations
+    // table predates interaction_mode, including fresh installs that
+    // jumped straight to the latest schema version.
+    if (
+      !conversationColumns.some((column) => column.name === "interaction_mode")
+    ) {
+      await db.execAsync(`
+        ALTER TABLE conversations
+        ADD COLUMN interaction_mode TEXT NOT NULL DEFAULT 'agent';
+      `);
+    }
+
     // Skill origin metadata (v28): repairs databases whose skills table
     // predates source_url/author, including fresh installs that jumped
     // straight to the latest schema version.
@@ -267,6 +292,27 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
       await db.execAsync(`
         ALTER TABLE skills
         ADD COLUMN author TEXT;
+      `);
+    }
+
+    // Agent origin metadata (v29): repairs databases whose agents table
+    // predates source_url/last_synced_at, including fresh installs that
+    // jumped straight to the latest schema version.
+    const agentColumns = await db.getAllAsync<{ name: string }>(
+      "PRAGMA table_info(agents)",
+    );
+
+    if (!agentColumns.some((column) => column.name === "source_url")) {
+      await db.execAsync(`
+        ALTER TABLE agents
+        ADD COLUMN source_url TEXT;
+      `);
+    }
+
+    if (!agentColumns.some((column) => column.name === "last_synced_at")) {
+      await db.execAsync(`
+        ALTER TABLE agents
+        ADD COLUMN last_synced_at TEXT;
       `);
     }
 
@@ -1147,6 +1193,50 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
     }
 
     currentVersion = 28;
+  }
+
+  if (currentVersion === 28) {
+    await ensureColumn(db, "agents", "source_url", "source_url TEXT");
+    await ensureColumn(
+      db,
+      "agents",
+      "last_synced_at",
+      "last_synced_at TEXT",
+    );
+
+    currentVersion = 29;
+  }
+
+  if (currentVersion === 29) {
+    await ensureColumn(
+      db,
+      "conversations",
+      "interaction_mode",
+      "interaction_mode TEXT NOT NULL DEFAULT 'agent'",
+    );
+
+    currentVersion = 30;
+  }
+
+  if (currentVersion === 30) {
+    // Edit History durable snapshots: SQLite mirror of the in-memory
+    // RevisionLog so revision timelines survive app restarts.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS editor_file_revisions (
+        id TEXT PRIMARY KEY NOT NULL,
+        project_uri TEXT NOT NULL,
+        path TEXT NOT NULL,
+        content TEXT NOT NULL,
+        author_name TEXT,
+        author_avatar_uri TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_editor_file_revisions_project_path_created_at
+      ON editor_file_revisions(project_uri, path, created_at);
+    `);
+
+    currentVersion = 31;
   }
 
   await db.execAsync(`PRAGMA user_version = ${currentVersion}`);

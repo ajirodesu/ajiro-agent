@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, Save, Sparkles, Trash2 } from "lucide-react-native";
+import * as Clipboard from "expo-clipboard";
+import { ChevronLeft, Copy, Save, Sparkles, Trash2 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -34,6 +35,8 @@ import {
   buildAgentGeneratePrompt,
   parseAgentJsonDraft,
 } from "@/modules/agents/generate";
+import { serializeAgentToMarkdown } from "@/modules/agents/agent-markdown";
+import { validateAgentDraft } from "@/modules/agents/agent-validation";
 import { ALL_BUILT_IN_TOOL_KEYS } from "@/modules/config/built-in-tools";
 import { modelRuntime } from "@/modules/runtime/model-runtime";
 
@@ -117,6 +120,25 @@ const EMPTY_DRAFT: Draft = {
   toolPermissions: {},
 };
 
+function parseDraftModelRef(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return { modelId: null, providerId: null };
+  }
+
+  const separatorIndex = trimmed.indexOf("/");
+
+  if (separatorIndex <= 0 || separatorIndex === trimmed.length - 1) {
+    return undefined;
+  }
+
+  return {
+    providerId: trimmed.slice(0, separatorIndex),
+    modelId: trimmed.slice(separatorIndex + 1),
+  };
+}
+
 export default function SettingsAgentEditorScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -130,6 +152,7 @@ export default function SettingsAgentEditorScreen() {
     skills,
     updateAgent,
     deleteAgent,
+    syncAgentFromSource,
   } = useConfig();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === "new";
@@ -142,6 +165,8 @@ export default function SettingsAgentEditorScreen() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState<null | "generate" | "save">(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   if (!draft) {
     if (existing) {
@@ -179,28 +204,27 @@ export default function SettingsAgentEditorScreen() {
   const updateDraft = (patch: Partial<Draft>) =>
     setDraft({ ...current, ...patch });
 
-  const parseModelRefInput = (value: string) => {
-    const trimmed = value.trim();
-
-    if (!trimmed) {
-      return { modelId: null, providerId: null };
-    }
-
-    const separatorIndex = trimmed.indexOf("/");
-
-    if (separatorIndex <= 0 || separatorIndex === trimmed.length - 1) {
-      return undefined;
-    }
-
-    return {
-      providerId: trimmed.slice(0, separatorIndex),
-      modelId: trimmed.slice(separatorIndex + 1),
-    };
-  };
+  const parseModelRefInput = (value: string) => parseDraftModelRef(value);
 
   const handleSave = async () => {
-    if (busy || !current.name.trim()) {
-      setError("Give the agent a name.");
+    if (busy) {
+      return;
+    }
+
+    // Shared builder gate (same rules as pack imports): typed per-field
+    // errors instead of ad-hoc checks, so the editor, imports, and future
+    // builder surfaces stay in sync.
+    const draftErrors = validateAgentDraft({
+      description: current.description,
+      mode: current.mode,
+      modelRef: current.modelRef,
+      name: current.name,
+      prompt: current.prompt,
+      temperature: current.temperature,
+    });
+
+    if (draftErrors.length > 0) {
+      setError(draftErrors[0]!.message);
       return;
     }
 
@@ -254,6 +278,32 @@ export default function SettingsAgentEditorScreen() {
       );
     } finally {
       setBusy(null);
+    }
+  };
+
+  const handleSync = async () => {
+    if (syncBusy || !existing?.sourceUrl) {
+      return;
+    }
+
+    setSyncBusy(true);
+    setSyncNotice(null);
+
+    try {
+      const result = await syncAgentFromSource(existing.id);
+
+      if (result.unchanged) {
+        setSyncNotice("Already up to date with the source.");
+      } else {
+        setDraft(draftFromAgent(result.agent));
+        setSyncNotice("Updated from the source.");
+      }
+    } catch (syncError) {
+      setSyncNotice(
+        syncError instanceof Error ? syncError.message : "Re-sync failed.",
+      );
+    } finally {
+      setSyncBusy(false);
     }
   };
 
@@ -364,6 +414,41 @@ export default function SettingsAgentEditorScreen() {
         subtitle="Persona, model override, and tool access"
       />
 
+      {existing?.sourceUrl ? (
+        <Card className="gap-sp-2 px-sp-4 py-sp-4">
+          <View className="flex-row items-center justify-between gap-sp-2">
+            <Text className="font-sans text-sm font-medium text-foreground dark:text-foreground-dark">
+              Imported source
+            </Text>
+            <Button
+              loading={syncBusy}
+              onPress={handleSync}
+              size="sm"
+              variant="outline"
+            >
+              Re-sync
+            </Button>
+          </View>
+          <Text
+            numberOfLines={2}
+            className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark"
+          >
+            {existing.sourceUrl}
+          </Text>
+          {existing.lastSyncedAt ? (
+            <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+              Last synced{" "}
+              {new Date(existing.lastSyncedAt).toLocaleString()}
+            </Text>
+          ) : null}
+          {syncNotice ? (
+            <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+              {syncNotice}
+            </Text>
+          ) : null}
+        </Card>
+      ) : null}
+
       <Card className="gap-sp-3 px-sp-4 py-sp-4">
         <View className="gap-sp-2">
           <Text className="font-sans text-sm font-medium text-foreground dark:text-foreground-dark">
@@ -449,6 +534,8 @@ export default function SettingsAgentEditorScreen() {
         skills={skills}
       />
 
+      <AgentMarkdownPreview draft={current} />
+
       {error ? (
         <Text className="font-sans text-sm text-destructive dark:text-destructive-dark">
           {error}
@@ -477,6 +564,74 @@ export default function SettingsAgentEditorScreen() {
         ) : null}
       </View>
     </Container>
+  );
+}
+
+function AgentMarkdownPreview({ draft }: { draft: Draft }) {
+  const [copied, setCopied] = useState(false);
+  const theme = useTheme();
+
+  let preview: string | null = null;
+
+  if (draft.prompt.trim()) {
+    try {
+      const model = parseDraftModelRef(draft.modelRef);
+      const temperature = draft.temperature.trim()
+        ? Number.parseFloat(draft.temperature)
+        : null;
+      preview = serializeAgentToMarkdown({
+        description: draft.description.trim() || null,
+        mode: draft.mode,
+        modelModelId: model?.modelId ?? null,
+        modelProviderId: model?.providerId ?? null,
+        name: draft.name.trim() || "agent",
+        prompt: draft.prompt,
+        temperature: Number.isFinite(temperature) ? temperature : null,
+        toolPermissions: draft.toolPermissions,
+      });
+    } catch {
+      preview = null;
+    }
+  }
+
+  const handleCopy = async () => {
+    if (!preview) {
+      return;
+    }
+    await Clipboard.setStringAsync(preview);
+    setCopied(true);
+  };
+
+  return (
+    <Card className="gap-sp-3 px-sp-4 py-sp-4">
+      <View className="flex-row items-center justify-between gap-sp-2">
+        <Text className="font-sans text-sm font-medium text-foreground dark:text-foreground-dark">
+          AGENT.md preview
+        </Text>
+        <Button
+          disabled={!preview}
+          leftIcon={<Copy color={theme.text} size={14} />}
+          onPress={handleCopy}
+          size="sm"
+          variant="outline"
+        >
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </View>
+      {preview ? (
+        <Text
+          selectable
+          className="font-mono text-xs text-foreground dark:text-foreground-dark"
+        >
+          {preview}
+        </Text>
+      ) : (
+        <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+          Write a system prompt above to see the exact AGENT.md this editor
+          will store.
+        </Text>
+      )}
+    </Card>
   );
 }
 

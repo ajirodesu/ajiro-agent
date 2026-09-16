@@ -31,6 +31,7 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import { useSQLiteContext } from "expo-sqlite";
 import Markdown from "react-native-markdown-display";
 
 import { Container } from "@/components/shared/container";
@@ -45,6 +46,8 @@ import {
 } from "@/components/ui/chrome";
 import { withAlpha } from "@/components/ui/chrome-spec";
 import { CodeMirrorEditor } from "@/editor/CodeMirrorEditor";
+import { EditHistoryPanel } from "@/editor/EditHistoryPanel";
+import { RevisionLog, type EditorRevision, type RevisionAuthor } from "@/editor/editorRevisions";
 import { FileTypeIcon } from "@/file-icons/FileTypeIcon";
 import {
   Drawer,
@@ -56,11 +59,13 @@ import {
 } from "@/components/ui/drawer";
 import { useChat } from "@/hooks/use-chat";
 import { useTheme } from "@/hooks/use-theme";
+import { createEditorRevisionRepository } from "@/core/db/repositories/editor-revision-repository";
+import { createDrizzleDb } from "@/core/db/repositories/shared";
 import { createExternalFolderService } from "@/core/services/external-folder/external-folder-service";
 import type { ExternalFolderSession } from "@/core/types/app-state";
 import { sessionForProject } from "@/modules/ide/workspace";
 import { useIdeWorkspace } from "@/providers/ide-workspace";
-import { detectRepo, getStatus } from "@/modules/ide/git-ops";
+import { detectRepo, getCommitAuthor, getStatus } from "@/modules/ide/git-ops";
 import {
   extensionOf,
   fingerprintForBytes,
@@ -1581,6 +1586,147 @@ function ActiveFileView({
   }, [kind, entry.path]);
 
   const value = buffer ?? disk?.text ?? "";
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const revisionLogRef = useRef<RevisionLog | null>(null);
+  if (!revisionLogRef.current) revisionLogRef.current = new RevisionLog();
+  const [revisions, setRevisions] = useState<EditorRevision[]>([]);
+  const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Durable revision plumbing: the SQLite mirror (drizzle over the app
+  // database) plus the repo-local git identity (`user.name`) for real author
+  // attribution — resolved once per file, refreshed on session change.
+  const sqliteDb = useSQLiteContext();
+  const revisionRepoRef = useRef<ReturnType<
+    typeof createEditorRevisionRepository
+  > | null>(null);
+  if (!revisionRepoRef.current) {
+    revisionRepoRef.current = createEditorRevisionRepository(
+      createDrizzleDb(sqliteDb),
+    );
+  }
+  const revisionAuthorRef = useRef<RevisionAuthor>({
+    name: null,
+    avatarUri: null,
+  });
+  // Hydrate-at-most-once per file: guards both the async mirror read and the
+  // debounced capture below so a pre-hydration buffer never snapshots.
+  const hydratedKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getCommitAuthor(session)
+      .then((author) => {
+        if (!cancelled) revisionAuthorRef.current = { name: author.name, avatarUri: null };
+      })
+      .catch(() => {
+        /* identity is best-effort; null keeps the default avatar */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  // Hydrate durable history first so the timeline survives restarts; the
+  // disk text seeds revision 1 when the file has no stored history yet.
+  useEffect(() => {
+    if (!disk) return;
+    const revisionKey = `${session.uri}\u0000${entry.path}`;
+    if (hydratedKeyRef.current === revisionKey) return;
+    hydratedKeyRef.current = revisionKey;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = await revisionRepoRef.current?.listByFile(
+          session.uri,
+          entry.path,
+        );
+        if (cancelled) return;
+        if (stored && stored.length > 0) {
+          revisionLogRef.current?.seed(
+            stored.map((record) => ({
+              id: record.id,
+              createdAt: record.createdAt,
+              authorName: record.authorName,
+              authorAvatarUri: record.authorAvatarUri,
+              content: record.content,
+            })),
+          );
+          setRevisions(revisionLogRef.current?.list() ?? []);
+          return;
+        }
+        const seeded = revisionLogRef.current?.capture(disk.text, {
+          name: null,
+          avatarUri: null,
+        });
+        if (seeded) {
+          setRevisions(revisionLogRef.current?.list() ?? []);
+          void revisionRepoRef.current?.append({
+            projectUri: session.uri,
+            path: entry.path,
+            ...seeded,
+          });
+        }
+      } catch {
+        // Durable mirror is best-effort; the in-memory log still works.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session.uri, entry.path, disk]);
+
+  // Real revision capture: every debounced batch of live edits appends a
+  // timestamped snapshot (memory + durable SQLite mirror).
+  useEffect(() => {
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+    historyTimerRef.current = setTimeout(() => {
+      if (
+        hydratedKeyRef.current !== `${session.uri}\u0000${entry.path}`
+      ) {
+        return;
+      }
+      const snapshot = revisionLogRef.current?.capture(
+        value,
+        revisionAuthorRef.current,
+      );
+      if (snapshot) {
+        setRevisions(revisionLogRef.current?.list() ?? []);
+        void revisionRepoRef.current
+          ?.append({
+            projectUri: session.uri,
+            path: entry.path,
+            ...snapshot,
+          })
+          .catch(() => {
+            /* durable mirror is best-effort */
+          });
+      }
+    }, 1500);
+    return () => {
+      if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+    };
+  }, [value, session.uri, entry.path]);
+
+  const resetToRevision = (content: string): void => {
+    ide.setBuffer(projectId, entry.path, content);
+    ide.setPathDirty(projectId, entry.path, true);
+    const snapshot = revisionLogRef.current?.capture(
+      content,
+      revisionAuthorRef.current,
+    );
+    if (snapshot) {
+      setRevisions(revisionLogRef.current?.list() ?? []);
+      void revisionRepoRef.current
+        ?.append({
+          projectUri: session.uri,
+          path: entry.path,
+          ...snapshot,
+        })
+        .catch(() => {
+          /* durable mirror is best-effort */
+        });
+    }
+    setHistoryOpen(false);
+  };
 
   if (diskError) {
     return (
@@ -1731,6 +1877,16 @@ function ActiveFileView({
           ide.setPathDirty(projectId, entry.path, text !== disk?.text);
         }}
         onSave={onSave}
+        dirty={value !== disk?.text}
+        onOpenHistory={() => setHistoryOpen(true)}
+      />
+      <EditHistoryPanel
+        open={historyOpen}
+        path={entry.path}
+        revisions={revisions}
+        liveText={value}
+        onClose={() => setHistoryOpen(false)}
+        onResetToRevision={resetToRevision}
       />
       {externalChanged ? (
         <ExternalChangeBar

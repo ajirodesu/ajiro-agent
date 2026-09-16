@@ -42,6 +42,8 @@ function nativeAgent(input: {
     name: input.name,
     prompt: input.prompt ?? null,
     sourceMarkdown: null,
+    sourceUrl: null,
+    lastSyncedAt: null,
     temperature: null,
     toolPermissions: {},
     updatedAt: "",

@@ -22,6 +22,8 @@ export interface EditorDocumentParams {
   /** Bundle grammar key from `grammarKeyForPath()`; null = plain text. */
   grammarKey: string | null;
   doc: string;
+  /** Initial AI-autocomplete toggle state (live-toggled after mount). */
+  autocompleteEnabled?: boolean;
 }
 
 /** Escape code so it can be inlined inside a `<script>` block. */
@@ -45,6 +47,8 @@ const BOOTSTRAP = `(function () {
   var INITIAL = __INITIAL__;
   var CM = window.AjiroCM;
   var T = CM.tags;
+  var currentGrammarKey = INITIAL.grammarKey;
+  var currentAutocomplete = INITIAL.autocompleteEnabled !== false;
 
   function supportFor(key) {
     if (!key) return null;
@@ -86,6 +90,9 @@ const BOOTSTRAP = `(function () {
   }
 
   function chromeFor(t) {
+    var sep = t.gutterBorder && t.gutterBorder !== t.gutterBackground
+      ? "1px solid " + t.gutterBorder
+      : "none";
     return CM.EditorView.theme({
       "&": { color: t.foreground, backgroundColor: t.background },
       ".cm-content": {
@@ -93,6 +100,36 @@ const BOOTSTRAP = `(function () {
         fontFamily: "monospace",
         fontSize: "13px",
         lineHeight: "20px",
+      },
+      // Gutter spacing (relative units, tied to the editor font size):
+      // left inset before the number, centered numbers, a fixed chevron
+      // cell on every row so the 1px separator stays perfectly straight,
+      // and a fixed code margin after the separator.
+      ".cm-gutter": { paddingLeft: "1ch" },
+      ".cm-lineNumbers .cm-gutterElement": {
+        textAlign: "center",
+        minWidth: "2ch",
+        padding: "0 0.5ch 0 0",
+      },
+      ".cm-foldGutter": { width: "1.6ch" },
+      ".cm-foldGutter .cm-gutterElement": {
+        textAlign: "center",
+        color: t.gutterForeground,
+        width: "1.6ch",
+      },
+      ".cm-gutters": {
+        backgroundColor: t.gutterBackground,
+        color: t.gutterForeground,
+        border: "none",
+        borderRight: sep,
+        marginRight: "1.25ch",
+      },
+      ".cm-content": {
+        caretColor: t.cursor,
+        fontFamily: "monospace",
+        fontSize: "13px",
+        lineHeight: "20px",
+        paddingRight: "1.25ch",
       },
       ".cm-cursor, .cm-dropCursor": { borderLeftColor: t.cursor },
       "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
@@ -103,47 +140,68 @@ const BOOTSTRAP = `(function () {
         backgroundColor: t.activeLine,
         color: t.gutterForeground,
       },
-      ".cm-gutters": {
-        backgroundColor: t.gutterBackground,
-        color: t.gutterForeground,
-        border: "none",
-      },
       ".cm-matchingBracket": { backgroundColor: t.matchingBracket },
-      ".cm-foldGutter .cm-gutterElement": { color: t.gutterForeground },
+      // Indentation guides: faint vertical lines at each indent level.
+      ".cm-indentGuide": {
+        borderLeft: "1px solid " + t.indentGuide,
+      },
     }, { dark: t.dark });
   }
 
   var langCompartment = new CM.Compartment();
   var themeCompartment = new CM.Compartment();
+  var autocompleteCompartment = new CM.Compartment();
   var view = null;
 
-  function extensionsFor(grammarKey, theme) {
-    var support = supportFor(grammarKey);
+  function autocompleteExt(enabled, grammarKey) {
+    if (!enabled) return [];
     var emmet = grammarKey && HTML_FAMILY[grammarKey];
+    if (emmet) {
+      return [
+        CM.abbreviationTracker(),
+        CM.autocompletion({
+          activateOnTyping: true,
+          maxRenderedOptions: 6,
+          override: [CM.emmetCompletionSource, CM.completeAnyWord],
+        }),
+      ];
+    }
+    return [
+      CM.autocompletion({ activateOnTyping: true, maxRenderedOptions: 6 }),
+    ];
+  }
+
+  function extensionsFor(grammarKey, theme, autocompleteEnabled) {
+    var support = supportFor(grammarKey);
     var extensions = [
       langCompartment.of(support ? support : []),
       themeCompartment.of([
         chromeFor(theme),
         CM.syntaxHighlighting(highlightFor(theme)),
       ]),
+      autocompleteCompartment.of(autocompleteExt(autocompleteEnabled, grammarKey)),
       CM.lineNumbers(),
       CM.highlightActiveLineGutter(),
       CM.highlightSpecialChars(),
       CM.history(),
-      CM.foldGutter(),
+      CM.foldGutter({
+        // Centered chevron cell inside the gutter: down = expanded,
+        // right = collapsed. Only lines opening a foldable block render
+        // one at all — CodeMirror's foldGutter decides that for real
+        // foldable regions (functions, if/for/while, literals, comments).
+        markerDOM: function (open) {
+          var el = document.createElement("span");
+          el.textContent = open ? "▾" : "▸";
+          el.setAttribute("aria-hidden", "true");
+          return el;
+        },
+      }),
       CM.drawSelection(),
       CM.dropCursor(),
       CM.rectangularSelection(),
       CM.crosshairCursor(),
       CM.highlightActiveLine(),
       CM.search(),
-      CM.autocompletion(emmet
-        ? {
-            activateOnTyping: true,
-            maxRenderedOptions: 6,
-            override: [CM.emmetCompletionSource, CM.completeAnyWord],
-          }
-        : { activateOnTyping: true, maxRenderedOptions: 6 }),
       CM.closeBrackets(),
       CM.keymap.of([
         CM.closeBracketsKeymap,
@@ -171,7 +229,6 @@ const BOOTSTRAP = `(function () {
         }
       }),
     ];
-    if (emmet) extensions.push(CM.abbreviationTracker());
     return extensions;
   }
 
@@ -222,9 +279,15 @@ const BOOTSTRAP = `(function () {
           });
         }
       } else if (msg.type === "grammar") {
+        currentGrammarKey = msg.key;
         var support = supportFor(msg.key);
         view.dispatch({
-          effects: langCompartment.reconfigure(support ? support : []),
+          effects: [
+            langCompartment.reconfigure(support ? support : []),
+            autocompleteCompartment.reconfigure(
+              autocompleteExt(currentAutocomplete, msg.key),
+            ),
+          ],
         });
       } else if (msg.type === "theme") {
         view.dispatch({
@@ -232,6 +295,13 @@ const BOOTSTRAP = `(function () {
             chromeFor(msg.theme),
             CM.syntaxHighlighting(highlightFor(msg.theme)),
           ]),
+        });
+      } else if (msg.type === "autocomplete") {
+        currentAutocomplete = msg.enabled !== false;
+        view.dispatch({
+          effects: autocompleteCompartment.reconfigure(
+            autocompleteExt(currentAutocomplete, currentGrammarKey),
+          ),
         });
       } else if (msg.type === "undo") {
         CM.undo(view);
@@ -252,7 +322,11 @@ const BOOTSTRAP = `(function () {
   try {
     var state = CM.EditorState.create({
       doc: INITIAL.doc,
-      extensions: extensionsFor(INITIAL.grammarKey, INITIAL.theme),
+      extensions: extensionsFor(
+        INITIAL.grammarKey,
+        INITIAL.theme,
+        INITIAL.autocompleteEnabled !== false,
+      ),
     });
     view = new CM.EditorView({
       state: state,
@@ -279,6 +353,7 @@ export function buildEditorDocument(
       theme: params.theme,
       grammarKey: params.grammarKey,
       doc: params.doc,
+      autocompleteEnabled: params.autocompleteEnabled !== false,
     }),
   );
   return `<!DOCTYPE html>

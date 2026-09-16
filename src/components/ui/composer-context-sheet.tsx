@@ -26,6 +26,7 @@ import {
   Paperclip,
   Pin,
   ArrowUpRight,
+  Bot,
   Package,
   Search,
   Server,
@@ -40,6 +41,7 @@ import {
 } from "lucide-react-native";
 
 import type {
+  InteractionMode,
   ReasoningEffort,
   SkillMode,
   ToolApprovalMode,
@@ -79,6 +81,7 @@ export type SheetPane =
   | "main"
   | "attachment"
   | "agent"
+  | "interaction"
   | "approval"
   | "websearch"
   | "effort"
@@ -114,6 +117,8 @@ export type ComposerContextSheetProps = {
   onThinkingChange: (enabled: boolean) => void;
   agentName: string;
   onAgentChange: (name: "build" | "plan") => void;
+  interactionMode: InteractionMode;
+  onInteractionModeChange: (mode: InteractionMode) => void;
   approvalMode: ToolApprovalMode;
   onApprovalModeChange: (mode: ToolApprovalMode) => void;
 };
@@ -471,6 +476,7 @@ const EFFORT_OPTIONS: { value: ReasoningEffort; label: string; badge?: ReactNode
 const PANE_TITLES: Partial<Record<SheetPane, string>> = {
   attachment: "Attachment",
   agent: "Agent Mode",
+  interaction: "Interaction",
   approval: "Approval Mode",
   websearch: "Web Search",
   effort: "Effort",
@@ -652,6 +658,11 @@ export function ComposerContextSheet(props: ComposerContextSheetProps) {
         onPress={() => goPane("agent")}
       />
       <MainRow
+        icon={Bot}
+        label="Interaction"
+        onPress={() => goPane("interaction")}
+      />
+      <MainRow
         icon={ListChecks}
         label="Approval Mode"
         onPress={() => goPane("approval")}
@@ -735,6 +746,33 @@ export function ComposerContextSheet(props: ComposerContextSheetProps) {
         selected={props.agentName === "plan"}
         onPress={() => {
           props.onAgentChange("plan");
+        }}
+      />
+    </View>
+  );
+
+  const interactionPane = (
+    <View>
+      <OptCard
+        icon={<InfinityIcon color={TEXT_STRONG} size={19} strokeWidth={2.1} />}
+        iconActive={props.interactionMode === "agent"}
+        title="Agent"
+        titleMedium={props.interactionMode === "agent"}
+        description="Full behavior: the agent can act with tools, skills, and environment"
+        selected={props.interactionMode === "agent"}
+        onPress={() => {
+          props.onInteractionModeChange("agent");
+        }}
+      />
+      <OptCard
+        icon={<Bot color={TEXT_STRONG} size={19} strokeWidth={2.1} />}
+        iconActive={props.interactionMode === "bot"}
+        title="Bot"
+        titleMedium={props.interactionMode === "bot"}
+        description="Answers only: read and explain, run skills, never change anything"
+        selected={props.interactionMode === "bot"}
+        onPress={() => {
+          props.onInteractionModeChange("bot");
         }}
       />
     </View>
@@ -896,6 +934,7 @@ export function ComposerContextSheet(props: ComposerContextSheetProps) {
     main: mainPane,
     attachment: attachmentPane,
     agent: agentPane,
+    interaction: interactionPane,
     approval: approvalPane,
     websearch: websearchPane,
     effort: effortPane,

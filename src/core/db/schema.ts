@@ -19,6 +19,7 @@ import type {
   BuiltInToolKey,
   ScheduleRunStatus,
   SkillMode,
+  InteractionMode,
   WebSearchMode,
   WorkspaceFileSourceKind,
 } from "@/core/types/app-state";
@@ -52,6 +53,10 @@ export const conversations = sqliteTable(
       .$type<WebSearchMode>()
       .notNull()
       .default("smart"),
+    interactionMode: text("interaction_mode")
+      .$type<InteractionMode>()
+      .notNull()
+      .default("agent"),
     externalFolderSession: text("external_folder_session_json", { mode: "json" })
       .$type<ExternalFolderSession | null>(),
     pinnedAt: text("pinned_at"),
@@ -164,6 +169,10 @@ export const agents = sqliteTable(
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
     sourceMarkdown: text("source_markdown"),
+    /** Origin URL the agent was imported from (pack import URL). */
+    sourceUrl: text("source_url"),
+    /** Last successful re-sync from sourceUrl (ISO timestamp). */
+    lastSyncedAt: text("last_synced_at"),
     toolPermissions: text("tool_permissions_json", { mode: "json" })
       .$type<AgentToolPermissions>()
       .notNull()
@@ -426,12 +435,33 @@ export const provenanceEvents = sqliteTable(
   ],
 );
 
+export const editorFileRevisions = sqliteTable(
+  "editor_file_revisions",
+  {
+    id: text("id").primaryKey().notNull(),
+    projectUri: text("project_uri").notNull(),
+    path: text("path").notNull(),
+    content: text("content").notNull(),
+    authorName: text("author_name"),
+    authorAvatarUri: text("author_avatar_uri"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_editor_file_revisions_project_path_created_at").on(
+      table.projectUri,
+      table.path,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const schema = {
   agentRuns,
   agents,
   appSettings,
   codingCheckpoints,
   conversations,
+  editorFileRevisions,
   memories,
   messages,
   mcpServers,

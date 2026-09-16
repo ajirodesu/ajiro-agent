@@ -4,6 +4,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 import type { schema } from "@/core/db/schema";
 import type { MemoryStore } from "@/modules/memory/types";
 import type { CheckpointRepository } from "@/core/db/repositories/checkpoint-repository";
+import type { EditorRevisionRepository } from "@/core/db/repositories/editor-revision-repository";
 import type { ProjectCodingSettings } from "@/core/services/coding/coding-settings";
 import type {
   AgentConfig,
@@ -32,6 +33,7 @@ import type {
   ScheduleRunStatus,
   SkillConfig,
   SkillMode,
+  InteractionMode,
   StoredMessage,
   ToolApprovalMode,
   ThemeMode,
@@ -52,6 +54,8 @@ export interface AgentRepository {
     name: string;
     prompt?: string | null;
     sourceMarkdown?: string | null;
+    sourceUrl?: string | null;
+    lastSyncedAt?: string | null;
     temperature?: number | null;
     toolPermissions?: AgentConfig["toolPermissions"];
   }): Promise<AgentConfig>;
@@ -71,6 +75,8 @@ export interface AgentRepository {
       name?: string;
       prompt?: string | null;
       sourceMarkdown?: string | null;
+      sourceUrl?: string | null;
+      lastSyncedAt?: string | null;
       temperature?: number | null;
       toolPermissions?: AgentConfig["toolPermissions"];
     },
@@ -110,6 +116,7 @@ export interface ConversationRepository {
       selectedSkillIds?: string[];
       skillMode?: SkillMode;
       webSearchMode?: WebSearchMode;
+      interactionMode?: InteractionMode;
       title?: string;
       updatedAt?: string;
     },
@@ -487,6 +494,7 @@ export type Repositories = {
   checkpointRepository: CheckpointRepository;
   configRepository: ConfigRepository;
   conversationRepository: ConversationRepository;
+  editorRevisionRepository: EditorRevisionRepository;
   memoryStore: MemoryStore;
   mcpServerRepository: McpServerRepository;
   messageRepository: MessageRepository;

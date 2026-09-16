@@ -41,6 +41,8 @@ function agent(overrides: Partial<AgentConfig> = {}): AgentConfig {
     name: "agent",
     prompt: null,
     sourceMarkdown: null,
+    sourceUrl: null,
+    lastSyncedAt: null,
     temperature: null,
     toolPermissions: {},
     updatedAt: "",

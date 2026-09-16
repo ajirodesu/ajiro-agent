@@ -26,6 +26,8 @@ function makeAgent(name: string): AgentConfig {
     enabled: true,
     hidden: false,
     sourceMarkdown: null,
+    sourceUrl: null,
+    lastSyncedAt: null,
     toolPermissions: {},
     createdAt: "",
     updatedAt: "",

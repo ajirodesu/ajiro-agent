@@ -64,8 +64,10 @@ import {
 import {
   agentAllowsBuiltInKey,
   filterMcpServerIdsByAgentPermissions,
+  isBotModeInteraction,
   isPlanAgent,
   isReadOnlyAgent,
+  isReadOnlyRun,
 } from "@/modules/agents/permissions";
 import { resolveMaxIterations } from "@/modules/agents/modes";
 import { createAgentTools } from "@/modules/tools/built-in/agent-tools";
@@ -199,6 +201,15 @@ function buildPlanModeSystemPrompt() {
     "Read-only MCP tools, such as web search, remain available for research. Never call an MCP tool that would modify or send data.",
     "Structure your plan with the specific files and changes involved, why each step is needed, and any risks or trade-offs you noticed.",
     "End by telling the user to switch to Build mode when they are ready for you to make the changes.",
+  ].join("\n");
+}
+
+function buildBotModeSystemPrompt() {
+  return [
+    "Bot Mode is on for this chat. Answer the user directly with words and read-only context: explain, summarize, quote files you read, and run enabled skills.",
+    "You must NOT make any changes. Never create, write, edit, delete, move, or rename files. Never tap, type, or otherwise operate the device. Never modify memory, schedules, agents, skills, or MCP-connected systems.",
+    "Your mutating tools are disabled, so attempting a change is impossible. If the user asks for a change, explain what you would do and tell them to switch this chat back to Agent Mode to have it done.",
+    "Read-only MCP tools, such as web search, remain available for research. Never call an MCP tool that would modify or send data.",
   ].join("\n");
 }
 
@@ -525,6 +536,11 @@ export async function executeClaimedAgentRun(
     run.agentId ?? conversation.agentId,
   );
   const isPlanMode = isReadOnlyAgent(agent);
+  // Bot Mode (per-conversation interaction posture): the run answers with
+  // words and read-only context only — same execution gates as plan mode,
+  // but a direct-answer persona instead of a present-a-plan persona.
+  const isBotMode = isBotModeInteraction(conversation.interactionMode);
+  const readOnlyRun = isReadOnlyRun(agent, conversation.interactionMode);
   const isPlanPersona = isPlanAgent(agent);
   const isSubagentRun = agent.mode === "subagent";
   const maxToolSteps = resolveMaxIterations(
@@ -946,14 +962,19 @@ export async function executeClaimedAgentRun(
       startBackgroundAgent();
     }
 
-    if (isPlanMode) {
+    if (readOnlyRun) {
       pushTimelineEvent(
         createExecutionTimelineEvent({
-          detail:
-            "Only read-only tools are available. The agent will research and present a plan without making changes.",
+          detail: isBotMode
+            ? "Bot Mode is on for this chat. The agent answers with words and read-only context only — no changes, no subagents, no schedules."
+            : "Only read-only tools are available. The agent will research and present a plan without making changes.",
           kind: "run",
           status: "info",
-          title: isPlanPersona ? "Plan mode" : `${agent.name} mode`,
+          title: isPlanPersona
+            ? "Plan mode"
+            : isBotMode
+              ? "Bot Mode"
+              : `${agent.name} mode`,
           createdAt: new Date().toISOString(),
         }),
       );
@@ -1098,7 +1119,7 @@ export async function executeClaimedAgentRun(
           }
 
           return Object.keys(tools).length > 0
-            ? (filterToolsToAgentMode(tools, isPlanMode) as ToolSet)
+            ? (filterToolsToAgentMode(tools, readOnlyRun) as ToolSet)
             : undefined;
         })()
       : undefined;
@@ -1108,14 +1129,14 @@ export async function executeClaimedAgentRun(
              servers: runMcpServers,
              onRecord: handleToolExecutionRecord,
              signal: abortController.signal,
-             keepTool: isPlanMode || isSubagentRun
+             keepTool: readOnlyRun || isSubagentRun
                ? (tool) => isMcpToolReadOnly(tool)
                : undefined,
            })
         : null;
     const memoryRuntime =
       runtimeSupportsTools &&
-      !isPlanMode &&
+      !readOnlyRun &&
       !isSubagentRun &&
       snapshotRef.current.settings.memoryEnabled
         ? createMemoryTools({
@@ -1163,7 +1184,7 @@ export async function executeClaimedAgentRun(
         : null;
     const scheduleRuntime =
       runtimeSupportsTools &&
-      !isPlanMode &&
+      !readOnlyRun &&
       !isSubagentRun &&
       agentAllowsBuiltInKey(agent, "schedules")
         ? createScheduleTools({
@@ -1176,7 +1197,7 @@ export async function executeClaimedAgentRun(
           })
         : null;
     const taskRuntime =
-      runtimeSupportsTools && !isPlanMode && !isSubagentRun
+      runtimeSupportsTools && !readOnlyRun && !isSubagentRun
         ? createTaskTool({
             getAgents: () => snapshotRef.current.agents,
             onRecord: handleToolExecutionRecord,
@@ -1188,7 +1209,7 @@ export async function executeClaimedAgentRun(
           })
         : null;
     const agentRuntime =
-      runtimeSupportsTools && !isPlanMode && !isSubagentRun
+      runtimeSupportsTools && !readOnlyRun && !isSubagentRun
         ? createAgentTools({
             onAgentsChange: () => {
               deps.onAgentsChange();
@@ -1239,7 +1260,7 @@ export async function executeClaimedAgentRun(
       ...(questionRuntime ? Object.keys(questionRuntime.tools) : []),
       ...(skillRuntime ? ["skill"] : []),
       ...(scheduleRuntime ? Object.keys(scheduleRuntime.tools) : []),
-      ...(isPlanMode && mcpRuntime?.tools
+      ...(readOnlyRun && mcpRuntime?.tools
         ? Object.keys(mcpRuntime.tools)
         : []),
     ]);
@@ -1410,17 +1431,19 @@ export async function executeClaimedAgentRun(
       ),
     );
     const skillManagementRuntimeSystem =
-      skillRuntime && runtimeSupportsTools && !isPlanMode
+      skillRuntime && runtimeSupportsTools && !readOnlyRun
         ? "You can create, update, delete, and list skills with the manageSkill tool. Skills follow the SKILL.md format: a name, a short description, and markdown instructions. Create a skill when the user explicitly asks to save one, or when a repeated task would benefit from reusable instructions."
         : undefined;
     const memoryRuntimeSystem = snapshotRef.current.settings.memoryEnabled
       ? buildMemorySystemPrompt(snapshotRef.current.memory, {
-          canWrite: runtimeSupportsTools && !isPlanMode,
+          canWrite: runtimeSupportsTools && !readOnlyRun,
         })
       : undefined;
     const agentModeRuntimeSystem = isPlanMode
       ? agent.prompt?.trim() || buildPlanModeSystemPrompt()
       : undefined;
+    const botModeRuntimeSystem =
+      isBotMode && !isPlanMode ? buildBotModeSystemPrompt() : undefined;
     const webSearchRuntimeSystem =
       conversation.webSearchMode === "offline"
         ? "Web Search is OFFLINE for this chat: do not use web search or fetch remote pages. Answer only from the model's own knowledge and the local project context."
@@ -1436,11 +1459,11 @@ export async function executeClaimedAgentRun(
           .join("\n")
       : undefined;
     const agentManagementRuntimeSystem =
-      agentRuntime && runtimeSupportsTools && !isPlanMode
+      agentRuntime && runtimeSupportsTools && !readOnlyRun
         ? "You can create, update, delete, and list agents with the manageAgent tool. Agents are reusable personas: a kebab-case name, a description of when to use them, an availability mode (primary = selectable in chats, subagent = invoked via the task tool, all = both), and a markdown system prompt that replaces your default persona while they run. Create an agent when the user explicitly asks to save one."
         : undefined;
     const taskRuntimeSystem =
-      taskRuntime && runtimeSupportsTools && !isPlanMode
+      taskRuntime && runtimeSupportsTools && !readOnlyRun
         ? `You can delegate work with the task tool.\n\n${describeSubagentCatalog(snapshotRef.current.agents)}\n\nDelegate when a subagent's specialty fits part of the work or for isolated multi-step research. Write self-contained prompts; the subagent cannot see this conversation. Wait for its result before continuing dependent work.`
         : undefined;
     const toolLoopRuntimeSystem = runtimeTools
@@ -1459,6 +1482,7 @@ export async function executeClaimedAgentRun(
         agent.prompt?.trim() || BASE_AGENT_SYSTEM_PROMPT,
         buildAutonomySystemPrompt(),
         agentModeRuntimeSystem,
+        botModeRuntimeSystem,
         webSearchRuntimeSystem,
         subagentRuntimeSystem,
         buildCurrentDateTimeSystemPrompt(),
@@ -1848,7 +1872,7 @@ export async function executeClaimedAgentRun(
       codingSettings.verifyEnabled &&
       codingSettings.verifyCommands.length > 0 &&
       pendingEditCount > 0 &&
-      !isPlanMode
+      !readOnlyRun
     ) {
       try {
         const { runVerifyLoop } = await import("@/modules/runtime/verify-loop");

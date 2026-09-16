@@ -20,11 +20,21 @@ import {
   type CodeMirrorWebViewRef,
 } from "@/editor/CodeMirrorWebView";
 import { adaptAppThemeToEditorTheme } from "@/editor/editorThemeAdapter";
+import {
+  checkFormat,
+  computeDiagnostics,
+  countBySeverity,
+  formatBuffer,
+  type EditorDiagnostic,
+  type FormatCheck,
+} from "@/editor/editorDiagnostics";
 import { grammarKeyForPath } from "@/editor/editorLanguages";
 import type {
   EditorWebViewInbound,
   EditorWebViewOutbound,
 } from "@/editor/editorTypes";
+import { EditorProblemsPanel } from "@/editor/EditorProblemsPanel";
+import { EditorStatusFooter } from "@/editor/EditorStatusFooter";
 import { useAppTheme } from "@/hooks/use-app-theme";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
@@ -35,10 +45,13 @@ export type CodeMirrorEditorProps = {
   onChangeText: (text: string) => void;
   autoFocus?: boolean;
   onSave?: () => void;
+  /** True when the in-memory buffer differs from the saved file. */
+  dirty?: boolean;
   externalChanged?: boolean;
   onKeepMine?: () => void;
   onReloadExternal?: () => void;
   onCompareExternal?: () => void;
+  onOpenHistory?: () => void;
 };
 
 export function CodeMirrorEditor({
@@ -47,10 +60,12 @@ export function CodeMirrorEditor({
   onChangeText,
   autoFocus = false,
   onSave,
+  dirty = false,
   externalChanged = false,
   onKeepMine,
   onReloadExternal,
   onCompareExternal,
+  onOpenHistory,
 }: CodeMirrorEditorProps): React.JSX.Element {
   const { theme: appTheme } = useAppTheme();
   const { accentColor } = useConfig();
@@ -71,6 +86,14 @@ export function CodeMirrorEditor({
   const [query, setQuery] = useState("");
   const [replaceText, setReplaceText] = useState("");
   const [matchCount, setMatchCount] = useState(0);
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(true);
+  const [diagnostics, setDiagnostics] = useState<EditorDiagnostic[]>([]);
+  const [format, setFormat] = useState<FormatCheck>({
+    valid: true,
+    unsupported: true,
+    message: null,
+  });
+  const [problemsOpen, setProblemsOpen] = useState(false);
 
   const changeRef = useRef(onChangeText);
   changeRef.current = onChangeText;
@@ -149,6 +172,51 @@ export function CodeMirrorEditor({
       clearTimeout(timeout);
     };
   }, [query, searchOpen]);
+
+  // The AI-autocomplete footer toggle gates the real provider: when off,
+  // the WebView compartment drops autocompletion (any-word + emmet) so no
+  // suggestion fires; when on, it is restored live without a reload.
+  const toggleAutocomplete = (): void => {
+    setAutocompleteEnabled((enabled) => {
+      send({ type: "autocomplete", enabled: !enabled });
+      return !enabled;
+    });
+  };
+
+  // Sync the compartment on ready-flush and doc swaps (initial HTML embeds
+  // the default-on state; queued toggles flush through `send` already).
+  useEffect(() => {
+    send({ type: "autocomplete", enabled: autocompleteEnabled });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path]);
+
+  // Live diagnostics + format validity from the real buffer (debounced).
+  useEffect(() => {
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      void computeDiagnostics(path, value).then((next) => {
+        if (!cancelled) setDiagnostics(next);
+      });
+      void checkFormat(path, value).then((next) => {
+        if (!cancelled) setFormat(next);
+      });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [path, value]);
+
+  const { errors, warnings } = countBySeverity(diagnostics);
+
+  const runFormat = (): void => {
+    const formatted = formatBuffer(path, value);
+    if (formatted !== null && formatted !== value) {
+      webTextRef.current = formatted;
+      changeRef.current(formatted);
+      send({ type: "set-doc", text: formatted });
+    }
+  };
 
   const runSearch = (
     action: "next" | "prev" | "replace-one" | "replace-all" | "select-next",
@@ -269,6 +337,34 @@ export function CodeMirrorEditor({
           onReady={handleReady}
         />
       </View>
+
+      {problemsOpen ? (
+        <EditorProblemsPanel
+          diagnostics={diagnostics}
+          onJump={(targetLine, targetColumn) => {
+            setCaret({ line: targetLine, column: targetColumn });
+            // Real cursor move: the gutter highlights the jumped line and
+            // `Ln, Col` reflects it via the cursor outbound message.
+            send({ type: "goto-line", line: targetLine, column: targetColumn });
+            setProblemsOpen(false);
+          }}
+        />
+      ) : null}
+
+      <EditorStatusFooter
+        autocompleteEnabled={autocompleteEnabled}
+        onToggleAutocomplete={toggleAutocomplete}
+        format={format}
+        onFormatPress={runFormat}
+        errors={errors}
+        warnings={warnings}
+        problemsOpen={problemsOpen}
+        onToggleProblems={() => setProblemsOpen((open) => !open)}
+        line={caret.line}
+        column={caret.column}
+        dirty={dirty}
+        onOpenHistory={() => onOpenHistory?.()}
+      />
     </View>
   );
 }

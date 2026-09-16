@@ -32,6 +32,8 @@ function makeAgent(overrides: Partial<AgentConfig>): AgentConfig {
     name: "custom",
     prompt: null,
     sourceMarkdown: null,
+    sourceUrl: null,
+    lastSyncedAt: null,
     temperature: null,
     toolPermissions: {},
     updatedAt: "",

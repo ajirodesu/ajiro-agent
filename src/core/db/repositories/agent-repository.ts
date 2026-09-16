@@ -26,6 +26,8 @@ export function createAgentRepository(db: AppDatabase): AgentRepository {
         enabled: input.enabled ?? true,
         hidden: input.hidden ?? false,
         sourceMarkdown: input.sourceMarkdown ?? null,
+        sourceUrl: input.sourceUrl ?? null,
+        lastSyncedAt: input.lastSyncedAt ?? null,
         toolPermissions: input.toolPermissions ?? {},
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -94,6 +96,14 @@ export function createAgentRepository(db: AppDatabase): AgentRepository {
             input.sourceMarkdown !== undefined
               ? input.sourceMarkdown
               : current.sourceMarkdown,
+          sourceUrl:
+            input.sourceUrl !== undefined
+              ? input.sourceUrl
+              : current.sourceUrl,
+          lastSyncedAt:
+            input.lastSyncedAt !== undefined
+              ? input.lastSyncedAt
+              : current.lastSyncedAt,
           temperature:
             input.temperature !== undefined
               ? input.temperature

@@ -10,6 +10,8 @@ const COLOR_SLOTS = [
   "foreground",
   "gutterBackground",
   "gutterForeground",
+  "gutterBorder",
+  "indentGuide",
   "cursor",
   "selection",
   "activeLine",

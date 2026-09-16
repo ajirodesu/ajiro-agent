@@ -29,6 +29,7 @@ export function createConversationRepository(
         selectedSkillIds: [],
         skillMode: "auto",
         webSearchMode: "smart",
+        interactionMode: "agent",
         externalFolderSession: null,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -111,6 +112,7 @@ export function createConversationRepository(
         selectedSkillIds: source.selectedSkillIds,
         skillMode: source.skillMode,
         webSearchMode: source.webSearchMode,
+        interactionMode: source.interactionMode,
         externalFolderSession: source.externalFolderSession,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -181,6 +183,7 @@ export function createConversationRepository(
           selectedSkillIds: input.selectedSkillIds ?? current.selectedSkillIds,
           skillMode: input.skillMode ?? current.skillMode,
           webSearchMode: input.webSearchMode ?? current.webSearchMode,
+          interactionMode: input.interactionMode ?? current.interactionMode,
           externalFolderSession:
             input.externalFolderSession !== undefined
               ? input.externalFolderSession

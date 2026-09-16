@@ -1,4 +1,8 @@
-import type { AgentConfig, BuiltInToolKey } from "@/core/types/app-state";
+import type {
+  AgentConfig,
+  BuiltInToolKey,
+  InteractionMode,
+} from "@/core/types/app-state";
 
 import { PLAN_AGENT_NAME } from "@/modules/agents/registry";
 import { isReadOnlyModeName } from "@/modules/agents/modes";
@@ -124,4 +128,28 @@ export function filterMcpServerIdsByAgentPermissions(
 
     return !hasAnyAllow;
   });
+}
+
+/**
+ * Bot Mode is a per-conversation interaction posture (not an agent mode):
+ * the run answers with words and read-only context only. Unknown values
+ * fail open to Agent Mode — a missing column on an unmigrated database
+ * must never lock the user out of acting.
+ */
+export function isBotModeInteraction(
+  mode: InteractionMode | string | null | undefined,
+): boolean {
+  return mode === "bot";
+}
+
+/**
+ * Full read-only gate for a run: read-only agents (plan, explore, …) plus
+ * Bot Mode conversations. Every mutating-tool strip, management-tool, and
+ * subagent/schedule gate keys off this single predicate.
+ */
+export function isReadOnlyRun(
+  agent: AgentConfig,
+  interactionMode: InteractionMode | string | null | undefined,
+): boolean {
+  return isReadOnlyAgent(agent) || isBotModeInteraction(interactionMode);
 }

@@ -122,6 +122,10 @@ export type AgentConfig = {
   enabled: boolean;
   hidden: boolean;
   sourceMarkdown: string | null;
+  /** Origin URL the agent was imported from (pack import URL). */
+  sourceUrl: string | null;
+  /** Last successful re-sync from sourceUrl (ISO timestamp). */
+  lastSyncedAt: string | null;
   toolPermissions: AgentToolPermissions;
   createdAt: string;
   updatedAt: string;
@@ -255,6 +259,12 @@ export type ProvenanceEvent = {
 
 export type SkillMode = "auto" | "manual";
 export type WebSearchMode = "offline" | "smart";
+/**
+ * Per-conversation interaction posture. Agent Mode is today's full
+ * behavior; Bot Mode constrains runs to answers only (read-only tools,
+ * no skill/agent/memory management, no subagents or schedules).
+ */
+export type InteractionMode = "agent" | "bot";
 
 export type PromptArtifact = {
   id: string;
@@ -447,6 +457,7 @@ export type Conversation = {
   selectedSkillIds: string[];
   skillMode: SkillMode;
   webSearchMode: WebSearchMode;
+  interactionMode: InteractionMode;
   externalFolderSession: ExternalFolderSession | null;
   pinnedAt: string | null;
   createdAt: string;
