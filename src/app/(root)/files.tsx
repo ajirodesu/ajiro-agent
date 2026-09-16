@@ -47,6 +47,7 @@ import {
 import { withAlpha } from "@/components/ui/chrome-spec";
 import { CodeMirrorEditor } from "@/editor/CodeMirrorEditor";
 import { EditHistoryPanel } from "@/editor/EditHistoryPanel";
+import { grammarKeyForPath } from "@/editor/editorLanguages";
 import { RevisionLog, type EditorRevision, type RevisionAuthor } from "@/editor/editorRevisions";
 import { FileTypeIcon } from "@/file-icons/FileTypeIcon";
 import {
@@ -58,7 +59,10 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { useChat } from "@/hooks/use-chat";
+import { usePluginCommandChords } from "@/hooks/use-plugin-command-chords";
 import { useTheme } from "@/hooks/use-theme";
+import { getPluginRuntimeBridge } from "@/modules/extensions";
+import { setActiveEditorAccess } from "@/modules/extensions/dom/editor-access";
 import { createEditorRevisionRepository } from "@/core/db/repositories/editor-revision-repository";
 import { createDrizzleDb } from "@/core/db/repositories/shared";
 import { createExternalFolderService } from "@/core/services/external-folder/external-folder-service";
@@ -1474,6 +1478,9 @@ function ActiveFileView({
 }) {
   const ide = useIdeWorkspace();
   const theme = useTheme();
+  // Plugin command key bindings (§45): chords a plugin owns are claimed by
+  // the editor document and dispatched to the plugin that registered them.
+  const commandChords = usePluginCommandChords();
   const [disk, setDisk] = useState<{
     text: string;
     fingerprint: string;
@@ -1484,6 +1491,31 @@ function ActiveFileView({
 
   const buffer = ide.getBuffer(projectId, entry.path);
   const kind = previewKindFor(entry.name, null);
+
+  /**
+   * The scoped editor surface plugins may see (§39): the document the user
+   * has open, read and replaced. Registered while this file is the open one,
+   * removed when it closes — a plugin can never read a different buffer, and
+   * never a stale one.
+   */
+  const pluginEditorTextRef = useRef<string>("");
+  useEffect(() => {
+    setActiveEditorAccess({
+      read: () => ({
+        languageId: grammarKeyForPath(entry.path) ?? null,
+        path: entry.path,
+        text: pluginEditorTextRef.current,
+      }),
+      replaceAll: (text) => {
+        ide.setBuffer(projectId, entry.path, text);
+        ide.setPathDirty(projectId, entry.path, true);
+        return true;
+      },
+    });
+    return () => {
+      setActiveEditorAccess(null);
+    };
+  }, [entry.path, ide, projectId]);
 
   const loadDisk = useCallback(async () => {
     setDiskError(null);
@@ -1586,6 +1618,7 @@ function ActiveFileView({
   }, [kind, entry.path]);
 
   const value = buffer ?? disk?.text ?? "";
+  pluginEditorTextRef.current = value;
   const [historyOpen, setHistoryOpen] = useState(false);
   const revisionLogRef = useRef<RevisionLog | null>(null);
   if (!revisionLogRef.current) revisionLogRef.current = new RevisionLog();
@@ -1879,6 +1912,10 @@ function ActiveFileView({
         onSave={onSave}
         dirty={value !== disk?.text}
         onOpenHistory={() => setHistoryOpen(true)}
+        commandChords={commandChords}
+        onCommandKey={(chord) =>
+          getPluginRuntimeBridge().handleCommandKey(chord).status === "bound"
+        }
       />
       <EditHistoryPanel
         open={historyOpen}

@@ -52,6 +52,13 @@ export type CodeMirrorEditorProps = {
   onReloadExternal?: () => void;
   onCompareExternal?: () => void;
   onOpenHistory?: () => void;
+  /**
+   * Canonical chord ids owned by plugin commands (§45). The document claims
+   * exactly these; everything else stays the editor's own keymap.
+   */
+  commandChords?: readonly string[];
+  /** Returns true when the chord was dispatched to a plugin command. */
+  onCommandKey?: (chord: string) => boolean;
 };
 
 export function CodeMirrorEditor({
@@ -66,6 +73,8 @@ export function CodeMirrorEditor({
   onReloadExternal,
   onCompareExternal,
   onOpenHistory,
+  commandChords,
+  onCommandKey,
 }: CodeMirrorEditorProps): React.JSX.Element {
   const { theme: appTheme } = useAppTheme();
   const { accentColor } = useConfig();
@@ -97,6 +106,9 @@ export function CodeMirrorEditor({
 
   const changeRef = useRef(onChangeText);
   changeRef.current = onChangeText;
+
+  const commandKeyRef = useRef(onCommandKey);
+  commandKeyRef.current = onCommandKey;
 
   const send = (message: EditorWebViewInbound): void => {
     if (!readyRef.current) {
@@ -132,6 +144,11 @@ export function CodeMirrorEditor({
       case "find-count":
         setMatchCount(message.count);
         break;
+      case "command-key":
+        // Unclaimed (e.g. the plugin unloaded mid-gesture) is not an error:
+        // the chord is simply dropped rather than typing the key through.
+        commandKeyRef.current?.(message.chord);
+        break;
       case "error":
         console.warn(`CodeMirror editor error: ${message.message}`);
         break;
@@ -161,6 +178,13 @@ export function CodeMirrorEditor({
     // Serialized key above keeps this effect stable across renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [themeKey]);
+
+  // Plugin command chords follow the live binding table; re-binding needs no
+  // document reload (the bootstrap handler reads the set on each keydown).
+  const chordsKey = (commandChords ?? []).join(",");
+  useEffect(() => {
+    send({ type: "keybindings", chords: chordsKey ? chordsKey.split(",") : [] });
+  }, [chordsKey, path]);
 
   // Live match counts while typing in the find bar.
   useEffect(() => {

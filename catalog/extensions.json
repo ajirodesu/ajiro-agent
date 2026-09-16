@@ -1,0 +1,51 @@
+{
+  "extensions": [
+    {
+      "id": "acode.plugin.python",
+      "name": "Python",
+      "version": "1.1.4",
+      "description": "Python language support for the code editor: run Python scripts and get Python tooling inside compatible editors.",
+      "author": { "name": "Ajit Kumar", "email": "me@ajitkumar.dev", "github": "deadlyjack" },
+      "license": "MIT",
+      "keywords": ["python", "language", "runner"],
+      "category": "Languages",
+      "repository": "https://github.com/Acode-Foundation/acode-plugin-python",
+      "minVersionCode": 290,
+      "download": {
+        "kind": "url",
+        "url": "https://github.com/Acode-Foundation/acode-plugin-python/archive/refs/heads/main.zip"
+      }
+    },
+    {
+      "id": "acode.runner.plugin",
+      "name": "Runner",
+      "version": "1.0.5",
+      "description": "Run code in 40+ languages and see the output directly in the editor console.",
+      "author": { "name": "Raunak", "email": "raunak@bajrangcoder.dev", "github": "bajrangCoder" },
+      "license": "MIT",
+      "keywords": ["runner", "code runner", "code execution"],
+      "category": "Tools",
+      "repository": "https://github.com/Acode-Foundation/acode-runner-plugin",
+      "minVersionCode": 963,
+      "download": {
+        "kind": "url",
+        "url": "https://github.com/Acode-Foundation/acode-runner-plugin/archive/refs/heads/main.zip"
+      }
+    },
+    {
+      "id": "acode.plugin.snippets",
+      "name": "Snippets",
+      "version": "2.0.0",
+      "description": "Adds the VS Code-style snippet expansion system with snippet files for dozens of languages.",
+      "author": { "name": "Ajit Kumar", "email": "me@ajitkumar.dev", "github": "deadlyjack" },
+      "license": "MIT",
+      "keywords": ["snippets", "autocompletion", "productivity"],
+      "category": "Productivity",
+      "repository": "https://github.com/deadlyjack/acode-plugin-snippets",
+      "download": {
+        "kind": "url",
+        "url": "https://github.com/deadlyjack/acode-plugin-snippets/archive/refs/heads/main.zip"
+      }
+    }
+  ]
+}

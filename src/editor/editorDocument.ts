@@ -50,6 +50,25 @@ const BOOTSTRAP = `(function () {
   var currentGrammarKey = INITIAL.grammarKey;
   var currentAutocomplete = INITIAL.autocompleteEnabled !== false;
 
+  // Plugin command chords (canonical ids pushed by the host, §45). Only the
+  // chords in this set are claimed; everything else stays the editor's.
+  var boundChords = {};
+
+  function chordIdForEvent(event) {
+    if (!event) return null;
+    var key = String(event.key || "").toLowerCase();
+    if (key === " " || key === "spacebar") key = "space";
+    if (key === "esc") key = "escape";
+    if (key === "return") key = "enter";
+    var parts = [];
+    if (event.ctrlKey) parts.push("ctrl");
+    if (event.altKey) parts.push("alt");
+    if (event.shiftKey) parts.push("shift");
+    if (event.metaKey) parts.push("meta");
+    parts.push(key);
+    return parts.join("-");
+  }
+
   function supportFor(key) {
     if (!key) return null;
     try {
@@ -211,6 +230,16 @@ const BOOTSTRAP = `(function () {
         CM.foldKeymap,
       ]),
       CM.indentOnInput(),
+      // A chord a plugin command owns is reported and consumed here. The
+      // handler reads the live set, so re-binding needs no reload.
+      CM.EditorView.domEventHandlers({
+        keydown: function (event) {
+          var id = chordIdForEvent(event);
+          if (!id || !boundChords[id]) return false;
+          post({ type: "command-key", chord: id });
+          return true;
+        },
+      }),
       CM.EditorView.updateListener.of(function (update) {
         if (update.docChanged) {
           try { post({ type: "change", text: update.state.doc.toString() }); }
@@ -315,6 +344,12 @@ const BOOTSTRAP = `(function () {
         applySearch(msg.action, msg.query, msg.replace);
       } else if (msg.type === "count") {
         post({ type: "find-count", count: countMatches(msg.query || "") });
+      } else if (msg.type === "keybindings") {
+        boundChords = {};
+        var chords = msg.chords || [];
+        for (var i = 0; i < chords.length; i++) {
+          if (chords[i]) boundChords[String(chords[i])] = true;
+        }
       }
     } catch (e) { /* malformed inbound -> ignore */ }
   };

@@ -1,3 +1,5 @@
+import { ExtensionCatalogObserver } from "@/components/extensions/catalog-sync-observer";
+import { PluginHostSurface } from "@/components/extensions/plugin-host-surface";
 import { DismissibleBanner } from "@/components/ui/dismissible-banner";
 import { migrateAppDatabase } from "@/core/db/database";
 import { useAppState } from "@/hooks/use-app-state";
@@ -345,9 +347,14 @@ export default function MainLayout() {
                   <UpdateProvider>
                     <SplashScreenController />
                     <NotificationObserver />
+                    <ExtensionCatalogObserver />
                     <InAppNotificationBanner />
                     <ReleaseUpdateBanner />
                     <Slot />
+                    {/* The DOM documents plugin entry scripts execute in.
+                        Mounted once, above the router, so plugin pages can
+                        show over any screen (§48/§49). */}
+                    <PluginHostSurface />
                     <ThemedSplashOverlay />
                   </UpdateProvider>
                 </IdeWorkspaceProvider>

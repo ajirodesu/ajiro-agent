@@ -65,11 +65,19 @@ export type EditorWebViewInbound =
       query: string;
       replace?: string;
     }
-  | { type: "count"; query: string };
+  | { type: "count"; query: string }
+  /**
+   * Canonical chord ids a plugin command currently owns (§45). The document
+   * claims only these chords, so plugin bindings can never swallow ordinary
+   * typing, and the RN side decides what a chord *does*.
+   */
+  | { type: "keybindings"; chords: string[] };
 
 export type EditorWebViewOutbound =
   | { type: "ready" }
   | { type: "change"; text: string }
   | { type: "cursor"; line: number; column: number }
   | { type: "find-count"; count: number }
+  /** A chord claimed by a plugin command was pressed in the editor. */
+  | { type: "command-key"; chord: string }
   | { type: "error"; message: string };

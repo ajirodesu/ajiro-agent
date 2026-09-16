@@ -6,7 +6,6 @@
  */
 import { usePathname, useRouter } from "expo-router";
 import {
-  AtSign,
   Clock,
   FolderGit,
   FolderOpen,
@@ -18,6 +17,7 @@ import {
   Pin,
   PinOff,
   Play,
+  Puzzle,
   Search,
   Settings,
   SquarePen,
@@ -66,6 +66,11 @@ import {
   markSidebarReturnPending,
 } from "@/modules/navigation/sidebar-return";
 import {
+  getCatalogSnapshot,
+  getExtensionStore,
+  subscribeCatalog,
+} from "@/modules/extensions";
+import {
   splitPinnedRecents,
   visibleConversations,
 } from "@/modules/chat/conversation-list";
@@ -101,7 +106,9 @@ export const PRIMARY_ICON_SIZE = 20;
  * Images -> Library filtered to image files, Projects -> coding settings
  * (project folder/sandbox management). Files + Git are the IDE workspace
  * (§§27-30): Files is the unified File Manager + Code Editor, Git binds to
- * the active project.
+ * the active project. "Plugins" is the Acode-compatible Extension Store
+ * (extension discovery, install, and lifecycle live there); MCP servers keep
+ * their own home under Settings -> MCP.
  */
 const NAV_ITEMS: { label: string; route: string; icon: typeof Library }[] = [
   { label: "Images", route: "/library?category=images", icon: Images },
@@ -112,7 +119,7 @@ const NAV_ITEMS: { label: string; route: string; icon: typeof Library }[] = [
   { label: "Terminal", route: "/terminal", icon: Terminal },
   { label: "Run", route: "/run", icon: Play },
   { label: "Scheduled", route: "/settings/jobs", icon: Clock },
-  { label: "Plugins", route: "/settings/mcp", icon: AtSign },
+  { label: "Plugins", route: "/extensions", icon: Puzzle },
 ];
 
 export function AppSidebar() {
@@ -133,7 +140,38 @@ export function AppSidebar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [gitHeadline, setGitHeadline] = useState<string | null>(null);
+  // Extensions discovered by background catalog sync (§19) that the user has
+  // not seen yet, surfaced as a quiet count on the Plugins row (§63).
+  const [extensionDiscoveries, setExtensionDiscoveries] = useState(
+    () => getCatalogSnapshot().newCount,
+  );
+  // Assumed on until the stored preference loads, so the very first paint
+  // matches the default rather than flashing a zero.
+  const notifyOnDiscoveryRef = useRef(true);
   const ide = useIdeWorkspace();
+
+  useEffect(() => {
+    let cancelled = false;
+    // The indicator is user-controllable (§63): with discovery notices off,
+    // new extensions still appear in the Store — they just don't interrupt.
+    void getExtensionStore()
+      .preferences.load()
+      .then((loaded) => {
+        if (!cancelled) notifyOnDiscoveryRef.current = loaded.notifyOnDiscovery;
+      })
+      .catch(() => {});
+    const apply = (count: number) => {
+      setExtensionDiscoveries(
+        notifyOnDiscoveryRef.current ? count : 0,
+      );
+    };
+    apply(getCatalogSnapshot().newCount);
+    const unsubscribe = subscribeCatalog((snapshot) => apply(snapshot.newCount));
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   // Git subtitle for the nav (§30): branch + change count of the active
   // project, refreshed on open and on every git event. No project → none.
@@ -337,6 +375,20 @@ export function AppSidebar() {
                       </Text>
                     ) : null}
                   </View>
+                  {item.label === "Plugins" && extensionDiscoveries > 0 ? (
+                    <View
+                      accessibilityLabel={`${extensionDiscoveries} new extensions`}
+                      className="items-center justify-center rounded-full px-2 py-0.5"
+                      style={{ backgroundColor: withAlpha(theme.accent, 0.22) }}
+                    >
+                      <Text
+                        className="font-mono text-xs"
+                        style={{ color: theme.text }}
+                      >
+                        {extensionDiscoveries}
+                      </Text>
+                    </View>
+                  ) : null}
                 </Pressable>
               );
             })}
