@@ -12,6 +12,8 @@ const COLOR_SLOTS = [
   "gutterForeground",
   "gutterBorder",
   "indentGuide",
+  "warning",
+  "error",
   "cursor",
   "selection",
   "activeLine",
@@ -37,7 +39,7 @@ describe("editorThemeAdapter (sole editor color integration)", () => {
       expect(editor.dark).toBe(theme.dark);
       for (const slot of COLOR_SLOTS) {
         expect(typeof editor[slot]).toBe("string");
-        expect(editor[slot]).toMatch(/^(#|rgba\()/);
+        expect(editor[slot]).toMatch(/^(#|rgba?\(|hsla?\()/);
       }
     }
   });

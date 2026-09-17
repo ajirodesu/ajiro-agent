@@ -148,7 +148,8 @@
     "vendor:ajiro-icon": "node ./scripts/make-ajiro-icon.mjs",
     "vendor:git-providers": "node ./scripts/vendor-git-providers.mjs",
     "lint": "expo lint",
-    "postinstall": "node ./scripts/patch-ai-sdk-react-native.js"
+    "postinstall": "node ./scripts/patch-ai-sdk-react-native.js",
+    "vendor:intel": "node ./scripts/vendor-intel.mjs"
   },
   "private": true,
   "expo": {

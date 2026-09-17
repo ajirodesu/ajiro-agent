@@ -31,6 +31,10 @@ export interface CodeMirrorWebViewProps {
   initialDoc: string;
   onMessage?: (message: EditorWebViewOutbound) => void;
   onReady?: () => void;
+  /** Stable document identity for the intel engine; null disables it. */
+  uri?: string | null;
+  /** Master switch for the in-WebView semantic engine. */
+  intelEnabled?: boolean;
 }
 
 export interface CodeMirrorWebViewRef {
@@ -43,6 +47,8 @@ export function CodeMirrorWebView({
   initialDoc,
   onMessage,
   onReady,
+  uri = null,
+  intelEnabled = false,
   ref,
 }: CodeMirrorWebViewProps & {
   ref?: React.Ref<CodeMirrorWebViewRef>;
@@ -69,7 +75,13 @@ export function CodeMirrorWebView({
     if (!CM_BUNDLE_JS) {
       return null;
     }
-    return buildEditorDocument({ theme, grammarKey, doc: initialDoc });
+    return buildEditorDocument({
+      theme,
+      grammarKey,
+      doc: initialDoc,
+      uri,
+      intelEnabled,
+    });
     // Built once: theme/grammar/doc updates go through postInbound so the
     // editor (and its undo history) is never reloaded for visual updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps

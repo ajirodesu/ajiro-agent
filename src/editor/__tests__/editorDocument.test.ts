@@ -6,6 +6,7 @@ import {
   escapeInlineJson,
   escapeInlineScript,
 } from "@/editor/editorDocument";
+import { INTEL_BUNDLE_JS } from "@/editor/intelBundle";
 import { chordIdFromEvent } from "@/modules/extensions/key-bindings";
 import { aquaTheme } from "@/theme/aqua";
 
@@ -88,8 +89,10 @@ describe("editorDocument (offline CodeMirror factory)", () => {
       grammarKey: "html",
       doc: "</script><script>alert('$&${1}')</script><!--",
     });
-    // Only the two structural closing tags may survive.
-    expect(html.split("</script").length - 1).toBe(2);
+    // Only structural closing tags survive: CodeMirror bundle + bootstrap,
+    // plus the intel bundle script when vendored.
+    const structural = INTEL_BUNDLE_JS ? 3 : 2;
+    expect(html.split("</script").length - 1).toBe(structural);
     // The payload's closing tags are slash-escaped, then `<`-escaped.
     // (`\/` decodes to `/` inside JS string literals.)
     expect(html).toContain("\\u003c\\/script>");
@@ -102,7 +105,10 @@ describe("editorDocument (offline CodeMirror factory)", () => {
       doc: "const a = 1;",
     });
     expect(html).not.toContain("<script src=");
-    expect(html).not.toContain("<link");
+    // Real stylesheet/resource tags only. The inlined intel bundle embeds
+    // lib.dom.d.ts whose JSDoc prose mentions `<link>` (HTMLLinkElement
+    // docs) — inert documentation text, not a remote resource.
+    expect(html).not.toMatch(/<link\s+(rel|href)/);
     expect(html).not.toMatch(/src="https?:/);
   });
 

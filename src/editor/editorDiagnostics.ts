@@ -11,6 +11,10 @@ export type EditorDiagnostic = {
   message: string;
   line: number;
   column: number;
+  /** Engine source (e.g. "ts-semantic"); absent for legacy checks. */
+  source?: string | null;
+  /** Engine code (e.g. 2304); absent for legacy checks. */
+  code?: string | number | null;
 };
 
 export type FormatCheck = {

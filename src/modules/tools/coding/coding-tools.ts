@@ -10,6 +10,10 @@ import { z } from "zod";
 
 import { createRecord, summarizeValue } from "@/modules/tools/built-in/shared";
 import type { ToolExecutionRecord , ExternalFolderSession } from "@/core/types/app-state";
+import { createExternalFolderService } from "@/core/services/external-folder/external-folder-service";
+import { computeDiagnostics } from "@/editor/editorDiagnostics";
+import { createRequestManager } from "@/modules/intel/cancellation";
+import { createSyntaxFallbackService } from "@/modules/intel/syntax-service";
 import { createGitTools } from "@/modules/tools/git/git-tools";
 import {
   EXEC_COMMAND_DESCRIPTIONS,
@@ -65,6 +69,71 @@ export function createCodingTools(params: CodingToolFactoryParams) {
           params.onRecord?.(
             createRecord({
               toolName: "exec",
+              status: "failed",
+              inputSummary,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+          throw error;
+        }
+      },
+    });
+  }
+
+  if (params.execEnabled) {
+    const fileService = createExternalFolderService();
+    const readProjectText = async (path: string): Promise<string> =>
+      fileService.readTextFile(params.session, path, 500_000);
+
+    tools.get_outline = tool({
+      description:
+        "List document symbols (functions, classes, methods, variables) for a project file. Syntax-level outline; no type information.",
+      inputSchema: z.object({
+        path: z.string().describe("Project-relative file path"),
+      }),
+      execute: async ({ path }) => {
+        const inputSummary = summarizeValue({ path });
+        try {
+          const text = await readProjectText(path);
+          const syntax = createSyntaxFallbackService({ getText: () => text });
+          const output = await syntax.documentSymbols(path, createRequestManager().createRequest(1));
+          params.onRecord?.(
+            createRecord({ toolName: "get_outline", status: "completed", inputSummary, outputSummary: summarizeValue(output) }),
+          );
+          return output;
+        } catch (error) {
+          params.onRecord?.(
+            createRecord({
+              toolName: "get_outline",
+              status: "failed",
+              inputSummary,
+              error: error instanceof Error ? error.message : String(error),
+            }),
+          );
+          throw error;
+        }
+      },
+    });
+
+    tools.get_diagnostics = tool({
+      description:
+        "Real syntax diagnostics (JS/TS via parser, JSON validation) plus TODO markers for a project file. No type checking.",
+      inputSchema: z.object({
+        path: z.string().describe("Project-relative file path"),
+      }),
+      execute: async ({ path }) => {
+        const inputSummary = summarizeValue({ path });
+        try {
+          const text = await readProjectText(path);
+          const output = await computeDiagnostics(path, text);
+          params.onRecord?.(
+            createRecord({ toolName: "get_diagnostics", status: "completed", inputSummary, outputSummary: summarizeValue(output) }),
+          );
+          return output;
+        } catch (error) {
+          params.onRecord?.(
+            createRecord({
+              toolName: "get_diagnostics",
               status: "failed",
               inputSummary,
               error: error instanceof Error ? error.message : String(error),

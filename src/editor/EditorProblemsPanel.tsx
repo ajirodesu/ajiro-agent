@@ -62,12 +62,24 @@ export function EditorProblemsPanel({
             >
               {`${diagnostic.line}:${diagnostic.column}`}
             </Text>
-            <Text
-              numberOfLines={1}
-              style={{ flex: 1, color: theme.text, fontSize: 12 }}
-            >
-              {diagnostic.message}
-            </Text>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text
+                numberOfLines={1}
+                style={{ color: theme.text, fontSize: 12 }}
+              >
+                {diagnostic.message}
+              </Text>
+              {diagnostic.source ? (
+                <Text
+                  numberOfLines={1}
+                  style={{ color: theme.textSecondary, fontSize: 10 }}
+                >
+                  {diagnostic.code !== null && diagnostic.code !== undefined
+                    ? `${diagnostic.source} · ${diagnostic.code}`
+                    : diagnostic.source}
+                </Text>
+              ) : null}
+            </View>
           </Pressable>
         ))}
       </ScrollView>
