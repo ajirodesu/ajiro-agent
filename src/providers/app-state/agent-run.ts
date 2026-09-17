@@ -72,6 +72,11 @@ import {
 import { resolveMaxIterations } from "@/modules/agents/modes";
 import { createAgentTools } from "@/modules/tools/built-in/agent-tools";
 import {
+  createBotCommandAgentTools,
+  isBotAgentMode,
+} from "@/modules/bot/bot-agent-tools";
+import { DEFAULT_BOT_ID } from "@/modules/bot/bot-constants";
+import {
   createTaskTool,
   describeSubagentCatalog,
 } from "@/modules/tools/built-in/task-tool";
@@ -1219,6 +1224,19 @@ export async function executeClaimedAgentRun(
             repository: repositories.agentRepository,
           })
         : null;
+    // Built-in bot command authoring (Agent Mode only): the bot's owner
+    // gains generate/add/edit/remove tools scoped to their own bot. In Bot
+    // Mode these tools are not registered at all.
+    const botCommandsRuntime =
+      runtimeSupportsTools &&
+      !readOnlyRun &&
+      !isSubagentRun &&
+      (await isBotAgentMode(repositories.botCommandRepository, DEFAULT_BOT_ID))
+        ? createBotCommandAgentTools({
+            onRecord: handleToolExecutionRecord,
+            repository: repositories.botCommandRepository,
+          })
+        : null;
 
     for (const serverResult of mcpRuntime?.serverResults ?? []) {
       repositories.mcpServerRepository
@@ -1240,7 +1258,8 @@ export async function executeClaimedAgentRun(
       skillRuntime ||
       scheduleRuntime ||
       taskRuntime ||
-      agentRuntime
+      agentRuntime ||
+      botCommandsRuntime
         ? ({
             ...(builtInRuntimeTools ?? {}),
             ...(mcpRuntime?.tools ?? {}),
@@ -1250,6 +1269,7 @@ export async function executeClaimedAgentRun(
             ...(scheduleRuntime?.tools ?? {}),
             ...(taskRuntime?.tools ?? {}),
             ...(agentRuntime?.tools ?? {}),
+            ...(botCommandsRuntime?.tools ?? {}),
           } satisfies ToolSet)
         : undefined;
     const autoApprovedToolNames = new Set([

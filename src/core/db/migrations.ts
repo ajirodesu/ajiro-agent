@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from "expo-sqlite";
 
 import { serializeSkillToMarkdown } from "@/modules/skills/skill-markdown";
 
-const DATABASE_VERSION = 31;
+const DATABASE_VERSION = 32;
 
 const CORE_SCHEMA_REPAIR_SQL = `
   PRAGMA journal_mode = WAL;
@@ -174,6 +174,48 @@ const CORE_SCHEMA_REPAIR_SQL = `
 
   CREATE INDEX IF NOT EXISTS idx_editor_file_revisions_project_path_created_at
   ON editor_file_revisions(project_uri, path, created_at);
+
+  CREATE TABLE IF NOT EXISTS bot_command_configs (
+    id TEXT PRIMARY KEY NOT NULL,
+    bot_id TEXT NOT NULL DEFAULT 'default',
+    name TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    repository_id TEXT,
+    md_text TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(bot_id, name)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_bot_command_configs_bot_id
+  ON bot_command_configs(bot_id);
+
+  CREATE TABLE IF NOT EXISTS bot_command_repositories (
+    id TEXT PRIMARY KEY NOT NULL,
+    bot_id TEXT NOT NULL DEFAULT 'default',
+    url TEXT NOT NULL,
+    last_synced_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_bot_command_repositories_bot_id
+  ON bot_command_repositories(bot_id);
+
+  CREATE TABLE IF NOT EXISTS bot_modes (
+    bot_id TEXT PRIMARY KEY NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'agent',
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS bot_command_secrets (
+    bot_id TEXT NOT NULL,
+    command_name TEXT NOT NULL,
+    has_api_key INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    UNIQUE(bot_id, command_name)
+  );
 `;
 
 /**
@@ -1237,6 +1279,57 @@ export async function migrateAppDatabase(db: SQLiteDatabase) {
     `);
 
     currentVersion = 31;
+  }
+
+  if (currentVersion === 31) {
+    // Built-in bot: codeless command configs + repositories + per-bot mode.
+    // Secrets themselves live in SecureStore; bot_command_secrets only
+    // tracks which commands have a stored key.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS bot_command_configs (
+        id TEXT PRIMARY KEY NOT NULL,
+        bot_id TEXT NOT NULL DEFAULT 'default',
+        name TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'manual',
+        repository_id TEXT,
+        md_text TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(bot_id, name)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_bot_command_configs_bot_id
+      ON bot_command_configs(bot_id);
+
+      CREATE TABLE IF NOT EXISTS bot_command_repositories (
+        id TEXT PRIMARY KEY NOT NULL,
+        bot_id TEXT NOT NULL DEFAULT 'default',
+        url TEXT NOT NULL,
+        last_synced_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_bot_command_repositories_bot_id
+      ON bot_command_repositories(bot_id);
+
+      CREATE TABLE IF NOT EXISTS bot_modes (
+        bot_id TEXT PRIMARY KEY NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'agent',
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS bot_command_secrets (
+        bot_id TEXT NOT NULL,
+        command_name TEXT NOT NULL,
+        has_api_key INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        UNIQUE(bot_id, command_name)
+      );
+    `);
+
+    currentVersion = 32;
   }
 
   await db.execAsync(`PRAGMA user_version = ${currentVersion}`);

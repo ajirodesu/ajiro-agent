@@ -488,7 +488,10 @@ export interface ProvenanceRepository {
   prune(beforeIso: string): Promise<void>;
 }
 
+export type BotCommandRepository = import("./bot-command-repository").BotCommandRepository;
+
 export type Repositories = {
+  botCommandRepository: BotCommandRepository;
   agentRepository: AgentRepository;
   agentRunRepository: AgentRunRepository;
   checkpointRepository: CheckpointRepository;

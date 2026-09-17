@@ -13,6 +13,7 @@ import { createProvenanceRepository } from "@/core/db/repositories/provenance-re
 import { createSavedPromptRepository } from "@/core/db/repositories/saved-prompt-repository";
 import { createScheduleRepository } from "@/core/db/repositories/schedule-repository";
 import { createScheduleRunRepository } from "@/core/db/repositories/schedule-run-repository";
+import { createBotCommandRepository } from "@/core/db/repositories/bot-command-repository";
 import { createSkillRepository } from "@/core/db/repositories/skill-repository";
 import { createWorkspaceRepository } from "@/core/db/repositories/workspace-repository";
 import { createDrizzleDb } from "@/core/db/repositories/shared";
@@ -36,6 +37,7 @@ export function createRepositories(sqliteDb: SQLiteDatabase): Repositories {
     scheduleRepository: createScheduleRepository(db),
     scheduleRunRepository: createScheduleRunRepository(db),
     skillRepository: createSkillRepository(db),
+    botCommandRepository: createBotCommandRepository(db),
     workspaceRepository: createWorkspaceRepository(db),
   };
 }

@@ -1,29 +1,48 @@
 /**
  * Codeless Compiler — config → genuine `.ts` command module source.
  *
- * The emitted source is a real Persian-Bot command module in the exact
+ * The emitted source is a real Ajiro Agent command module in the exact
  * shape of the hand-written examples (same imports, same `meta` shape,
- * same `onCommand` / `onReply` / `button` exports): it can be saved as
- * `<name>.ts`, downloaded in the manual-commands zip, or written by the
- * agent tools, and it runs through the identical loader + middleware
+ * same `onCommand` / `onReply` / `button` / `onChat` exports): it can be
+ * saved as `<name>.ts`, downloaded in the manual-commands zip, or written
+ * by the agent tools, and it runs through the identical loader + middleware
  * pipeline as hand-written commands.
  *
- * The emitted `meta` NEVER contains version/role/aliases/platform —
- * author is always the hardcoded constant. onCommand is always generated
- * (the loader requires onCommand or onChat); onReply/onButton are extras.
+ * The emitted `meta` NEVER contains version/role/aliases/platform/hasPrefix
+ * — author is always the hardcoded constant. `onCommand` is generated when
+ * selected (the loader requires onCommand or onChat); `onChat` matches by
+ * content instead of by command name and produces the same styled output.
  */
 import type {
   CodelessApiConfig,
   CodelessCommandConfig,
-} from './command-config.types.js';
+  NormalizedCodelessConfig,
+} from "./command-config.types";
 import {
   CODELESS_AUTHOR,
   normalizeCodelessConfig,
-  validateCodelessConfig,
-} from './command-config.types.js';
+  assertValidCodelessConfig,
+} from "./command-config.types";
 
 function js(value: string): string {
   return JSON.stringify(value);
+}
+
+export function buildCaptionExpression(
+  config: NormalizedCodelessConfig,
+): string {
+  const parts: string[] = [];
+  if (config.displayCommandName) {
+    parts.push(`"**/${config.name}**"`);
+  }
+  if (config.displayCommandName && config.lineSeparator) {
+    parts.push(`"────────────"`);
+  } else if (!config.displayCommandName && config.lineSeparator) {
+    parts.push(`"────────────"`);
+  }
+  parts.push(js(config.caption));
+  if (parts.length === 1) return parts[0] as string;
+  return `[${parts.join(", ")}].join("\\n")`;
 }
 
 function emitApiHelpers(api: CodelessApiConfig): string {
@@ -36,6 +55,7 @@ function emitApiHelpers(api: CodelessApiConfig): string {
     `const API_BODY = ${js(api.body)};`,
     `const API_RESPONSE_PATH = ${js(api.responsePath)};`,
     `const API_RESPONSE_TYPE = ${js(api.responseType)};`,
+    `const API_KEY_SEND_AS = ${js(api.apiKeySendAs ? `${api.apiKeySendAs.kind}:${api.apiKeySendAs.name}` : "")};`,
     `const API_TIMEOUT = 10000;`,
     ``,
     `function substituteVars(template, values) {`,
@@ -72,21 +92,50 @@ function emitApiHelpers(api: CodelessApiConfig): string {
     `  return 'Unknown error';`,
     `}`,
     ``,
+    `function apiKeyTarget(inputs) {`,
+    `  const raw = String(API_KEY_SEND_AS || '');`,
+    `  const colon = raw.indexOf(':');`,
+    `  if (colon <= 0) return null;`,
+    `  const kind = raw.slice(0, colon);`,
+    `  const name = raw.slice(colon + 1);`,
+    `  if (!name) return null;`,
+    `  const value = inputs && inputs.API_KEY !== undefined ? String(inputs.API_KEY) : '';`,
+    `  if (!value) return null;`,
+    `  return { kind, name, value };`,
+    `}`,
+    ``,
     `async function runApiFetch(inputs) {`,
-    `  let url = substituteVars(API_ENDPOINT, inputs);`,
+    `  const withKey = { ...(inputs || {}) };`,
+    `  if (withKey.API_KEY === undefined && typeof secrets !== 'undefined' && secrets && secrets.getApiKey) {`,
+    `    try { withKey.API_KEY = await secrets.getApiKey(); } catch { withKey.API_KEY = ''; }`,
+    `  }`,
+    `  let url = substituteVars(API_ENDPOINT, withKey);`,
+    `  const keyTarget = apiKeyTarget(withKey);`,
     `  const extra = Object.entries(API_PARAMS).filter(([key, value]) => key.trim() !== '' && value !== '');`,
+    `  if (keyTarget && keyTarget.kind === 'query') {`,
+    `    extra.push([keyTarget.name, keyTarget.value]);`,
+    `  }`,
     `  if (extra.length > 0) {`,
     `    const query = extra`,
-    `      .map(([key, value]) => encodeURIComponent(key.trim()) + '=' + encodeURIComponent(substituteVars(value, inputs)))`,
+    `      .map(([key, value]) => encodeURIComponent(key.trim()) + '=' + encodeURIComponent(substituteVars(value, withKey)))`,
     `      .join('&');`,
     `    url += (url.includes('?') ? '&' : '?') + query;`,
     `  }`,
     `  const headers = {};`,
     `  for (const [key, value] of Object.entries(API_HEADERS)) {`,
-    `    if (key.trim() !== '') headers[key.trim()] = substituteVars(value, inputs);`,
+    `    if (key.trim() !== '') headers[key.trim()] = substituteVars(value, withKey);`,
+    `  }`,
+    `  if (keyTarget && keyTarget.kind === 'header') {`,
+    `    const name = String(keyTarget.name);`,
+    `    const lower = name.toLowerCase();`,
+    `    if (lower === 'authorization' && !/^bearer\\s+/i.test(keyTarget.value)) {`,
+    `      headers[name] = 'Bearer ' + keyTarget.value;`,
+    `    } else {`,
+    `      headers[name] = substituteVars(keyTarget.value, withKey);`,
+    `    }`,
     `  }`,
     `  if (API_METHOD === 'POST') {`,
-    `    const { data, headers: responseHeaders } = await axios.post(url, substituteVars(API_BODY, inputs), {`,
+    `    const { data, headers: responseHeaders } = await axios.post(url, substituteVars(API_BODY, withKey), {`,
     `      headers: { ...headers, 'Content-Type': 'application/json' },`,
     `      timeout: API_TIMEOUT,`,
     `    });`,
@@ -96,10 +145,10 @@ function emitApiHelpers(api: CodelessApiConfig): string {
     `  return { data, headers: responseHeaders };`,
     `}`,
     ``,
-  ].join('\n');
+  ].join("\n");
 }
 
-function emitMedaBlock(config: ReturnType<typeof normalizeCodelessConfig>): string {
+function emitMetaBlock(config: NormalizedCodelessConfig): string {
   const options =
     config.api && config.api.inputs.length > 0
       ? `  options: [\n${config.api.inputs
@@ -107,8 +156,8 @@ function emitMedaBlock(config: ReturnType<typeof normalizeCodelessConfig>): stri
             (input) =>
               `    {\n      type: OptionType.string,\n      name: ${js(input.name)},\n      description: ${js(`Value for ${input.name}`)},\n      required: false,\n    },`,
           )
-          .join('\n')}\n  ],\n`
-      : '';
+          .join("\n")}\n  ],\n`
+      : "";
   return (
     `export const meta: CommandMeta = {\n` +
     `  name: ${js(config.name)},\n` +
@@ -117,32 +166,65 @@ function emitMedaBlock(config: ReturnType<typeof normalizeCodelessConfig>): stri
     `  category: ${js(config.category)},\n` +
     `  usage: ${js(config.usage)},\n` +
     `  cooldown: ${config.cooldown},\n` +
-    `  hasPrefix: true,\n` +
     options +
     `};\n`
   );
 }
 
+function emitOnChatMatcher(config: NormalizedCodelessConfig): string[] {
+  const onChat = config.onChat;
+  if (!onChat) return [];
+  const keyword = js(onChat.keyword);
+  const mode = onChat.detectionMode;
+  const fold = onChat.caseSensitive
+    ? `const haystack = text; const needle = ${keyword};`
+    : `const haystack = text.toLowerCase(); const needle = ${keyword}.toLowerCase();`;
+  let test = "";
+  if (mode === "exact") test = `if (haystack !== needle) return false;`;
+  else if (mode === "startsWith") test = `if (!haystack.startsWith(needle)) return false;`;
+  else if (mode === "regex")
+    test = onChat.caseSensitive
+      ? `try { if (!new RegExp(${keyword}).test(text)) return false; } catch { return false; }`
+      : `try { if (!new RegExp(${keyword}, 'i').test(text)) return false; } catch { return false; }`;
+  else test = `if (!haystack.includes(needle)) return false;`;
+  return [
+    `const ONCHAT_KEYWORD = ${keyword};`,
+    `const ONCHAT_MODE = ${js(mode)};`,
+    `const ONCHAT_CASE_SENSITIVE = ${onChat.caseSensitive ? "true" : "false"};`,
+    ``,
+    `export function matchesOnChat(message) {`,
+    `  const text = String(message ?? '');`,
+    `  if (!text || !ONCHAT_KEYWORD) return false;`,
+    `  ${fold}`,
+    `  void ONCHAT_MODE; void ONCHAT_CASE_SENSITIVE;`,
+    `  ${test}`,
+    `  return true;`,
+    `}`,
+    ``,
+  ];
+}
+
 /**
  * Compile a config into the full `.ts` module source. Throws on invalid
- * configs (same validation as the create endpoint).
+ * configs (same validation as the create service).
  */
 export function compileCommandModule(raw: CodelessCommandConfig): string {
   const config = normalizeCodelessConfig(raw);
-  const { validateCodelessConfig } = require('./command-config.types.js') as typeof import('./command-config.types.js');
-  void validateCodelessConfig;
-  const { default: _unused } = {};
-  void _unused;
+  assertValidCodelessConfig(config);
   return compileNormalizedCommandModule(config);
 }
 
 export function compileNormalizedCommandModule(
-  config: ReturnType<typeof normalizeCodelessConfig>,
+  config: NormalizedCodelessConfig,
 ): string {
   const hasApi = config.api !== null;
-  const hasButton = config.button.enabled;
-  const hasReply = config.handlers.includes('onReply');
-  const hasInputs = hasApi && config.api.inputs.length > 0;
+  const hasButton =
+    config.button.enabled || config.handlers.includes("onButton");
+  const hasReply = config.handlers.includes("onReply");
+  const hasChat = config.handlers.includes("onChat");
+  const hasCommand = config.handlers.includes("onCommand");
+  const hasInputs = hasApi && (config.api as CodelessApiConfig).inputs.length > 0;
+  const captionExpr = buildCaptionExpression(config);
 
   const imports = [
     `import type { AppCtx } from '@/engine/types/controller.types.js';`,
@@ -176,97 +258,181 @@ export function compileNormalizedCommandModule(
   ];
 
   if (hasApi) parts.push(emitApiHelpers(config.api as CodelessApiConfig));
-  parts.push(emitMedaBlock(config));
+  parts.push(emitMetaBlock(config));
+  parts.push(...emitOnChatMatcher(config));
 
-  // ── onCommand ──────────────────────────────────────────────────────
-  const body: string[] = [];
-  body.push(`export const onCommand = async ({ args, chat, event, native, button: btn, state, options }: AppCtx) => {`);
-  if (hasInputs) {
-    body.push(`  const inputs = {};`);
-    config.api?.inputs.forEach((input, index) => {
-      body.push(
-        `  inputs[${js(input.name)}] = options.get(${js(input.name)}) ?? args[${index}] ?? '';`,
-      );
-    });
-  }
-  if (hasApi) {
-    const api = config.api as CodelessApiConfig;
-    body.push(`  const inputs = ${hasInputs ? 'inputs' : '{}'};`);
-    body.push(`  let caption = ${js(config.caption)};`);
-    body.push(`  try {`);
-    body.push(`    const { data, headers: responseHeaders } = await runApiFetch(inputs);`);
-    body.push(
-      `    const contentType = String((responseHeaders && (responseHeaders['content-type'] || responseHeaders['Content-Type'])) || '');`,
-    );
-    if (api.responseType === 'JSON') {
-      body.push(`    const { found, value } = readPath(data, API_RESPONSE_PATH);`);
-      body.push(`    const result = found
-      ? typeof value === 'string'
-        ? value
-        : JSON.stringify(value)
-      : '(empty response)';`);
-      body.push(`    caption = caption.includes('\${result}') ? caption.split('\${result}').join(result) : caption + '\\n\\n' + result;`);
-    } else if (api.responseType === 'Text') {
-      body.push(`    const result = typeof data === 'string' ? data : JSON.stringify(data);`);
-      body.push(`    caption = caption.includes('\${result}') ? caption.split('\${result}').join(result) : caption + '\\n\\n' + result;`);
-    } else if (api.responseType === 'Image URL') {
-      body.push(`    const { found, value } = readPath(data, API_RESPONSE_PATH);`);
-      body.push(`    const imageUrl = found && typeof value === 'string' ? value : (typeof data === 'string' ? data : '');`);
-      body.push(`    if (!imageUrl) {`);
-      body.push(`      await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: caption + '\\n\\n(empty response)' });`);
-      if (hasReply) body.push(...emitReplyRegistration(config));
-      body.push(`      return;`);
-      body.push(`    }`);
-      body.push(`    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: API_TIMEOUT });`);
-      body.push(`    const imageName = String(imageUrl.split('?')[0].split('/').pop() || '${config.name}.png');`);
-      body.push(`    await chat.reply({`);
-      body.push(`      style: MessageStyle.MARKDOWN,`);
-      body.push(`      message: caption,`);
-      body.push(`      attachment: [{ name: imageName, stream: Buffer.from(imageResponse.data) }],`);
-      if (hasButton) body.push(...emitButtonAttach(config));
-      body.push(`    });`);
-      if (hasReply) body.push(...emitReplyRegistration(config, true));
-      body.push(`    return;`);
-    } else {
-      // Buffer
-      body.push(`    const { found, value } = readPath(data, API_RESPONSE_PATH);`);
-      body.push(`    const payload = found && value !== undefined ? (typeof value === 'string' ? value : JSON.stringify(value)) : (typeof data === 'string' ? data : JSON.stringify(data));`);
-      body.push(`    await chat.reply({`);
-      body.push(`      style: MessageStyle.MARKDOWN,`);
-      body.push(`      message: caption,`);
-      body.push(`      attachment: [{ name: '${config.name}.bin', stream: Buffer.from(String(payload), 'utf-8') }],`);
-      if (hasButton) body.push(...emitButtonAttach(config));
-      body.push(`    });`);
-      if (hasReply) body.push(...emitReplyRegistration(config, true));
-      body.push(`    return;`);
-    }
-    body.push(`  } catch (err) {`);
-    body.push(`    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: '⚠️ **Error:** ' + formatApiError(err) });`);
-    body.push(`    return;`);
-    body.push(`  }`);
-  }
-  if (!hasApi || (hasApi && (config.api as CodelessApiConfig).responseType !== 'Image URL' && (config.api as CodelessApiConfig).responseType !== 'Buffer')) {
-    if (hasApi) {
-      body.push(`  await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: caption${hasButton ? ',' : ''} });`);
+  const responseSender = (opts: {
+    inOnChat: boolean;
+    earlyReturn: boolean;
+  }): string[] => {
+    const out: string[] = [];
+    const media = config.responseMedia;
+    if (media === "text") {
       if (hasButton) {
-        // remove trailing comma handling: rebuild last line properly below
-        body.pop();
-        body.push(`  const messageID = await chat.replyMessage({`);
-        body.push(`    style: MessageStyle.MARKDOWN,`);
-        body.push(`    message: caption,`);
-        body.push(...emitButtonAttach(config));
-        body.push(`  });`);
+        out.push(`  const sentId = await chat.replyMessage({`);
+        out.push(`    style: MessageStyle.MARKDOWN,`);
+        out.push(`    message: caption,`);
+        out.push(...emitButtonAttach());
+        out.push(`  });`);
       } else {
-        body[body.length - 1] = `  await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: caption });`;
+        out.push(
+          `  const sentId = await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: caption });`,
+        );
       }
     } else {
-      body.push(`  await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: ${js(config.caption)} });`);
+      const attachName =
+        media === "image"
+          ? `${config.name}.png`
+          : media === "video"
+            ? `${config.name}.mp4`
+            : media === "audio"
+              ? `${config.name}.mp3`
+              : `${config.name}.bin`;
+      out.push(`  const sentId = await chat.reply({`);
+      out.push(`    style: MessageStyle.MARKDOWN,`);
+      out.push(`    message: caption,`);
+      out.push(
+        `    attachment: [{ name: ${js(attachName)}, stream: Buffer.from(caption, 'utf-8') }],`,
+      );
+      if (hasButton) out.push(...emitButtonAttach());
+      out.push(`  });`);
     }
-    if (hasReply && !hasApi) body.push(...emitReplyRegistration(config));
-    if (hasReply && hasApi) body.push(...emitReplyRegistrationApi(config));
+    if (hasReply) {
+      out.push(`  if (sentId) {`);
+      out.push(
+        `    state.create({ id: state.generateID({ id: String(sentId) }), state: STATE.awaiting_reply, context: {} });`,
+      );
+      out.push(`  }`);
+    }
+    void opts;
+    return out;
+  };
+
+  const emitHandlerBody = (inOnChat: boolean): string[] => {
+    const body: string[] = [];
+    if (hasInputs) {
+      body.push(`  const __inputs = {};`);
+      (config.api as CodelessApiConfig).inputs.forEach((input, index) => {
+        body.push(
+          `  __inputs[${js(input.name)}] = options.get(${js(input.name)}) ?? args[${index}] ?? '';`,
+        );
+      });
+    }
+    if (hasApi) {
+      const api = config.api as CodelessApiConfig;
+      body.push(
+        `  const inputs = ${hasInputs ? "__inputs" : "{}"};`,
+      );
+      body.push(`  let caption = ${captionExpr};`);
+      body.push(`  try {`);
+      body.push(
+        `    const { data, headers: responseHeaders } = await runApiFetch(inputs);`,
+      );
+      if (api.responseType === "JSON") {
+        body.push(`    const { found, value } = readPath(data, API_RESPONSE_PATH);`);
+        body.push(
+          `    const result = found ? (typeof value === 'string' ? value : JSON.stringify(value)) : '(empty response)';`,
+        );
+        body.push(
+          `    caption = caption.includes('\${result}') ? caption.split('\${result}').join(result) : caption + '\\n\\n' + result;`,
+        );
+        body.push(...responseSender({ inOnChat, earlyReturn: false }));
+      } else if (api.responseType === "Text") {
+        body.push(
+          `    const result = typeof data === 'string' ? data : JSON.stringify(data);`,
+        );
+        body.push(
+          `    caption = caption.includes('\${result}') ? caption.split('\${result}').join(result) : caption + '\\n\\n' + result;`,
+        );
+        body.push(...responseSender({ inOnChat, earlyReturn: false }));
+      } else if (api.responseType === "Image URL") {
+        body.push(`    const { found, value } = readPath(data, API_RESPONSE_PATH);`);
+        body.push(
+          `    const imageUrl = found && typeof value === 'string' ? value : (typeof data === 'string' ? data : '');`,
+        );
+        body.push(`    if (!imageUrl) {`);
+        body.push(
+          `      await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: caption + '\\n\\n(empty response)' });`,
+        );
+        body.push(`      return;`);
+        body.push(`    }`);
+        body.push(
+          `    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: API_TIMEOUT });`,
+        );
+        body.push(
+          `    const imageName = String(imageUrl.split('?')[0].split('/').pop() || '${config.name}.png');`,
+        );
+        body.push(`    const sentId = await chat.reply({`);
+        body.push(`      style: MessageStyle.MARKDOWN,`);
+        body.push(`      message: caption,`);
+        body.push(
+          `      attachment: [{ name: imageName, stream: Buffer.from(imageResponse.data) }],`,
+        );
+        if (hasButton) body.push(...emitButtonAttach());
+        body.push(`    });`);
+        if (hasReply) {
+          body.push(`    if (sentId) {`);
+          body.push(
+            `      state.create({ id: state.generateID({ id: String(sentId) }), state: STATE.awaiting_reply, context: {} });`,
+          );
+          body.push(`    }`);
+        }
+        body.push(`    return;`);
+      } else {
+        body.push(`    const { found, value } = readPath(data, API_RESPONSE_PATH);`);
+        body.push(
+          `    const payload = found && value !== undefined ? (typeof value === 'string' ? value : JSON.stringify(value)) : (typeof data === 'string' ? data : JSON.stringify(data));`,
+        );
+        body.push(`    const sentId = await chat.reply({`);
+        body.push(`      style: MessageStyle.MARKDOWN,`);
+        body.push(`      message: caption,`);
+        body.push(
+          `      attachment: [{ name: '${config.name}.bin', stream: Buffer.from(String(payload), 'utf-8') }],`,
+        );
+        if (hasButton) body.push(...emitButtonAttach());
+        body.push(`    });`);
+        if (hasReply) {
+          body.push(`    if (sentId) {`);
+          body.push(
+            `      state.create({ id: state.generateID({ id: String(sentId) }), state: STATE.awaiting_reply, context: {} });`,
+          );
+          body.push(`    }`);
+        }
+        body.push(`    return;`);
+      }
+      body.push(`  } catch (err) {`);
+      body.push(
+        `    await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: '⚠️ **Error:** ' + formatApiError(err) });`,
+      );
+      body.push(`    return;`);
+      body.push(`  }`);
+    } else {
+      body.push(`  const caption = ${captionExpr};`);
+      body.push(...responseSender({ inOnChat, earlyReturn: false }));
+    }
+    return body;
+  };
+
+  // ── onCommand ──────────────────────────────────────────────────────
+  if (hasCommand) {
+    parts.push(
+      `export const onCommand = async ({ args, chat, event, native, button: btn, state, options }: AppCtx) => {`,
+      ...emitHandlerBody(false),
+      `};`,
+      ``,
+    );
   }
-  body.push(`};`);
-  parts.push(body.join('\n'), ``);
+
+  // ── onChat ─────────────────────────────────────────────────────────
+  if (hasChat) {
+    parts.push(
+      `export const onChat = async ({ args, chat, event, native, button: btn, state, options }: AppCtx) => {`,
+      `  if (!matchesOnChat(String(event['message'] ?? ''))) return;`,
+      ...emitHandlerBody(true),
+      `};`,
+      ``,
+    );
+  }
 
   // ── button map ─────────────────────────────────────────────────────
   if (hasButton) {
@@ -281,7 +447,7 @@ export function compileNormalizedCommandModule(
       `      await chat.editMessage({`,
       `        style: MessageStyle.MARKDOWN,`,
       `        message_id_to_edit: event['messageID'],`,
-      `        message: ${js(config.caption)} + ' (refreshed)',`,
+      `        message: ${captionExpr} + ' (refreshed)',`,
       `      });`,
       `    },`,
       `  },`,
@@ -306,41 +472,11 @@ export function compileNormalizedCommandModule(
     );
   }
 
-  return `${parts.join('\n')}\n`;
+  return `${parts.join("\n")}\n`;
 }
 
-function emitButtonAttach(config: ReturnType<typeof normalizeCodelessConfig>): string[] {
+function emitButtonAttach(): string[] {
   return [
     `    ...(hasNativeButtons(native.platform) ? { button: [btn.generateID({ id: BUTTON_ID.action, public: true })] } : {}),`,
-  ];
-}
-
-/** Register a single follow-up state after a replyMessage send. */
-function emitReplyRegistration(
-  config: ReturnType<typeof normalizeCodelessConfig>,
-  usedMessageIDVar = false,
-): string[] {
-  void config;
-  if (!usedMessageIDVar) {
-    return [
-      `  const followUpID = await chat.replyMessage({ style: MessageStyle.MARKDOWN, message: ${js(config.caption)} });`,
-      `  if (followUpID) {`,
-      `    state.create({ id: state.generateID({ id: String(followUpID) }), state: STATE.awaiting_reply, context: {} });`,
-      `  }`,
-    ];
-  }
-  return [
-    `  if (messageID) {`,
-    `    state.create({ id: state.generateID({ id: String(messageID) }), state: STATE.awaiting_reply, context: {} });`,
-    `  }`,
-  ];
-}
-
-function emitReplyRegistrationApi(
-  config: ReturnType<typeof normalizeCodelessConfig>,
-): string[] {
-  void config;
-  return [
-    `  // Note: the reply above already went out; register follow-up state when we have its ID.`,
   ];
 }

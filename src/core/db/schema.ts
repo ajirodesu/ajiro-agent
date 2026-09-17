@@ -455,10 +455,87 @@ export const editorFileRevisions = sqliteTable(
   ],
 );
 
+/**
+ * Built-in bot — codeless command configs (port of Persian-Bot's
+ * cached-repo pattern into Ajiro Agent's own data layer).
+ * One row per manual or imported command; the MD interchange text is the
+ * editable source of truth. Never stores API key secrets — only the
+ * `${API_KEY}` placeholder + Send As location travel here.
+ */
+export const botCommandConfigs = sqliteTable(
+  "bot_command_configs",
+  {
+    id: text("id").primaryKey().notNull(),
+    botId: text("bot_id").notNull().default("default"),
+    name: text("name").notNull(),
+    /** `manual` or `imported:<repositoryId>`. */
+    source: text("source").notNull().default("manual"),
+    repositoryId: text("repository_id"),
+    mdText: text("md_text").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("bot_command_configs_bot_id_name_unique").on(
+      table.botId,
+      table.name,
+    ),
+    index("idx_bot_command_configs_bot_id").on(table.botId),
+  ],
+);
+
+export const botCommandRepositories = sqliteTable(
+  "bot_command_repositories",
+  {
+    id: text("id").primaryKey().notNull(),
+    botId: text("bot_id").notNull().default("default"),
+    url: text("url").notNull(),
+    lastSyncedAt: text("last_synced_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [index("idx_bot_command_repositories_bot_id").on(table.botId)],
+);
+
+/** Per-bot Bot Mode / Agent Mode (`'bot' | 'agent'`, default `'agent'`). */
+export const botModes = sqliteTable(
+  "bot_modes",
+  {
+    botId: text("bot_id").primaryKey().notNull(),
+    mode: text("mode").notNull().default("agent"),
+    updatedAt: text("updated_at").notNull(),
+  },
+);
+
+/** Per-bot, per-command API key secrets (SecureStore-backed at runtime;
+ * this table only tracks WHICH commands have a stored key, never values). */
+export const botCommandSecrets = sqliteTable(
+  "bot_command_secrets",
+  {
+    botId: text("bot_id").notNull(),
+    commandName: text("command_name").notNull(),
+    hasApiKey: integer("has_api_key", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("bot_command_secrets_bot_command_unique").on(
+      table.botId,
+      table.commandName,
+    ),
+  ],
+);
+
 export const schema = {
   agentRuns,
   agents,
   appSettings,
+  botCommandConfigs,
+  botCommandRepositories,
+  botCommandSecrets,
+  botModes,
   codingCheckpoints,
   conversations,
   editorFileRevisions,

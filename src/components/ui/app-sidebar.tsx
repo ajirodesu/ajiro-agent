@@ -6,6 +6,7 @@
  */
 import { usePathname, useRouter } from "expo-router";
 import {
+  Bot,
   Clock,
   FolderGit,
   FolderOpen,
@@ -322,6 +323,16 @@ export function AppSidebar() {
           contentContainerClassName="gap-sp-4 pb-sp-3"
           style={{ marginTop: 8 }}
         >
+          {/* Bot shortcut — bespoke tile (fresh design): accent-ringed
+              rounded tile with its own icon well, not the nav-row style.
+              Active-route highlighting matches nav behavior. */}
+          <BotSidebarTile
+            active={pathname === "/bot" || pathname.startsWith("/bot/")}
+            onPress={() => {
+              openRoute("/bot");
+            }}
+          />
+
           {/* Nav rows — 22px icon + 16px medium label, radius 12. */}
           <View className="gap-sp-1">
             {NAV_ITEMS.map((item) => {
@@ -631,6 +642,52 @@ export function AppSidebar() {
         </View>
       </ReactNativeModal>
     </>
+  );
+}
+
+/**
+ * "Bot" sidebar shortcut — direct link to the bot console (`/bot`), where
+ * Bot Mode / Agent Mode switching and the command builder live. Bespoke
+ * tile design (icon well + accent ring), with active-route highlighting
+ * consistent with the rest of the navigation.
+ */
+function BotSidebarTile({ active, onPress }: { active: boolean; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      className="flex-row items-center gap-sp-3 rounded-3xl border-2 p-sp-3"
+      style={{
+        borderColor: active ? theme.accent : withAlpha(theme.accent, 0.35),
+        backgroundColor: active ? withAlpha(theme.accent, 0.16) : withAlpha(theme.accent, 0.07),
+      }}
+    >
+      <View
+        className="h-10 w-10 items-center justify-center rounded-2xl"
+        style={{ backgroundColor: withAlpha(theme.accent, active ? 0.35 : 0.22) }}
+      >
+        <Bot color={theme.accent} size={22} strokeWidth={2.2} />
+      </View>
+      <View className="min-w-0 flex-1">
+        <Text
+          className="font-sans text-foreground dark:text-foreground-dark"
+          style={{ fontSize: 16, fontWeight: "600" }}
+        >
+          Bot
+        </Text>
+        <Text
+          className="font-sans text-muted-foreground dark:text-muted-foreground-dark"
+          style={{ fontSize: 13 }}
+        >
+          Console · modes · commands
+        </Text>
+      </View>
+      {active ? (
+        <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.accent }} />
+      ) : null}
+    </Pressable>
   );
 }
 
