@@ -14,6 +14,7 @@ import {
   createPluginRuntimeBridge,
   type PluginRuntimeBridge,
 } from "./dom/runtime-bridge";
+import { createPreferenceFormatterSelections } from "./formatters";
 import {
   createExtensionPreferencesReader,
   type ExtensionPreferences,
@@ -74,6 +75,7 @@ export function createExtensionStore(): ExtensionStore {
     bridge: createPluginRuntimeBridge({
       deps,
       diagnostics,
+      formatterSelections: createPreferenceFormatterSelections(preferences),
       // `bindKey` platform maps resolved against the real OS (§45).
       os: Platform.OS,
       runtime,

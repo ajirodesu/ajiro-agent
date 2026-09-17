@@ -27,6 +27,7 @@
  *   notice and recorded in diagnostics.
  */
 import { emitExtensionEvent } from "../events";
+import type { FormatterSelectionStore } from "../formatters";
 import {
   createPluginCommandRegistry,
   type PluginCommandRegistry,
@@ -36,7 +37,11 @@ import { loadInstalledRecords, type InstallDeps } from "../installer";
 import { acodePlatformForOS, type KeyBindingResolution } from "../key-bindings";
 import type { ExtensionDiagnostic } from "../models";
 import type { ExtensionRuntime } from "../runtime";
-import type { PluginPageState } from "./bridge-protocol";
+import type {
+  PluginDialogKind,
+  PluginDialogPayload,
+  PluginPageState,
+} from "./bridge-protocol";
 import { buildPluginHostDocument } from "./dom-runtime-script";
 import { createPluginHostServices } from "./host-services";
 import {
@@ -65,6 +70,24 @@ export type PluginInstallRequestHandler = (
   pluginId: string,
   targetId: string,
 ) => Promise<void>;
+
+/**
+ * App-side renderer for plugin dialogs, loaders, toasts, the file browser,
+ * and new editor files (verified against Acode's `src/dialogs/*`). The
+ * bridge ships honest defaults that refuse loudly, so a missing surface
+ * reads as "not wired" rather than a silent swallow — except `toast` and
+ * the loader ops, which degrade to diagnostics/no-ops like Acode's own
+ * fire-and-forget paths.
+ */
+export type PluginUiHandler = {
+  showDialog(kind: PluginDialogKind, payload: PluginDialogPayload): Promise<unknown>;
+  createLoader(pluginId: string, title: string, message: string, timeoutMs?: number): Promise<string>;
+  operateLoader(loaderId: string, op: "hide" | "setMessage" | "setTitle" | "show", value?: string): void;
+  destroyLoader(loaderId: string): void;
+  toast(pluginId: string, text: string, durationMs?: number): void;
+  pickFiles(pluginId: string, mode: string): Promise<string[]>;
+  openNewFile(pluginId: string, filename: string, text: string): Promise<string>;
+};
 
 export type PluginRuntimeBridge = {
   /** Attach a freshly mounted document, then restart live plugins. */
@@ -102,6 +125,7 @@ export type PluginRuntimeBridge = {
   runCommand(name: string, value?: unknown): boolean;
   setInstallRequestHandler(handler: PluginInstallRequestHandler | null): void;
   setNotifyHandler(handler: ((notice: PluginNotification) => void) | null): void;
+  setUiHandler(handler: PluginUiHandler | null): void;
   status(): PluginRuntimeStatus;
   subscribe(listener: (status: PluginRuntimeStatus) => void): () => void;
 };
@@ -109,6 +133,8 @@ export type PluginRuntimeBridge = {
 export function createPluginRuntimeBridge(input: {
   deps: InstallDeps;
   diagnostics?: DiagnosticRecorder;
+  /** Per-language formatter selections (persisted by the caller). */
+  formatterSelections?: FormatterSelectionStore;
   /** OS whose `bindKey` entry applies; defaults to the “win” map (§45). */
   os?: string;
   runtime: ExtensionRuntime;
@@ -128,10 +154,52 @@ export function createPluginRuntimeBridge(input: {
   const listeners = new Set<(status: PluginRuntimeStatus) => void>();
   let installHandler: PluginInstallRequestHandler | null = null;
   let notifyHandler: ((notice: PluginNotification) => void) | null = null;
+  let uiHandler: PluginUiHandler | null = null;
   let ready = false;
 
   const services = createPluginHostServices({
     callbacks: {
+      async showDialog(kind, payload) {
+        if (!uiHandler) {
+          throw new Error(
+            "Plugin dialogs are not available: the app surface has not wired a dialog handler.",
+          );
+        }
+        return uiHandler.showDialog(kind, payload);
+      },
+      async createLoader(pluginId, title, message, timeoutMs) {
+        if (!uiHandler) {
+          throw new Error(
+            "Plugin loaders are not available: the app surface has not wired a dialog handler.",
+          );
+        }
+        return uiHandler.createLoader(pluginId, title, message, timeoutMs);
+      },
+      operateLoader(loaderId, op, value) {
+        uiHandler?.operateLoader(loaderId, op, value);
+      },
+      destroyLoader(loaderId) {
+        uiHandler?.destroyLoader(loaderId);
+      },
+      toast(pluginId, text, durationMs) {
+        uiHandler?.toast(pluginId, text, durationMs);
+      },
+      async pickFiles(pluginId, mode) {
+        if (!uiHandler) {
+          throw new Error(
+            "The file browser is not available: the app surface has not wired a dialog handler.",
+          );
+        }
+        return uiHandler.pickFiles(pluginId, mode);
+      },
+      async openNewFile(pluginId, filename, text) {
+        if (!uiHandler) {
+          throw new Error(
+            "Creating editor files is not available: the app surface has not wired a dialog handler.",
+          );
+        }
+        return uiHandler.openNewFile(pluginId, filename, text);
+      },
       log(pluginId, level, message) {
         // Persistence happens in the host services; this only fans the line
         // out to interested surfaces (the Store's diagnostics panel).
@@ -166,7 +234,7 @@ export function createPluginRuntimeBridge(input: {
     diagnostics,
   });
 
-  const host = new PluginDomHost(services);
+  const host = new PluginDomHost(services, undefined, input.formatterSelections);
   invokeCommand = (name) => {
     host.runCommand(name);
   };
@@ -291,6 +359,10 @@ export function createPluginRuntimeBridge(input: {
 
     setNotifyHandler(handler) {
       notifyHandler = handler;
+    },
+
+    setUiHandler(handler) {
+      uiHandler = handler;
     },
 
     status,

@@ -61,6 +61,10 @@ function metadata(id: string, dependencies: string[] = []): ExtensionMetadata {
     source: "registry",
     updatedAt: null,
     version: "1.0.0",
+    channel: null,
+    deprecated: false,
+    revoked: false,
+    rolloutPercent: null,
   };
 }
 

@@ -16,7 +16,11 @@
 import { createDiagnosticRecorder, type DiagnosticRecorder } from "../diagnostics";
 import type { ExtensionPlatform, InstallDeps } from "../installer";
 import { pluginDataDir, pluginDir, sanitizePluginId } from "../storage";
-import type { PluginCommandRegistration } from "./bridge-protocol";
+import type {
+  PluginCommandRegistration,
+  PluginDialogKind,
+  PluginDialogPayload,
+} from "./bridge-protocol";
 import { getActiveEditorAccess } from "./editor-access";
 import type { PluginHostServices } from "./plugin-host";
 
@@ -30,6 +34,21 @@ export type HostServiceCallbacks = {
   notify(pluginId: string, level: string, text: string): void;
   /** Consent-gated `acode.installPlugin` request (§42). */
   requestPluginInstall(pluginId: string, targetId: string): Promise<void>;
+  /**
+   * Native dialogs, rendered by the app (`showDialog` settles with the
+   * user's answer), loader overlays, toasts, the file browser, and new
+   * editor files. The host owns permission checks; these only fan out.
+   * All seven are optional so headless/test callers can wire a subset:
+   * unwired promise-kinds refuse loudly, unwired fire-and-forget kinds
+   * degrade to diagnostics/no-ops.
+   */
+  showDialog?(kind: PluginDialogKind, payload: PluginDialogPayload): Promise<unknown>;
+  createLoader?(pluginId: string, title: string, message: string, timeoutMs?: number): Promise<string>;
+  operateLoader?(loaderId: string, op: "hide" | "setMessage" | "setTitle" | "show", value?: string): void;
+  destroyLoader?(loaderId: string): void;
+  toast?(pluginId: string, text: string, durationMs?: number): void;
+  pickFiles?(pluginId: string, mode: string): Promise<string[]>;
+  openNewFile?(pluginId: string, filename: string, text: string): Promise<string>;
 };
 
 const DATA_KIND_FILE: Record<"cache" | "settings" | "storage", string> = {
@@ -137,6 +156,49 @@ export function createPluginHostServices(input: {
 
     async requestPluginInstall(pluginId, targetId) {
       return callbacks.requestPluginInstall(pluginId, targetId);
+    },
+
+    async showDialog(kind: PluginDialogKind, payload: PluginDialogPayload) {
+      // Deliberately never recorded: dialog answers may contain user input
+      // (prompt values, multi-prompt fields) that must not land in logs.
+      if (!callbacks.showDialog) {
+        throw new Error("Plugin dialogs are not wired in this host.");
+      }
+      return callbacks.showDialog(kind, payload);
+    },
+
+    async createLoader(pluginId, title, message, timeoutMs) {
+      if (!callbacks.createLoader) {
+        throw new Error("Plugin loaders are not wired in this host.");
+      }
+      return callbacks.createLoader(pluginId, title, message, timeoutMs);
+    },
+
+    operateLoader(loaderId, op, value) {
+      callbacks.operateLoader?.(loaderId, op, value);
+    },
+
+    destroyLoader(loaderId) {
+      callbacks.destroyLoader?.(loaderId);
+    },
+
+    toast(pluginId, text, durationMs) {
+      callbacks.toast?.(pluginId, text, durationMs);
+      void diagnostics.record(pluginId, "info", `Toast: ${text}`).catch(() => {});
+    },
+
+    async pickFiles(pluginId, mode) {
+      if (!callbacks.pickFiles) {
+        throw new Error("The file browser is not wired in this host.");
+      }
+      return callbacks.pickFiles(pluginId, mode);
+    },
+
+    async openNewFile(pluginId, filename, text) {
+      if (!callbacks.openNewFile) {
+        throw new Error("Creating editor files is not wired in this host.");
+      }
+      return callbacks.openNewFile(pluginId, filename, text);
     },
 
     async setPluginSetting(pluginId, key, value) {

@@ -10,6 +10,7 @@
  * extension install, enable, or execute on its own. Catalog synchronization
  * is automatic; installation stays a user action (§17/§64).
  */
+import { parseUpdateChannel, type UpdateChannel } from "@/modules/updates/extension-framework";
 import { isRecord } from "./models";
 import type { ExtensionPathPlan } from "./storage";
 import type { ExtensionPlatform } from "./installer";
@@ -27,6 +28,17 @@ export type ExtensionPreferences = {
   requireSignedPackages: boolean;
   /** keyId → base64 Ed25519 public key, the publishers this device trusts. */
   trustedSigningKeys: Record<string, string>;
+  /**
+   * Formatter selection, Acode-style (`appSettings.value.formatter[mode]`):
+   * language id → owning formatter id. Chosen explicitly (or by the
+   * unambiguous single-candidate rule); never inferred silently per keystroke.
+   */
+  formatters: Record<string, string>;
+  /**
+   * Update channel (§44): which registry entries the Store offers.
+   * Production default is stable; beta also shows stable, preview shows all.
+   */
+  updateChannel: UpdateChannel;
 };
 
 export const DEFAULT_EXTENSION_PREFERENCES: ExtensionPreferences = {
@@ -34,6 +46,8 @@ export const DEFAULT_EXTENSION_PREFERENCES: ExtensionPreferences = {
   notifyOnDiscovery: true,
   requireSignedPackages: false,
   trustedSigningKeys: {},
+  formatters: {},
+  updateChannel: "stable",
 };
 
 /**
@@ -51,6 +65,30 @@ function parseTrustedKeys(raw: unknown): Record<string, string> {
     keys[keyId] = value.trim();
   }
   return keys;
+}
+
+/**
+ * Formatter selections are user data, so they are validated here: non-empty
+ * string keys and values only, bounded so a corrupt file cannot grow the
+ * map without limit.
+ */
+const MAX_FORMATTER_SELECTIONS = 128;
+
+export function parseFormatterSelections(raw: unknown): Record<string, string> {
+  if (!isRecord(raw)) return {};
+  const selections: Record<string, string> = {};
+  for (const [languageId, formatterId] of Object.entries(raw)) {
+    if (Object.keys(selections).length >= MAX_FORMATTER_SELECTIONS) break;
+    if (
+      typeof languageId === "string" &&
+      languageId.trim() !== "" &&
+      typeof formatterId === "string" &&
+      formatterId.trim() !== ""
+    ) {
+      selections[languageId.trim()] = formatterId.trim();
+    }
+  }
+  return selections;
 }
 
 export function parseExtensionPreferences(
@@ -74,6 +112,10 @@ export function parseExtensionPreferences(
           ? parsed.requireSignedPackages
           : DEFAULT_EXTENSION_PREFERENCES.requireSignedPackages,
       trustedSigningKeys: parseTrustedKeys(parsed.trustedSigningKeys),
+      formatters: parseFormatterSelections(parsed.formatters),
+      updateChannel:
+        parseUpdateChannel(parsed.updateChannel) ??
+        DEFAULT_EXTENSION_PREFERENCES.updateChannel,
     };
   } catch {
     return { ...DEFAULT_EXTENSION_PREFERENCES };

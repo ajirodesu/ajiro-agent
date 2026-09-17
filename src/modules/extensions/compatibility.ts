@@ -9,10 +9,11 @@
  * `HTMLElement`, `CustomEvent`, `fetch`, or `URL` is *supported* rather than
  * merely tolerated. What remains out of reach is Ajiro's missing native
  * surface: Acode core modules the host document does not implement
- * (`editorManager`, `app`, `project`, …) and APIs with no Ajiro equivalent
- * (`acode.newEditorFile`, direct editor DOM access). `editor` itself is
- * provided in a scoped form — read and replace the active document — so it is
- * supported rather than flagged.
+ * (`editorManager`, `app`, `project`, …) and direct editor DOM access.
+ * `editor` itself is provided in a scoped form — read and replace the active
+ * document — `newEditorFile` creates through the app's file service, and the
+ * native dialogs render through the app surface, so all three are supported
+ * rather than flagged.
  *
  * Levels:
  * - `compatible`  — the manifest, package, and entry script run as written.
@@ -21,6 +22,7 @@
  * - `unknown`     — the manifest was too malformed to judge (installer path).
  */
 import type { AcodePluginManifest } from "./manifest";
+import { checkNativeRequirements } from "@/modules/updates/extension-framework";
 import {
   ACODE_COMPATIBILITY_MATRIX,
   type AcodeCompatibilityVersion,
@@ -44,6 +46,11 @@ export const SUPPORTED_ACODE_APIS = [
   "acode.pushNotification",
   "acode.addIcon",
   "acode.toInternalUrl",
+  "acode.registerFormatter",
+  "acode.unregisterFormatter",
+  "acode.format",
+  "acode.formatters",
+  "acode.getFormatterFor",
 ] as const;
 
 /**
@@ -105,16 +112,30 @@ function requiredModules(source: string): string[] {
  * this list any more: it is provided by the plugin host document.
  */
 const UNSUPPORTED_API_PATTERNS: { label: string; pattern: RegExp }[] = [
-  { label: "acode.newEditorFile", pattern: /\bnewEditorFile\s*\(/ },
   {
     label: "direct editor DOM access (editorManager/ace/CodeMirror)",
     pattern: /\b(editorManager|ace\s*\.\s*edit|CodeMirror)\b/,
   },
   {
-    label: "Ajiro's native UI from a plugin page",
-    pattern: /\b(acode\.toast|acode\.loader|acode\.select|acode\.alert|acode\.confirm|acode\.prompt)\b/,
+    label: "Web Workers (the plugin host document provides no Worker constructor)",
+    pattern: /\bnew\s+Worker\s*\(/,
   },
 ];
+
+/**
+ * Bare `editorManager` references *outside* `acode.require("...")` strings:
+ * the real Python plugin reaches the editor this way
+ * (`editorManager.activeFile`, `editorManager.on(...)`), never through the
+ * module registry, so the `acode.require` scan alone would miss it. Matches
+ * inside require() calls are stripped first to avoid double-reporting.
+ */
+export function usesBareEditorManager(source: string): boolean {
+  const withoutRequires = source.replace(
+    /acode\s*\.\s*require\s*\(\s*["'`][\w.@/-]+["'`]\s*\)/g,
+    "",
+  );
+  return /\beditorManager\b/.test(withoutRequires);
+}
 
 export function compareExtensionVersions(left: string, right: string): number {
   const numeric = (value: string) =>
@@ -158,6 +179,17 @@ export function evaluateCompatibility(
     level = "unsupported";
   }
 
+  // Native capability floor (Dynamic Updates prompt §36/§42): a declared
+  // requirement this install lacks is `unsupported` with an app-update
+  // reason, never a silent partial.
+  const native = checkNativeRequirements(manifest.nativeCapabilities);
+  if (!native.satisfied) {
+    reasons.push(
+      `Requires an Ajiro Agent update (missing native capabilities: ${native.missing.join(", ")}).`,
+    );
+    level = "unsupported";
+  }
+
   const matrixRow = pickMatrixRow(manifest.minVersionCode);
   if (matrixRow && matrixRow.unsupportedApis.length > 0) {
     reasons.push(
@@ -189,6 +221,9 @@ export function evaluateCompatibility(
     const gaps = UNSUPPORTED_API_PATTERNS.filter(({ pattern }) =>
       pattern.test(entrySource),
     ).map(({ label }) => label);
+    if (usesBareEditorManager(entrySource) && !required.some((name) => name.toLowerCase() === "editormanager")) {
+      gaps.push("bare editorManager access (the scoped `editor` module only covers the active document)");
+    }
     if (gaps.length > 0) {
       reasons.push(`Uses APIs without an Ajiro equivalent: ${gaps.join(", ")}.`);
       weaken("partial");

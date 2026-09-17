@@ -24,6 +24,13 @@ import {
 } from "@/modules/skills/skill-markdown";
 import { getSkillMetadataError } from "@/modules/skills/skill-validation";
 import { hashContent, type StoreSkillEntry } from "@/modules/skills/skill-store-catalog";
+import {
+  checkNativeRequirements,
+  compareDynamicVersions,
+  evaluateExtensionTrust,
+  type ExtensionTrustState,
+} from "@/modules/updates/extension-framework";
+import type { SkillRollbackStore } from "@/modules/skills/skill-rollback";
 
 export type SkillInstallProgress =
   | { phase: "fetching" }
@@ -43,6 +50,36 @@ export interface InstallResult {
   /** True when the installed copy was already current (no write happened). */
   unchanged: boolean;
   fileCount: number;
+  /** Trust verdict for the installed content (§23). */
+  trust: ExtensionTrustState;
+}
+
+/**
+ * Dynamic-update guards for a store install (§§21–24, 36). All optional so
+ * plain URL imports keep working exactly as before.
+ */
+export interface SkillInstallGuards {
+  /** Registry-fed revocation set: installing a revoked skill refuses loudly. */
+  revokedSlugs?: Set<string>;
+  /** Expected content hash (§21): a mismatch fails closed before parsing. */
+  expectedHash?: string | null;
+  /**
+   * Publisher signature presence (§22, reserved): skills have no publisher
+   * keyring yet, so presence alone never upgrades trust — the field rides
+   * along so registry entries with signatures flow through intact for the
+   * day verification exists.
+   */
+  signaturePresent?: boolean;
+  /** Native capabilities the skill declares (§36): missing ones refuse with Requires App Update. */
+  requiredCapabilities?: string[];
+  /** Runtime floor/ceiling + platforms from the registry entry (§§12, 35). */
+  appVersion?: string | null;
+  platform?: string | null;
+  minAppVersion?: string | null;
+  maxAppVersion?: string | null;
+  platforms?: string[];
+  /** Pre-update snapshot store (§25): snapshots the replaced copy for rollback. */
+  rollback?: SkillRollbackStore;
 }
 
 function slugOf(skill: Pick<SkillConfig, "title">): string {
@@ -74,10 +111,70 @@ export async function findInstalledBySlug(
 export async function installSkillFromEntry(
   deps: SkillInstallDeps,
   entry: Pick<StoreSkillEntry, "slug" | "sourceUrl"> & { author?: string | null },
+  guards: SkillInstallGuards = {},
 ): Promise<InstallResult> {
   const emit = deps.onProgress ?? ((): void => {});
+  if (guards.revokedSlugs?.has(normalizeSkillSlug(entry.slug))) {
+    const message = `Skill "${entry.slug}" was revoked by the registry and cannot be installed.`;
+    emit({ phase: "error", message });
+    throw new Error(message);
+  }
+  if (guards.requiredCapabilities?.length) {
+    const native = checkNativeRequirements(guards.requiredCapabilities);
+    if (!native.satisfied) {
+      const message =
+        `Skill "${entry.slug}" requires an Ajiro Agent update ` +
+        `(missing native capabilities: ${native.missing.join(", ")}).`;
+      emit({ phase: "error", message });
+      throw new Error(message);
+    }
+  }
+  if (guards.platforms?.length && guards.platform) {
+    const current = guards.platform.toLowerCase();
+    if (!guards.platforms.includes(current)) {
+      const message = `Skill "${entry.slug}" does not support ${guards.platform}.`;
+      emit({ phase: "error", message });
+      throw new Error(message);
+    }
+  }
+  if (guards.minAppVersion && guards.appVersion) {
+    try {
+      if (compareDynamicVersions(guards.appVersion, guards.minAppVersion) < 0) {
+        const message =
+          `Skill "${entry.slug}" needs Ajiro Agent ${guards.minAppVersion} or newer.`;
+        emit({ phase: "error", message });
+        throw new Error(message);
+      }
+    } catch {
+      // Unparseable floors fail open; content validation still applies.
+    }
+  }
+  if (guards.maxAppVersion && guards.appVersion) {
+    try {
+      if (compareDynamicVersions(guards.appVersion, guards.maxAppVersion) > 0) {
+        const message =
+          `Skill "${entry.slug}" supports Ajiro Agent up to ${guards.maxAppVersion}.`;
+        emit({ phase: "error", message });
+        throw new Error(message);
+      }
+    } catch {
+      // Same fail-open reasoning as the floor above.
+    }
+  }
   emit({ phase: "fetching" });
   const { content } = await fetchSkillMarkdownFromUrl(entry.sourceUrl);
+  if (guards.expectedHash && hashContent(content.trim()) !== guards.expectedHash) {
+    const message = `Skill "${entry.slug}" failed integrity validation (hash mismatch).`;
+    emit({ phase: "error", message });
+    throw new Error(message);
+  }
+  const trust = evaluateExtensionTrust({
+    expectedHashPresent: guards.expectedHash != null,
+    hashMatches:
+      guards.expectedHash != null
+        ? hashContent(content.trim()) === guards.expectedHash
+        : undefined,
+  });
   emit({ phase: "parsing" });
 
   let parsed: ReturnType<typeof parseSkillMarkdown>;
@@ -111,7 +208,18 @@ export async function installSkillFromEntry(
     hashContent(existing.sourceMarkdown.trim()) === hashContent(content.trim())
   ) {
     emit({ phase: "done", skill: existing });
-    return { fileCount: relatedFiles.length, replaced: true, skill: existing, unchanged: true };
+    return {
+      fileCount: relatedFiles.length,
+      replaced: true,
+      skill: existing,
+      trust,
+      unchanged: true,
+    };
+  }
+  // Snapshot the replaced copy before writing (§25): a later rollback
+  // restores exactly this content.
+  if (existing) {
+    await guards.rollback?.snapshot(deps.repository, entry.slug).catch(() => {});
   }
   const input = {
     author: entry.author ?? null,
@@ -155,7 +263,13 @@ export async function installSkillFromEntry(
     throw new Error(message);
   }
   emit({ phase: "done", skill });
-  return { fileCount: relatedFiles.length, replaced: Boolean(existing), skill, unchanged: false };
+  return {
+    fileCount: relatedFiles.length,
+    replaced: Boolean(existing),
+    skill,
+    trust,
+    unchanged: false,
+  };
 }
 
 /** Update check: true when live content hash differs from installed. */

@@ -13,9 +13,11 @@ import {
   Copy,
   Cpu,
   Database,
+  Info,
   KeyRound,
   RefreshCw,
   Server,
+  Share2,
   Terminal,
   Upload,
   Wand2,
@@ -52,6 +54,7 @@ import {
   BUILT_IN_THEMES,
 } from "@/theme/themes";
 import { countEnabledBuiltInFileTools } from "@/modules/config/built-in-tools";
+import { shareLatestRelease } from "@/modules/about/app-links";
 import { useUpdate } from "@/providers/check-for-updates";
 import {
   isBackgroundAgentHeld,
@@ -784,6 +787,23 @@ export default function SettingsScreen() {
               value={hydrating || busyKey === "refresh" ? "Loading..." : undefined}
               onPress={() => {
                 runAction("refresh", refresh).catch(console.error);
+              }}
+            />
+            <SettingsRefRow
+              icon={Info}
+              title="About"
+              onPress={() => {
+                router.push("/settings/about" as never);
+              }}
+            />
+            <SettingsRefRow
+              icon={Share2}
+              title="Share"
+              disabled={busyKey === "share"}
+              showChevron={false}
+              value={busyKey === "share" ? "Loading..." : undefined}
+              onPress={() => {
+                runAction("share", shareLatestRelease).catch(console.error);
               }}
             />
           </SettingsGroup>

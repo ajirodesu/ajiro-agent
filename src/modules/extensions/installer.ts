@@ -13,6 +13,7 @@
  * Discovery vs. execution (§17): installing registers and stages files
  * only. Activation is a separate, explicit step through the runtime.
  */
+import { checkNativeRequirements } from "@/modules/updates/extension-framework";
 import { evaluateCompatibility } from "./compatibility";
 import {
   buildDependencyGraph,
@@ -119,6 +120,12 @@ export type InstallOutcome =
       /** Ids required but not installed, in declaration order. */
       missing: string[];
       status: "needs-dependencies";
+    }
+  | {
+      manifest: AcodePluginManifest;
+      /** Native capabilities this install lacks (§36). */
+      missingCapabilities: string[];
+      status: "needs-app-update";
     }
   | {
       manifest: AcodePluginManifest;
@@ -284,7 +291,31 @@ export async function installPackage(
     [...pkg.files.keys()],
   );
 
-  // 3b. Publisher signature (§51). Verified against the bytes that were
+  // 3a. Native capability gate (Dynamic Updates prompt §36): a plugin that
+  // needs native functionality this install lacks is refused with Requires
+  // App Update — never installed half-working.
+  const native = checkNativeRequirements(manifest.nativeCapabilities);
+  if (!native.satisfied) {
+    return {
+      manifest,
+      missingCapabilities: native.missing,
+      status: "needs-app-update",
+    };
+  }
+
+  // 3b. Revocation gate (§24): a revoked package is refused before anything
+  // is staged, no matter the source. The catalog is advisory — the check
+  // runs on the id the *package itself* declares.
+  const catalogEntry = (options.catalog ?? []).find(
+    (entry) => entry.id === manifest.id,
+  );
+  if (catalogEntry?.revoked) {
+    throw new InstallerError(
+      `Extension "${manifest.id}" was revoked by the registry and cannot be installed.`,
+    );
+  }
+
+  // 3c. Publisher signature (§51). Verified against the bytes that were
   // actually downloaded, so the verdict describes *this* package and not the
   // version the registry once advertised. A verdict is always recorded; only
   // the user's own policy can make one refuse the install.

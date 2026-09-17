@@ -44,7 +44,7 @@ import {
   saveInstalledRecords,
   type InstallDeps,
 } from "./installer";
-import { pluginDir } from "./storage";
+import { pluginDataDir, pluginDir } from "./storage";
 import type {
   ExtensionDiagnostic,
   ExtensionPermissionKey,
@@ -68,6 +68,40 @@ export const RESERVED_CORE_MODULES = [
 
 /** Acode's plugin load timeout (loadPlugins.js: PLUGIN_LOAD_TIMEOUT). */
 export const DEFAULT_PLUGIN_INIT_TIMEOUT_MS = 15_000;
+
+/**
+ * Theme-plugin identifiers (Acode's `loadPlugins.js` THEME_IDENTIFIERS,
+ * [OPEN-SOURCE, MIT]). Acode loads theme plugins before everything else, so
+ * a theme is in place before plugins that read theme state initialize.
+ * Detection is a case-insensitive substring match on the plugin id, exactly
+ * like Acode's `isThemePlugin`.
+ */
+export const THEME_PLUGIN_IDENTIFIERS: readonly string[] = [
+  "theme",
+  "catppuccin",
+  "pine",
+  "githubdark",
+  "radiant",
+  "rdtheme",
+  "ayumirage",
+  "dust",
+  "synthwave",
+  "dragon",
+  "mint",
+  "monokai",
+  "lumina_code",
+  "sweet",
+  "moonlight",
+  "bluloco",
+  "acode.plugin.extra_syntax_highlights",
+  "documentsviewer",
+];
+
+/** Case-insensitive substring match on the plugin id, like Acode. */
+export function isThemePluginId(pluginId: string): boolean {
+  const id = pluginId.toLowerCase();
+  return THEME_PLUGIN_IDENTIFIERS.some((identifier) => id.includes(identifier));
+}
 
 /**
  * Third argument Acode passes to a plugin's init callback. `cacheFile` and
@@ -217,7 +251,12 @@ export class ExtensionRuntime {
   async restoreActivePlugins(): Promise<void> {
     if (!this.deps || !this.executionHost) return;
     const records = await loadInstalledRecords(this.deps);
-    for (const record of records) {
+    // Acode loads theme plugins before everything else (loadPlugins.js), so
+    // a theme is in place before plugins that read theme state initialize.
+    const ordered = [...records].sort(
+      (left, right) => Number(isThemePluginId(right.id)) - Number(isThemePluginId(left.id)),
+    );
+    for (const record of ordered) {
       if (!record.enabled || record.runtimeState === "broken") continue;
       const source = await this.readEntrySource(record);
       if (!source) continue;
@@ -446,6 +485,14 @@ export class ExtensionRuntime {
     // webview-side timers, listeners, pages, and commands of this plugin.
     if (this.executionHost) {
       await this.executionHost.unmount(pluginId).catch(() => {});
+    }
+    // Acode's unmount always deletes the plugin's cache directory; settings
+    // and storage survive (only uninstall removes those). Cache is
+    // disposable by definition, so a failure here never fails deactivation.
+    if (this.deps) {
+      await this.deps.platform
+        .deleteEntry(pluginDataDir(this.deps.paths, pluginId, "cache"), "directory")
+        .catch(() => {});
     }
     for (const cleanup of pluginEntry.callbacksUnmount.values()) {
       try {

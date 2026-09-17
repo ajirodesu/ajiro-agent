@@ -16,7 +16,7 @@ import type { ExtensionMetadata, ExtensionPermissionKey } from "../models";
 import type { RegistryProvider } from "../registry";
 import { ExtensionRuntime, installAcodeRuntime } from "../runtime";
 import { planExtensionPaths } from "../storage";
-import { createMemoryPlatform, zipOfFiles } from "./helpers";
+import { createFakeExecutionHost, createMemoryPlatform, zipOfFiles } from "./helpers";
 
 const ALL_PERMISSIONS: ExtensionPermissionKey[] = [
   "commands",
@@ -48,8 +48,10 @@ function metadata(
   return {
     author: null,
     category: null,
+    channel: null,
     changelog: null,
     dependencies,
+    deprecated: false,
     description: null,
     download: null,
     icon: null,
@@ -62,6 +64,8 @@ function metadata(
     price: 0,
     readme: null,
     repository: null,
+    revoked: false,
+    rolloutPercent: null,
     source: "registry",
     updatedAt: null,
     version,
@@ -360,5 +364,86 @@ describe("interrupted operations", () => {
     expect(records[0].runtimeState).toBe("broken");
     expect(records[0].enabled).toBe(false);
     expect(records[0].runtimeError).toContain("interrupted");
+  });
+});
+
+describe("dynamic-update gates (revocation, native capabilities, health)", () => {
+  function nativePackage(id: string, capabilities: string[]) {
+    return zipOfFiles({
+      "main.js": `window.${id} = true;`,
+      "plugin.json": JSON.stringify({
+        author: { name: "Tester" },
+        id,
+        main: "main.js",
+        name: id,
+        nativeCapabilities: capabilities,
+        version: "1.0.0",
+      }),
+    });
+  }
+
+  it("refuses packages needing native capabilities with needs-app-update", async () => {
+    const rig = makeRig({
+      catalog: [metadata("com.example.needs-ar")],
+      packages: { "com.example.needs-ar": nativePackage("com.example.needs-ar", ["arKit"]) },
+    });
+    const outcome = await rig.manager.install(
+      { kind: "registry", pluginId: "com.example.needs-ar" },
+      { acceptedPermissions: ALL_PERMISSIONS },
+    );
+    expect(outcome.status).toBe("needs-app-update");
+    if (outcome.status === "needs-app-update") {
+      expect(outcome.missingCapabilities).toEqual(["arKit"]);
+    }
+    expect(await rig.manager.listInstalled()).toHaveLength(0);
+  });
+
+  it("refuses revoked catalog entries before staging anything", async () => {
+    const rig = makeRig({
+      catalog: [{ ...metadata("com.example.banned", [], "1.0.0"), revoked: true }],
+      packages: { "com.example.banned": packageBytes("com.example.banned") },
+    });
+    await expect(
+      rig.manager.install(
+        { kind: "registry", pluginId: "com.example.banned" },
+        { acceptedPermissions: ALL_PERMISSIONS },
+      ),
+    ).rejects.toThrow(/revoked/);
+    expect(await rig.manager.listInstalled()).toHaveLength(0);
+  });
+
+  it("reconcileRevoked disables revoked installs with a reason and logs health", async () => {
+    const rig = makeRig({
+      catalog: [metadata("com.example.plugin")],
+      packages: { "com.example.plugin": packageBytes("com.example.plugin") },
+    });
+    rig.runtime.setExecutionHost(createFakeExecutionHost());
+    const installed = await rig.manager.install(
+      { kind: "registry", pluginId: "com.example.plugin" },
+      { acceptedPermissions: ALL_PERMISSIONS },
+    );
+    expect(installed.status).toBe("installed");
+    await rig.manager.enable("com.example.plugin");
+
+    const { extensionHealthLog } = await import("../manager");
+    extensionHealthLog().clear();
+    const disabled = await rig.manager.reconcileRevoked([
+      { ...metadata("com.example.plugin"), revoked: true },
+    ]);
+    expect(disabled).toEqual(["com.example.plugin"]);
+    const records = await rig.manager.listInstalled();
+    expect(records[0].enabled).toBe(false);
+    expect(records[0].runtimeError).toMatch(/Revoked/);
+    expect(
+      extensionHealthLog().events().map((event) => event.kind),
+    ).toContain("revoked");
+
+    // Already-disabled extensions are left alone (idempotent sweep).
+    extensionHealthLog().clear();
+    expect(
+      await rig.manager.reconcileRevoked([
+        { ...metadata("com.example.plugin"), revoked: true },
+      ]),
+    ).toEqual([]);
   });
 });

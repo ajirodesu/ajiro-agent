@@ -39,6 +39,13 @@ export type RegistryProvider = {
   getVersions(id: string): Promise<ExtensionVersion[]>;
   resolveDownload(id: string, version?: string): Promise<ExtensionDownload>;
   search(query: string, options?: SearchOptions): Promise<ExtensionSummary[]>;
+  /**
+   * Acode's per-plugin update check (`plugin/check-update/<id>/<version>`).
+   * Optional: providers that cannot reach the endpoint omit it, and callers
+   * fall back to comparing catalog versions, which stays offline-safe.
+   * Returns null when the endpoint is unavailable or fails.
+   */
+  checkUpdate?(id: string, version: string): Promise<{ update: boolean; version: string | null } | null>;
 };
 
 function firstString(record: Record<string, unknown>, keys: string[]): string | null {
@@ -62,6 +69,32 @@ function normalizeAuthor(value: unknown): ExtensionMetadata["author"] {
     name,
     url: firstString(value, ["url", "website"]),
   };
+}
+
+/**
+ * The live registry serializes some arrays as JSON strings (verified
+ * firsthand against `plugin/acode.plugin.python`: `keywords` arrives as
+ * `"[\"python\"]"`). Accept real arrays, JSON-encoded arrays, and — as a
+ * last resort — a single bare value.
+ */
+export function parseRegistryStringList(value: unknown): string[] {
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string");
+  }
+  if (typeof value !== "string") return [];
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((entry): entry is string => typeof entry === "string");
+    }
+    if (typeof parsed === "string" && parsed.trim()) return [parsed.trim()];
+  } catch {
+    // Not JSON — fall through to the bare-value branch below.
+  }
+  return [trimmed];
 }
 
 function normalizeDownload(
@@ -94,9 +127,21 @@ export function normalizeRegistryEntry(value: unknown): ExtensionMetadata | null
   const name = firstString(value, ["name", "title"]);
   const version = firstString(value, ["version", "latestVersion", "latest_version"]);
   if (!id || !name || !version) return null;
-  const keywords = Array.isArray(value.keywords)
-    ? value.keywords.filter((entry): entry is string => typeof entry === "string")
-    : [];
+  const keywords = parseRegistryStringList(value.keywords).slice(0, 32);
+  let author = normalizeAuthor(value.author);
+  // The live registry also carries flat author fields alongside (or instead
+  // of parts of) the author value — merge them rather than dropping data.
+  if (!author) {
+    const flatName = firstString(value, ["username", "user", "developer"]);
+    if (flatName) {
+      author = { email: null, github: null, name: flatName, url: null };
+    }
+  }
+  if (author) {
+    author.email ??= firstString(value, ["author_email", "authorEmail"]);
+    author.github ??= firstString(value, ["author_github", "authorGithub"]);
+    author.url ??= firstString(value, ["author_url", "authorUrl", "website"]);
+  }
   const dependencies = Array.isArray(value.dependencies)
     ? value.dependencies
         .map((entry) =>
@@ -111,11 +156,24 @@ export function normalizeRegistryEntry(value: unknown): ExtensionMetadata | null
         )
         .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
     : [];
+  const channel = firstString(value, ["channel"]);
+  const rolloutPercent =
+    typeof value.rolloutPercent === "number" &&
+    Number.isFinite(value.rolloutPercent) &&
+    value.rolloutPercent >= 0 &&
+    value.rolloutPercent <= 100
+      ? value.rolloutPercent
+      : null;
   return {
-    author: normalizeAuthor(value.author),
+    author,
     category: firstString(value, ["category", "type"]),
     changelog: firstString(value, ["changelog", "changelogs"]),
+    channel:
+      channel === "stable" || channel === "beta" || channel === "preview"
+        ? channel
+        : null,
     dependencies,
+    deprecated: value.deprecated === true,
     description:
       firstString(value, ["description", "summary", "shortDescription", "short_description"]),
     download: normalizeDownload(value, id),
@@ -134,6 +192,8 @@ export function normalizeRegistryEntry(value: unknown): ExtensionMetadata | null
     price: typeof value.price === "number" ? value.price : 0,
     readme: firstString(value, ["readme", "readmeUrl", "readme_url"]),
     repository: firstString(value, ["repository", "repo", "sourceUrl", "source_url"]),
+    revoked: value.revoked === true,
+    rolloutPercent,
     source: "registry",
     updatedAt: firstString(value, ["updatedAt", "updated_at", "lastUpdated"]),
     version,
@@ -268,6 +328,33 @@ export class AcodeRegistryProvider implements RegistryProvider {
     return { kind: "registry", pluginId: id };
   }
 
+  /**
+   * Mirrors Acode's own update check (`checkPluginsUpdate.js`): ask the
+   * registry whether `<version>` is stale. Any failure yields null so the
+   * caller falls back to the catalog version comparison.
+   */
+  async checkUpdate(
+    id: string,
+    version: string,
+  ): Promise<{ update: boolean; version: string | null } | null> {
+    try {
+      const response = await this.fetchJson(
+        this.url(`plugin/check-update/${encodeURIComponent(id)}/${encodeURIComponent(version)}`),
+        { headers: { Accept: "application/json" } },
+      );
+      if (!response.ok) return null;
+      const parsed: unknown = await response.json();
+      if (!isRecord(parsed)) return null;
+      if (parsed.update !== true) return { update: false, version: null };
+      const remoteVersion = typeof parsed.version === "string" && parsed.version.trim()
+        ? parsed.version.trim()
+        : null;
+      return { update: true, version: remoteVersion };
+    } catch {
+      return null;
+    }
+  }
+
   async search(query: string, options?: SearchOptions): Promise<ExtensionSummary[]> {
     const { entries } = await this.fetchCatalog({ limit: options?.limit });
     return searchCatalogMetadata(entries, query)
@@ -362,6 +449,18 @@ export class SeededRegistryProvider implements RegistryProvider {
   async resolveDownload(id: string): Promise<ExtensionDownload> {
     const metadata = await this.getExtension(id);
     return metadata.download ?? { kind: "registry", pluginId: id };
+  }
+
+  async checkUpdate(
+    id: string,
+    version: string,
+  ): Promise<{ update: boolean; version: string | null } | null> {
+    if (!this.remote || typeof this.remote.checkUpdate !== "function") return null;
+    try {
+      return await this.remote.checkUpdate(id, version);
+    } catch {
+      return null;
+    }
   }
 
   async search(query: string, options?: SearchOptions): Promise<ExtensionSummary[]> {

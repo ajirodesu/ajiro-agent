@@ -21,11 +21,13 @@ function author(github: string, name: string) {
 }
 
 function metadata(overrides: Partial<ExtensionMetadata>): ExtensionMetadata {
-  return {
+  const base: ExtensionMetadata = {
     author: null,
     category: null,
+    channel: null,
     changelog: null,
     dependencies: [],
+    deprecated: false,
     description: null,
     download: null,
     icon: null,
@@ -38,11 +40,13 @@ function metadata(overrides: Partial<ExtensionMetadata>): ExtensionMetadata {
     price: 0,
     readme: null,
     repository: null,
+    revoked: false,
+    rolloutPercent: null,
     source: "registry",
     updatedAt: null,
     version: "1.0.0",
-    ...overrides,
   };
+  return Object.assign(base, overrides);
 }
 
 function record(
@@ -189,6 +193,7 @@ describe("installed-state filters", () => {
       "enabled",
       "disabled",
       "broken",
+      "revoked",
       "update-available",
     ]);
   });

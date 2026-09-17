@@ -16,15 +16,30 @@
  * - a plugin that fails to load or initialize is reported to the runtime,
  *   which marks it broken and auto-disables it (§52/§72)
  */
+import { EXTENSION_TO_MODE_KEY } from "../../../editor/editorLanguages";
+import {
+  createMemoryFormatterSelections,
+  extensionsForLanguageId,
+  formatterSupportsLanguage,
+  normalizeFormatterExtensions,
+  type FormatterRegistration,
+  type FormatterSelectionStore,
+} from "../formatters";
 import type { ExtensionPermissionKey } from "../models";
 import {
   isSafePluginPath,
+  MAX_TOAST_LENGTH,
   normalizeConsoleText,
+  normalizeDialogText,
+  normalizeNewFileName,
   normalizePageTitle,
   parsePluginBridgeOutbound,
+  PLUGIN_DIALOG_CANCELLED,
   type PluginBridgeInbound,
   type PluginBridgeOutbound,
   type PluginCommandRegistration,
+  type PluginDialogKind,
+  type PluginDialogPayload,
   type PluginErrorPhase,
   type PluginPageState,
 } from "./bridge-protocol";
@@ -38,6 +53,9 @@ export const DOM_GRANTABLE_PERMISSIONS: readonly ExtensionPermissionKey[] = [
   "network",
   "notifications",
   "storage",
+  // Every installed plugin holds `ui` (permissions.ts); dialogs need no
+  // further grant, exactly like Acode, which gates dialogs not at all.
+  "ui",
 ];
 
 export type PluginHostTransport = {
@@ -67,6 +85,23 @@ export type PluginHostServices = {
   ): Promise<Record<string, unknown>>;
   /** Consent-gated install request raised by acode.installPlugin (§42). */
   requestPluginInstall(pluginId: string, targetId: string): Promise<void>;
+  /**
+   * Native dialogs (verified against Acode's `src/dialogs/*`): the app
+   * renders, the promise settles with the user's answer. The `select` kind
+   * stays pending on cancel unless the payload sets `rejectOnCancel`;
+   * `multi-prompt` rejects on cancel, mirroring Acode.
+   */
+  showDialog(kind: PluginDialogKind, payload: PluginDialogPayload): Promise<unknown>;
+  /** Create a loader overlay; the returned id feeds operate/destroy calls. */
+  createLoader(pluginId: string, title: string, message: string, timeoutMs?: number): Promise<string>;
+  operateLoader(loaderId: string, op: "hide" | "setMessage" | "setTitle" | "show", value?: string): void;
+  destroyLoader(loaderId: string): void;
+  /** Fire-and-forget transient message; never throws, never needs a grant. */
+  toast(pluginId: string, text: string, durationMs?: number): void;
+  /** User-mediated file picking; resolves the picked URIs, empty on cancel. */
+  pickFiles(pluginId: string, mode: string): Promise<string[]>;
+  /** Create a file in the active project; resolves the created path. */
+  openNewFile(pluginId: string, filename: string, text: string): Promise<string>;
   setPluginSetting(pluginId: string, key: string, value: unknown): Promise<void>;
   /** List a plugin-private data directory. */
   listPluginData(pluginId: string, path: string): Promise<string[]>;
@@ -112,6 +147,11 @@ const ACTIVATION_TIMEOUT_MS = 20_000;
 /** Guard against a runaway plugin flooding the host with messages. */
 const MAX_REQUESTS_PER_PLUGIN = 512;
 
+/** File extensions a formatter may declare for an editor language id. */
+function extensionsForLanguage(languageId: string): string[] {
+  return extensionsForLanguageId(languageId, EXTENSION_TO_MODE_KEY);
+}
+
 export class PluginDomHost {
   private readonly definitions = new Map<string, PluginDefinition>();
   private readonly listeners = new Set<(event: PluginHostEvent) => void>();
@@ -133,11 +173,29 @@ export class PluginDomHost {
   private readonly readyWaiters = new Set<ReadyWaiter>();
   private transport: PluginHostTransport | null = null;
   private ready = false;
+  /** Loader overlay ids owned by each plugin; destroyed with the plugin. */
+  private readonly loaders = new Map<string, string>();
+  /** Formatter mirror: the functions stay in the document, metadata here. */
+  private readonly formatters = new Map<string, FormatterRegistration>();
+  private formatterSelections: FormatterSelectionStore;
 
   constructor(
     private readonly services: PluginHostServices,
     private readonly activationTimeoutMs: number = ACTIVATION_TIMEOUT_MS,
-  ) {}
+    selections?: FormatterSelectionStore,
+  ) {
+    this.formatterSelections = selections ?? createMemoryFormatterSelections();
+  }
+
+  /** Formatter registrations currently known to the host (selection UI). */
+  listFormatters(): FormatterRegistration[] {
+    return [...this.formatters.values()].map((entry) => ({
+      displayName: entry.displayName,
+      extensions: [...entry.extensions],
+      formatterId: entry.formatterId,
+      pluginId: entry.pluginId,
+    }));
+  }
 
   /**
    * The webview mounted (or remounted). Everything the previous document
@@ -365,6 +423,13 @@ export class PluginDomHost {
 
   async unmount(pluginId: string): Promise<void> {
     const definition = this.definitions.get(pluginId);
+    // Formatter registrations died with the document state; drop the mirror
+    // so a stale entry can never route a format at a gone plugin. Saved
+    // per-language selections are pruned lazily on the next format instead,
+    // mirroring Acode's own cleanup-on-unregister behavior.
+    for (const [formatterId, entry] of this.formatters) {
+      if (entry.pluginId === pluginId) this.formatters.delete(formatterId);
+    }
     if (!definition) return;
     // Kept aside until the document answers: the plugin's unmount callback
     // runs after this point and must still be able to write and notify.
@@ -438,6 +503,17 @@ export class PluginDomHost {
       case "unmounted":
         this.activations.delete(message.pluginId);
         this.unmounting.delete(message.pluginId);
+        // A dead plugin keeps no loader overlay on screen.
+        for (const [loaderId, owner] of [...this.loaders]) {
+          if (owner === message.pluginId) {
+            this.loaders.delete(loaderId);
+            try {
+              this.services.destroyLoader(loaderId);
+            } catch {
+              // Teardown must never break the unmount path.
+            }
+          }
+        }
         this.emit({ type: "unmounted", pluginId: message.pluginId });
         return;
       case "console":
@@ -587,6 +663,47 @@ export class PluginDomHost {
         return;
       case "install-plugin":
         void this.handleInstallRequest(message.pluginId, message.requestId, message.targetId);
+        return;
+      case "formatter-register":
+        this.handleFormatterRegister(message);
+        return;
+      case "formatter-unregister":
+        this.handleFormatterUnregister(message);
+        return;
+      case "format-request":
+        void this.handleFormatRequest(message.pluginId, message.requestId);
+        return;
+      case "format-apply":
+        void this.handleFormatApply(message.pluginId, message.requestId, message.text);
+        return;
+      case "dialog":
+        void this.handleDialogRequest(message.pluginId, message.requestId, message.kind, message.payload);
+        return;
+      case "dialog-loader-create":
+        void this.handleLoaderCreate(
+          message.pluginId,
+          message.requestId,
+          message.title,
+          message.message,
+          message.options,
+        );
+        return;
+      case "dialog-loader-op":
+        this.handleLoaderOp(message.pluginId, message.loaderId, message.op, message.value);
+        return;
+      case "toast":
+        this.handleToast(message.pluginId, message.text, message.durationMs);
+        return;
+      case "file-browser":
+        void this.handleFileBrowser(message.pluginId, message.requestId, message.mode);
+        return;
+      case "editor-new-file":
+        void this.handleNewEditorFile(
+          message.pluginId,
+          message.requestId,
+          message.filename,
+          message.text,
+        );
         return;
       case "exec-request":
         if (message.pluginId && !this.hasPermission(message.pluginId, "commands")) {
@@ -781,6 +898,357 @@ export class PluginDomHost {
         ok: false,
       });
     }
+  }
+
+  /**
+   * Native dialogs (verified against Acode's `src/dialogs/*`). Gated on the
+   * `ui` capability every plugin holds; the app renders and the promise
+   * settles with the user's answer. Cancellation mirrors Acode per kind:
+   * `select` stays pending unless the payload sets `rejectOnCancel`,
+   * `multi-prompt` rejects, everything else resolves its empty value.
+   */
+  private async handleDialogRequest(
+    pluginId: string,
+    requestId: number,
+    kind: PluginDialogKind,
+    payload: PluginDialogPayload,
+  ): Promise<void> {
+    if (!this.withinRequestBudget(pluginId, requestId)) return;
+    if (!pluginId || !this.hasPermission(pluginId, "ui")) {
+      this.respond(requestId, {
+        error: "Showing a dialog requires the ui capability.",
+        ok: false,
+      });
+      return;
+    }
+    if (kind !== "alert" && kind !== "confirm" && kind !== "prompt" && kind !== "select" && kind !== "multi-prompt") {
+      this.respond(requestId, { error: `Unknown dialog kind "${String(kind)}".`, ok: false });
+      return;
+    }
+    try {
+      const value = await this.services.showDialog(kind, payload);
+      this.respond(requestId, { ok: true, value: value ?? null });
+    } catch (error) {
+      if (error instanceof Error && error.name === PLUGIN_DIALOG_CANCELLED) {
+        this.respond(requestId, { error: PLUGIN_DIALOG_CANCELLED, ok: false });
+        return;
+      }
+      this.respond(requestId, {
+        error: error instanceof Error ? error.message : "The dialog could not be shown.",
+        ok: false,
+      });
+    }
+  }
+
+  private async handleLoaderCreate(
+    pluginId: string,
+    requestId: number,
+    title: unknown,
+    message: unknown,
+    options: unknown,
+  ): Promise<void> {
+    if (!this.withinRequestBudget(pluginId, requestId)) return;
+    if (!pluginId || !this.hasPermission(pluginId, "ui")) {
+      this.respond(requestId, {
+        error: "Showing a loader requires the ui capability.",
+        ok: false,
+      });
+      return;
+    }
+    const optionsRecord =
+      typeof options === "object" && options !== null
+        ? (options as { timeoutMs?: unknown })
+        : {};
+    const timeoutMs =
+      typeof optionsRecord.timeoutMs === "number" && optionsRecord.timeoutMs > 0
+        ? Math.min(Math.floor(optionsRecord.timeoutMs), 120_000)
+        : undefined;
+    try {
+      const loaderId = await this.services.createLoader(
+        pluginId,
+        normalizeDialogText(title, 200),
+        normalizeDialogText(message),
+        timeoutMs,
+      );
+      this.loaders.set(loaderId, pluginId);
+      this.respond(requestId, { ok: true, value: loaderId });
+    } catch (error) {
+      this.respond(requestId, {
+        error: error instanceof Error ? error.message : "The loader could not be shown.",
+        ok: false,
+      });
+    }
+  }
+
+  /** Loader ops are one-way: unknown ids are ignored, cross-plugin ops refused. */
+  private handleLoaderOp(
+    pluginId: string,
+    loaderId: unknown,
+    op: string,
+    value: unknown,
+  ): void {
+    if (typeof loaderId !== "string" || this.loaders.get(loaderId) !== pluginId) return;
+    if (op === "destroy") {
+      this.loaders.delete(loaderId);
+      try {
+        this.services.destroyLoader(loaderId);
+      } catch {
+        // Loader teardown must never break the plugin.
+      }
+      return;
+    }
+    if (op === "hide" || op === "show" || op === "setTitle" || op === "setMessage") {
+      try {
+        this.services.operateLoader(
+          loaderId,
+          op,
+          typeof value === "string" ? normalizeDialogText(value, 500) : undefined,
+        );
+      } catch {
+        // Loader teardown must never break the plugin.
+      }
+    }
+  }
+
+  /** Toasts need no grant (Acode requires none) but count toward the budget. */
+  private handleToast(pluginId: string, text: unknown, durationMs: unknown): void {
+    if (!pluginId || !this.definitions.has(pluginId)) return;
+    const count = (this.requestCounts.get(pluginId) ?? 0) + 1;
+    this.requestCounts.set(pluginId, count);
+    if (count > MAX_REQUESTS_PER_PLUGIN) return;
+    const duration =
+      typeof durationMs === "number" && durationMs > 0
+        ? Math.min(Math.floor(durationMs), 10_000)
+        : undefined;
+    try {
+      this.services.toast(pluginId, normalizeDialogText(text, MAX_TOAST_LENGTH), duration);
+    } catch {
+      // A toast must never break the plugin that showed it.
+    }
+  }
+
+  private async handleFileBrowser(
+    pluginId: string,
+    requestId: number,
+    mode: unknown,
+  ): Promise<void> {
+    if (!this.withinRequestBudget(pluginId, requestId)) return;
+    if (!pluginId || !this.hasPermission(pluginId, "ui")) {
+      this.respond(requestId, {
+        error: "Opening the file browser requires the ui capability.",
+        ok: false,
+      });
+      return;
+    }
+    try {
+      const uris = await this.services.pickFiles(
+        pluginId,
+        typeof mode === "string" ? mode : "file",
+      );
+      this.respond(requestId, { ok: true, value: uris });
+    } catch (error) {
+      this.respond(requestId, {
+        error: error instanceof Error ? error.message : "No file was picked.",
+        ok: false,
+      });
+    }
+  }
+
+  private async handleNewEditorFile(
+    pluginId: string,
+    requestId: number,
+    filename: unknown,
+    text: unknown,
+  ): Promise<void> {
+    if (!this.withinRequestBudget(pluginId, requestId)) return;
+    if (!pluginId || !this.hasPermission(pluginId, "editor")) {
+      this.respond(requestId, {
+        error: "Creating an editor file requires the editor capability.",
+        ok: false,
+      });
+      return;
+    }
+    const name = normalizeNewFileName(filename);
+    if (!name) {
+      this.respond(requestId, {
+        error: "A new editor file requires a file name.",
+        ok: false,
+      });
+      return;
+    }
+    try {
+      const path = await this.services.openNewFile(
+        pluginId,
+        name,
+        typeof text === "string" ? text : "",
+      );
+      this.respond(requestId, { ok: true, value: path });
+    } catch (error) {
+      this.respond(requestId, {
+        error: error instanceof Error ? error.message : "The file could not be created.",
+        ok: false,
+      });
+    }
+  }
+
+  /**
+   * Formatter registration (verified against Acode's acode.js). Registering
+   * is metadata-only and needs no permission; *running* a formatter goes
+   * through the editor-gated format flow below. Only a defined plugin may
+   * register — messages from nowhere are dropped.
+   */
+  private handleFormatterRegister(message: {
+    displayName: string;
+    extensions: string[];
+    formatterId: string;
+    pluginId: string;
+  }): void {
+    if (!message.pluginId || !this.definitions.has(message.pluginId)) return;
+    const formatterId = message.formatterId?.trim();
+    if (!formatterId) {
+      this.services.log(message.pluginId, "warning", "Refused a formatter registration without an id.");
+      return;
+    }
+    this.formatters.set(formatterId, {
+      displayName: typeof message.displayName === "string" ? message.displayName : "",
+      extensions: normalizeFormatterExtensions(message.extensions),
+      formatterId,
+      pluginId: message.pluginId,
+    });
+  }
+
+  /**
+   * Only the owning plugin may remove its formatter. Acode checks nothing
+   * here; silent cross-plugin removal is sabotage, not compatibility.
+   */
+  private async handleFormatterUnregister(message: {
+    formatterId: string;
+    pluginId: string;
+  }): Promise<void> {
+    const entry = this.formatters.get(message.formatterId);
+    if (entry && entry.pluginId === message.pluginId) {
+      this.formatters.delete(message.formatterId);
+      await this.clearFormatterSelections(entry.formatterId);
+    }
+  }
+
+  private async clearFormatterSelections(formatterId: string): Promise<void> {
+    try {
+      const selections = await this.formatterSelections.loadSelections();
+      let changed = false;
+      for (const [languageId, selected] of Object.entries(selections)) {
+        if (selected === formatterId) {
+          delete selections[languageId];
+          changed = true;
+        }
+      }
+      if (changed) await this.formatterSelections.saveSelections(selections);
+    } catch {
+      // Selection cleanup is best-effort; stale entries are pruned lazily.
+    }
+  }
+
+  /**
+   * `acode.format()` entry: resolve the selection for the active document's
+   * language and hand the document everything its formatter function needs.
+   * The caller must hold the editor capability — formatting reads and
+   * replaces the open document.
+   */
+  private async handleFormatRequest(pluginId: string | null, requestId: number): Promise<void> {
+    if (!pluginId || !this.hasPermission(pluginId, "editor")) {
+      this.respond(requestId, {
+        error: "Formatting the active document requires the editor capability.",
+        ok: false,
+      });
+      return;
+    }
+    if (!this.withinRequestBudget(pluginId, requestId)) return;
+    const snapshot = this.services.readActiveEditor();
+    if (!snapshot) {
+      this.respond(requestId, { error: "No document is open in the editor.", ok: false });
+      return;
+    }
+    const languageId = (snapshot.languageId ?? "").toLowerCase();
+    let selections: Record<string, string> = {};
+    try {
+      selections = await this.formatterSelections.loadSelections();
+    } catch {
+      selections = {};
+    }
+    let formatterId: string | null = selections[languageId] ?? null;
+    let entry = formatterId ? (this.formatters.get(formatterId) ?? null) : null;
+    if (formatterId && !entry) {
+      // Mirror Acode's lazy cleanup: a selection pointing at a formatter
+      // that no longer exists is deleted instead of failing forever.
+      delete selections[languageId];
+      await this.formatterSelections.saveSelections(selections).catch(() => {});
+      formatterId = null;
+    }
+    if (!entry) {
+      // Unambiguous single candidate: use it without forcing the user
+      // through the Store picker's detail view mid-keystroke. Zero or
+      // several candidates is an honest refusal, not a guess.
+      const candidates = [...this.formatters.values()].filter((candidate) =>
+        formatterSupportsLanguage(candidate, extensionsForLanguage(languageId)),
+      );
+      if (candidates.length === 1 && candidates[0]) {
+        entry = candidates[0];
+        formatterId = entry.formatterId;
+      }
+    }
+    if (!entry || !formatterId) {
+      this.services.log(
+        pluginId,
+        "info",
+        `No formatter selected for language "${languageId || "plain text"}".`,
+      );
+      this.respond(requestId, { error: "No formatter is selected for this file.", ok: false });
+      return;
+    }
+    this.respond(requestId, {
+      ok: true,
+      value: {
+        formatterId,
+        languageId,
+        path: snapshot.path,
+        text: snapshot.text,
+      },
+    });
+  }
+
+  /**
+   * The document ran the selected formatter and posts the result. The
+   * caller (the plugin that invoked `format()`) must still hold the editor
+   * capability at apply time.
+   */
+  private async handleFormatApply(
+    pluginId: string | null,
+    requestId: number,
+    text: unknown,
+  ): Promise<void> {
+    if (!pluginId || !this.hasPermission(pluginId, "editor")) {
+      this.respond(requestId, {
+        error: "Applying formatted text requires the editor capability.",
+        ok: false,
+      });
+      return;
+    }
+    if (!this.withinRequestBudget(pluginId, requestId)) return;
+    if (typeof text !== "string") {
+      this.respond(requestId, { error: "A formatter must return text.", ok: false });
+      return;
+    }
+    let applied = false;
+    try {
+      applied = this.services.writeActiveEditor(text);
+    } catch {
+      applied = false;
+    }
+    if (!applied) {
+      this.respond(requestId, { error: "No document is open in the editor.", ok: false });
+      return;
+    }
+    this.respond(requestId, { ok: true, value: true });
   }
 
   /* --------------------------------------------------------------- events */

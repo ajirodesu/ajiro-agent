@@ -18,6 +18,10 @@
  *   record that disagrees with what is on disk (§52).
  */
 import {
+  createExtensionHealthLog,
+  type ExtensionHealthLog,
+} from "@/modules/updates/extension-framework";
+import {
   buildDependencyGraph,
   planDependencyInstall,
   type DependencyIssue,
@@ -107,6 +111,12 @@ export type ExtensionPackageManager = {
   hasRollbackPoint(pluginId: string): Promise<boolean>;
   discardRollbackPoint(pluginId: string): Promise<void>;
   listInstalled(): Promise<InstalledExtensionRecord[]>;
+  /**
+   * Revocation sweep (§24): disable every installed extension the catalog
+   * revoked, with a persisted reason. Returns the disabled ids. Safe to run
+   * on every sync — already-disabled extensions are left alone.
+   */
+  reconcileRevoked(entries: ExtensionMetadata[]): Promise<string[]>;
 };
 
 export type ExtensionManagerConfig = {
@@ -128,6 +138,17 @@ export type ExtensionManagerConfig = {
 
 const DEFAULT_SLEEP = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Local-only install/update/rollback telemetry (§49, optional; the app has
+ * no remote pipeline). Shared process-wide so the Store can surface recent
+ * health without threading a log through every caller.
+ */
+const health: ExtensionHealthLog = createExtensionHealthLog();
+
+export function extensionHealthLog(): ExtensionHealthLog {
+  return health;
+}
 
 export function createExtensionManager({
   deps,
@@ -180,14 +201,33 @@ export function createExtensionManager({
   const manager: ExtensionPackageManager = {
     async install(source, options = {}) {
       await records();
-      const outcome = await installPackage(deps, source, {
-        ...options,
-        catalog: await catalogEntries(),
-        provider,
-        signaturePolicy: await policy(),
-      });
+      let outcome: InstallOutcome;
+      try {
+        outcome = await installPackage(deps, source, {
+          ...options,
+          catalog: await catalogEntries(),
+          provider,
+          signaturePolicy: await policy(),
+        });
+      } catch (error) {
+        health.record(
+          "plugin",
+          source.kind === "registry" ? source.pluginId : source.kind,
+          "install-failure",
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      }
       if (outcome.status === "installed") {
+        health.record("plugin", outcome.record.id, "install-success");
         await runtime.refreshStateFromRecords();
+      } else if (outcome.status === "needs-app-update") {
+        health.record(
+          "plugin",
+          outcome.manifest.id,
+          "incompatible",
+          `missing native: ${outcome.missingCapabilities.join(", ")}`,
+        );
       }
       return outcome;
     },
@@ -231,12 +271,14 @@ export function createExtensionManager({
                 {
                   id: dependency.id,
                   kind: "failed",
-                  message:
-                    outcome.status === "needs-permissions"
-                      ? "it requires permissions that have not been approved"
-                      : outcome.status === "signature-rejected"
-                        ? signaturePolicyMessage(outcome.verdict)
-                        : "it could not be installed",
+                    message:
+                      outcome.status === "needs-permissions"
+                        ? "it requires permissions that have not been approved"
+                        : outcome.status === "signature-rejected"
+                          ? signaturePolicyMessage(outcome.verdict)
+                          : outcome.status === "needs-app-update"
+                            ? `it requires a newer Ajiro Agent (missing: ${outcome.missingCapabilities.join(", ")})`
+                            : "it could not be installed",
                   requiredBy: pluginId,
                 },
               ],
@@ -298,14 +340,25 @@ export function createExtensionManager({
       const source: ExtensionPackageSource = existing.sourceUrl
         ? { kind: "url", url: existing.sourceUrl }
         : { kind: "registry", pluginId };
-      const outcome = await installPackage(deps, source, {
-        ...options,
-        catalog: await catalogEntries(),
-        provider,
-        // Keep the replaced version until the new one activates (§32).
-        retainBackup: true,
-        signaturePolicy: await policy(),
-      });
+      let outcome: InstallOutcome;
+      try {
+        outcome = await installPackage(deps, source, {
+          ...options,
+          catalog: await catalogEntries(),
+          provider,
+          // Keep the replaced version until the new one activates (§32).
+          retainBackup: true,
+          signaturePolicy: await policy(),
+        });
+      } catch (error) {
+        health.record(
+          "plugin",
+          pluginId,
+          "update-failure",
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      }
       if (outcome.status !== "installed") return outcome;
 
       await runtime.refreshStateFromRecords();
@@ -315,6 +368,7 @@ export function createExtensionManager({
         await runtime.activate(pluginId, { firstInit: false });
         await discardRollbackPoint(deps, pluginId);
       }
+      health.record("plugin", pluginId, "update-success");
       return outcome;
     },
 
@@ -327,9 +381,20 @@ export function createExtensionManager({
     async rollback(pluginId) {
       // Unmount the failed version before its files are replaced.
       await runtime.deactivate(pluginId).catch(() => {});
-      const record = await rollbackPackage(deps, pluginId);
-      await runtime.refreshStateFromRecords();
-      return record;
+      try {
+        const record = await rollbackPackage(deps, pluginId);
+        await runtime.refreshStateFromRecords();
+        health.record("plugin", pluginId, "rollback");
+        return record;
+      } catch (error) {
+        health.record(
+          "plugin",
+          pluginId,
+          "update-failure",
+          `rollback failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        throw error;
+      }
     },
 
     async enable(pluginId) {
@@ -368,6 +433,33 @@ export function createExtensionManager({
     },
 
     listInstalled: records,
+
+    async reconcileRevoked(entries) {
+      const current = await records();
+      const revoked = new Set(
+        entries.filter((entry) => entry.revoked).map((entry) => entry.id),
+      );
+      const disabled: string[] = [];
+      for (const record of current) {
+        if (!revoked.has(record.id) || !record.enabled) continue;
+        await runtime.deactivate(record.id).catch(() => {});
+        const next = patchRecord(
+          current,
+          record.id,
+          {
+            enabled: false,
+            runtimeError: "Revoked by the registry.",
+            runtimeState: "disabled",
+          },
+          deps.platform.nowIso(),
+        );
+        await saveInstalledRecords(deps, next);
+        health.record("plugin", record.id, "revoked", "Disabled by revocation sweep.");
+        disabled.push(record.id);
+      }
+      await runtime.refreshStateFromRecords();
+      return disabled;
+    },
   };
 
   return manager;

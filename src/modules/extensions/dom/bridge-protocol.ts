@@ -51,7 +51,76 @@ export type PluginBridgeOutbound =
       pluginId: string | null;
       value?: unknown;
     }
-  | { type: "notify"; level: "error" | "info" | "success" | "warning"; pluginId: string; text: string };
+  | { type: "notify"; level: "error" | "info" | "success" | "warning"; pluginId: string; text: string }
+  /**
+   * Formatter registration (verified against Acode's acode.js): the format
+   * function itself stays inside the document — only its metadata crosses.
+   */
+  | {
+      type: "formatter-register";
+      displayName: string;
+      extensions: string[];
+      formatterId: string;
+      pluginId: string;
+    }
+  | { type: "formatter-unregister"; formatterId: string; pluginId: string }
+  /** `acode.format()` entry: the host resolves the selection + document. */
+  | { type: "format-request"; pluginId: string; requestId: number }
+  /** The document ran the selected formatter; the host applies the text. */
+  | { type: "format-apply"; pluginId: string; requestId: number; text: string }
+  /**
+   * Native dialogs (verified against Acode's `src/dialogs/*` + `acode.js`):
+   * the document collects arguments and normalizes option shapes, the app
+   * renders. Every kind is permission-gated on `ui` host-side. `alert`
+   * resolves when dismissed; `confirm` resolves a boolean; `prompt` resolves
+   * the value (number-coerced for `type: "number"`) or null on cancel;
+   * `select` resolves the chosen value, stays pending on cancel unless
+   * `rejectOnCancel` was set (mirroring Acode), and `multi-prompt` resolves
+   * the values map or rejects on cancel (mirroring Acode).
+   */
+  | {
+      type: "dialog";
+      kind: PluginDialogKind;
+      payload: PluginDialogPayload;
+      pluginId: string;
+      requestId: number;
+    }
+  /**
+   * Loader handles are stateful: create returns an id, later ops mutate it.
+   * Mirrors Acode's singleton behavior — creating a loader replaces the
+   * active one app-side. Ops for unknown ids are ignored, never errors.
+   */
+  | {
+      type: "dialog-loader-create";
+      message: string;
+      options: { timeoutMs?: number };
+      pluginId: string;
+      requestId: number;
+      title: string;
+    }
+  | {
+      type: "dialog-loader-op";
+      loaderId: string;
+      op: "destroy" | "hide" | "setMessage" | "setTitle" | "show";
+      pluginId: string;
+      value?: string;
+    }
+  /** Fire-and-forget transient message (`acode.require("toast")`). */
+  | { type: "toast"; durationMs?: number; pluginId: string; text: string }
+  /** User-mediated file picking (`acode.fileBrowser`): safe by construction. */
+  | { type: "file-browser"; mode: string; pluginId: string; requestId: number }
+  /**
+   * `acode.newEditorFile(filename, options?)`: creates the file in the
+   * active project with the app's own file service and emits FILE_CREATED,
+   * exactly like a manually created file. Responds with the created path.
+   */
+  | {
+      type: "editor-new-file";
+      filename: string;
+      pluginId: string;
+      requestId: number;
+      text: string;
+    };
 
 export type PluginErrorPhase = "activate" | "execute" | "load" | "unmount";
 
@@ -80,6 +149,174 @@ export type PluginCommandRegistration = {
   exec?: unknown;
   name: string;
 };
+
+export type PluginDialogKind =
+  | "alert"
+  | "confirm"
+  | "prompt"
+  | "select"
+  | "multi-prompt";
+
+/** A select option after document-side normalization (Acode accepts strings, arrays, and objects). */
+export type PluginSelectOption = {
+  disabled?: boolean;
+  subText?: string;
+  text: string;
+  value: string;
+};
+
+/** One multi-prompt field after normalization. Function-valued Acode options (`match`, `onclick`, `onchange`, `test`) cannot cross the bridge and are dropped. */
+export type PluginMultiPromptInput = {
+  defaultValue?: string;
+  disabled?: boolean;
+  hidden?: boolean;
+  id: string;
+  label?: string;
+  matchSource?: string;
+  placeholder?: string;
+  required?: boolean;
+  type?: string;
+};
+
+export type PluginDialogPayload =
+  | { message: string; title: string }
+  | { message: string; title: string }
+  | {
+      defaultValue: string;
+      matchSource?: string;
+      message: string;
+      placeholder?: string;
+      required?: boolean;
+      type: string;
+    }
+  | { defaultValue?: string; options: PluginSelectOption[]; rejectOnCancel: boolean; title: string }
+  | { help?: string; inputs: PluginMultiPromptInput[]; title: string };
+
+/** Error name the app uses when the user cancels a select/multi-prompt. */
+export const PLUGIN_DIALOG_CANCELLED = "DialogCancelled";
+
+export const MAX_DIALOG_TEXT_LENGTH = 2000;
+export const MAX_DIALOG_OPTIONS = 50;
+export const MAX_DIALOG_INPUTS = 12;
+export const MAX_NEW_FILE_NAME_LENGTH = 120;
+export const MAX_TOAST_LENGTH = 300;
+
+/** Cap dialog prose so a plugin cannot flood the app with megabytes of text. */
+export function normalizeDialogText(value: unknown, max = MAX_DIALOG_TEXT_LENGTH): string {
+  const text = typeof value === "string" ? value : String(value ?? "");
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** Acode prompt types are HTML input types; anything else becomes text. */
+export function normalizePromptType(value: unknown): string {
+  const type = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (type === "textarea" || type === "number") return type;
+  if (
+    type === "text" ||
+    type === "password" ||
+    type === "tel" ||
+    type === "email" ||
+    type === "url" ||
+    type === "search"
+  ) {
+    return type;
+  }
+  return "text";
+}
+
+/**
+ * Normalize one Acode select item. Acode accepts a bare string, an object,
+ * or a positional array [value, text, icon?, disabled-flag?, ...] where a
+ * boolean past index 1 means "enabled" (so disabled is its negation).
+ */
+export function normalizeSelectOption(item: unknown): PluginSelectOption | null {
+  if (typeof item === "string") {
+    const text = item.trim();
+    if (!text) return null;
+    return { text, value: item };
+  }
+  if (Array.isArray(item)) {
+    const [value, text, ...rest] = item;
+    if (typeof value !== "string" || !value) return null;
+    const disabledFlag = rest.find((entry) => typeof entry === "boolean");
+    return {
+      disabled: typeof disabledFlag === "boolean" ? !disabledFlag : false,
+      text: typeof text === "string" && text ? text : value,
+      value,
+    };
+  }
+  if (isRecord(item)) {
+    const value = item.value;
+    if (typeof value !== "string" || !value) return null;
+    const text = item.text;
+    const subText = item.subText ?? item.subtext;
+    const option: PluginSelectOption = {
+      text: typeof text === "string" && text ? text : value,
+      value,
+    };
+    if (typeof subText === "string" && subText) option.subText = subText;
+    if (item.disabled === true) option.disabled = true;
+    return option;
+  }
+  return null;
+}
+
+export function normalizeSelectOptions(input: unknown): PluginSelectOption[] {
+  if (!Array.isArray(input)) {
+    return typeof input === "string" && input.trim()
+      ? [{ text: input, value: input }]
+      : [];
+  }
+  const options: PluginSelectOption[] = [];
+  for (const item of input) {
+    if (options.length >= MAX_DIALOG_OPTIONS) break;
+    const option = normalizeSelectOption(item);
+    if (option) options.push(option);
+  }
+  return options;
+}
+
+/** Flatten Acode multi-prompt input groups; strings are group labels and are dropped. */
+export function normalizeMultiPromptInputs(input: unknown): PluginMultiPromptInput[] {
+  const raw: unknown[] = Array.isArray(input) ? input.flat() : [];
+  const inputs: PluginMultiPromptInput[] = [];
+  for (const entry of raw) {
+    if (inputs.length >= MAX_DIALOG_INPUTS) break;
+    if (!isRecord(entry) || typeof entry.id !== "string" || !entry.id) continue;
+    const normalized: PluginMultiPromptInput = { id: entry.id };
+    if (typeof entry.name === "string" && entry.name) normalized.label = entry.name;
+    else if (typeof entry.placeholder === "string" && entry.placeholder) {
+      normalized.label = entry.placeholder;
+    }
+    if (typeof entry.placeholder === "string") normalized.placeholder = entry.placeholder;
+    if (typeof entry.value !== "undefined" && entry.value !== null) {
+      normalized.defaultValue = String(entry.value);
+    }
+    if (entry.required === true) normalized.required = true;
+    if (entry.disabled === true) normalized.disabled = true;
+    if (entry.hidden === true) normalized.hidden = true;
+    if (typeof entry.type === "string" && entry.type) {
+      normalized.type = normalizePromptType(entry.type);
+    }
+    inputs.push(normalized);
+  }
+  return inputs;
+}
+
+/**
+ * New file names are flat (no directories), like the app's own create-file
+ * flow: slashes become dashes, control characters are stripped.
+ */
+export function normalizeNewFileName(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const name = input
+    .replace(/[/\\]+/g, "-")
+    .replace(/[\0-\x1f\x7f]/g, "")
+    .trim()
+    .replace(/^\.+/, "")
+    .slice(0, MAX_NEW_FILE_NAME_LENGTH);
+  return name ? name : null;
+}
 
 export function parsePluginBridgeOutbound(raw: string): PluginBridgeOutbound | null {
   let parsed: unknown;

@@ -10,6 +10,7 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import {
+  Brush,
   ChevronLeft,
   CircleAlert,
   Download,
@@ -70,10 +71,12 @@ import {
   deriveExtensionInstallState,
   filterCatalogEntries,
   findUpdateAvailable,
+  checkServerUpdates,
   getExtensionStore,
   getPluginRuntimeBridge,
   describeDependencyIssues,
   isSafePluginPath,
+  languageIdsForExtensions,
   listCategories,
   listFeaturedExtensions,
   signatureLabel,
@@ -87,10 +90,12 @@ import {
   type ExtensionPackageSource,
   type ExtensionPermissionKey,
   type ExtensionPreferences,
+  type FormatterRegistration,
   type InstalledExtensionRecord,
   type RegisteredPluginCommand,
   type RegistrySyncStatus,
 } from "@/modules/extensions";
+import { EXTENSION_TO_MODE_KEY } from "@/editor/editorLanguages";
 import { PERMISSION_LABELS } from "@/modules/extensions/permissions";
 import { pluginDataDir, pluginDir } from "@/modules/extensions/storage";
 
@@ -115,6 +120,7 @@ const STATE_FILTER_LABELS: Record<CatalogStateFilter, string> = {
   broken: "Broken",
   disabled: "Disabled",
   enabled: "Enabled",
+  revoked: "Revoked",
   "update-available": "Update available",
 };
 
@@ -444,6 +450,10 @@ export default function ExtensionsScreen() {
   const [preferences, setPreferences] = useState<ExtensionPreferences>(
     DEFAULT_EXTENSION_PREFERENCES,
   );
+  /** Registry-reported newer versions the synced catalog does not show (§19). */
+  const [serverUpdates, setServerUpdates] = useState<Map<string, string>>(
+    new Map(),
+  );
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   // Trusted publisher keys are typed in by the user (§51): nothing is
   // trusted by default, and Acode publishes no keys to seed from.
@@ -455,6 +465,12 @@ export default function ExtensionsScreen() {
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commands, setCommands] = useState<RegisteredPluginCommand[]>([]);
+  /**
+   * Formatter registrations mirrored from the runtime document (§50): the
+   * full list resolves persisted per-language selections to names, while the
+   * detail view filters down to the open plugin.
+   */
+  const [allFormatters, setAllFormatters] = useState<FormatterRegistration[]>([]);
   /** Chords claimed by more than one plugin command (§45). */
   const [bindingConflicts, setBindingConflicts] = useState<Set<string>>(new Set());
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
@@ -463,6 +479,19 @@ export default function ExtensionsScreen() {
     const next = await store.manager.listInstalled();
     setRecords(next);
     await store.runtime.refreshStateFromRecords();
+    return next;
+  };
+
+  /**
+   * Server update hints (§19): Acode's per-plugin check-update probe behind
+   * catalog version comparison, for updates the synced catalog missed.
+   */
+  const refreshServerUpdates = async (installed: InstalledExtensionRecord[]) => {
+    const hints = await checkServerUpdates(store.provider, installed).catch(
+      () => new Map<string, string>(),
+    );
+    setServerUpdates(hints);
+    return hints;
   };
 
   /**
@@ -494,6 +523,7 @@ export default function ExtensionsScreen() {
       setDiagnostics([...logs].reverse().slice(0, 40));
       setPluginSettings(settings);
       setCommands(bridge.commands.list().filter((item) => item.pluginId === pluginId));
+      setAllFormatters(bridge.host.listFormatters());
       setBindingConflicts(
         new Set(bridge.commands.conflicts().map((conflict) => conflict.chordId)),
       );
@@ -542,6 +572,16 @@ export default function ExtensionsScreen() {
       setEntries(result.entries);
       setSyncStatus(result.status);
       setNewCount(result.newCount);
+      // Revocation sweep (§24), same as the manual refresh path.
+      const disabledRevoked = await store.manager
+        .reconcileRevoked(result.entries)
+        .catch(() => []);
+      await refreshServerUpdates(await refreshRecords());
+      if (disabledRevoked.length > 0) {
+        setNotice(
+          `${disabledRevoked.length} extension(s) were disabled: revoked by the registry.`,
+        );
+      }
       // The user is looking at the Store, so the discovery indicator no
       // longer needs to draw attention to it (§63).
       acknowledgeNewExtensions();
@@ -618,12 +658,64 @@ export default function ExtensionsScreen() {
     setNotice(`Signing key "${keyId}" is no longer trusted.`);
   };
 
-  // Diagnostics, settings, and commands follow the open detail view.
+  /**
+   * Per-language formatter defaults (§50): persisted in preferences and
+   * honored by format dispatch, so an explicit choice survives restarts
+   * while "Automatic" keeps Acode's first-candidate behavior.
+   */
+  const selectFormatter = async (languageId: string, formatterId: string) => {
+    const saved = await savePreference({
+      formatters: { ...preferences.formatters, [languageId]: formatterId },
+    });
+    if (!saved) {
+      setError("The formatter choice could not be saved.");
+      return;
+    }
+    setNotice(`Default formatter for ${languageId} saved.`);
+  };
+
+  const clearFormatter = async (languageId: string) => {
+    const next = { ...preferences.formatters };
+    delete next[languageId];
+    const saved = await savePreference({ formatters: next });
+    if (!saved) {
+      setError("The formatter choice could not be cleared.");
+      return;
+    }
+    setNotice(`Default formatter for ${languageId} cleared.`);
+  };
+
+  /**
+   * Update candidates from both sources (§19/§26): catalog version
+   * comparison first, server check-update hints behind it. Every id here is
+   * actionable — updating re-downloads the latest registry package.
+   */
+  const updateIds = useMemo(() => {
+    // Channel-gated (§44): updates on channels the user did not opt into
+    // are not offered. Revoked entries never surface (§24).
+    const ids = findUpdateAvailable(entries, records, preferences.updateChannel);
+    for (const [pluginId, version] of serverUpdates) {
+      const record = records.find((item) => item.id === pluginId);
+      const entry = entries.find((item) => item.id === pluginId);
+      if (entry?.revoked) continue;
+      if (
+        record &&
+        compareExtensionVersions(version, record.version) > 0
+      ) {
+        ids.add(pluginId);
+      }
+    }
+    return ids;
+  }, [entries, records, serverUpdates, preferences.updateChannel]);
+
+  // Diagnostics, settings, commands, and formatters follow the open detail
+  // view.
   useEffect(() => {
     if (!detailId) {
       setDiagnostics([]);
       setPluginSettings(null);
       setCommands([]);
+      setAllFormatters([]);
       return;
     }
     void refreshDetailPanels(detailId).catch(() => {});
@@ -655,7 +747,17 @@ export default function ExtensionsScreen() {
       setEntries(result.entries);
       setSyncStatus(result.status);
       setNewCount(result.newCount);
-      if (result.status === "offline") {
+      // Revocation sweep (§24): disable anything the fresh catalog revoked,
+      // then re-read records so the lists show it immediately.
+      const disabledRevoked = await store.manager
+        .reconcileRevoked(result.entries)
+        .catch(() => []);
+      await refreshServerUpdates(await refreshRecords());
+      if (disabledRevoked.length > 0) {
+        setNotice(
+          `${disabledRevoked.length} extension(s) were disabled: revoked by the registry.`,
+        );
+      } else if (result.status === "offline") {
         setNotice("Registry unreachable — showing the cached catalog.");
       } else if (result.newCount > 0) {
         setNotice(`${result.newCount} new extension(s) discovered.`);
@@ -728,6 +830,15 @@ export default function ExtensionsScreen() {
           `${outcome.manifest.id} was not installed. ${signaturePolicyMessage(
             outcome.verdict,
           )}`,
+        );
+        return;
+      }
+      if (outcome.status === "needs-app-update") {
+        // A plugin that needs native functionality this install lacks
+        // (§36): name exactly what is missing and point at the app update
+        // (§42), instead of installing something that cannot run.
+        setError(
+          `${outcome.manifest.id} needs a newer Ajiro Agent (missing: ${outcome.missingCapabilities.join(", ")}). Update the app to install it.`,
         );
         return;
       }
@@ -864,7 +975,7 @@ export default function ExtensionsScreen() {
    * not stop the others from updating.
    */
   const updateAll = async () => {
-    const updates = findUpdateAvailable(entries, records);
+    const updates = updateIds;
     if (updates.size === 0) {
       setNotice("Everything is up to date.");
       return;
@@ -925,6 +1036,25 @@ export default function ExtensionsScreen() {
 
   const detail = entries.find((entry) => entry.id === detailId) ?? null;
   const detailRecord = records.find((record) => record.id === detailId) ?? null;
+  /**
+   * Formatters for the open plugin, with per-language rows derived from the
+   * editor extension table (§50). The name lookup spans every plugin so a
+   * persisted default owned by another plugin still resolves.
+   */
+  const detailFormatters = useMemo(
+    () =>
+      detailId
+        ? allFormatters.filter((item) => item.pluginId === detailId)
+        : [],
+    [allFormatters, detailId],
+  );
+  const formatterNameById = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const item of allFormatters) {
+      names.set(item.formatterId, item.displayName || item.formatterId);
+    }
+    return names;
+  }, [allFormatters]);
   // Hoisted so the JSX closures below keep the non-null narrowing.
   const detailRepository = detail?.repository ?? null;
   // Hoisted for the drawers rendered outside the detail branch, where
@@ -934,12 +1064,22 @@ export default function ExtensionsScreen() {
 
   /**
    * README + changelog come out of the installed package (§60), so they are
-   * available offline and always describe the version on disk.
+   * available offline and always describe the version on disk. For entries
+   * that are not installed, fall back to inline registry markdown: the live
+   * registry carries `changelogs` as text (verified firsthand), and a value
+   * containing a newline is prose, never a package path.
    */
   useEffect(() => {
-    if (!detail || !detailRecord) {
+    if (!detail) {
       setReadme(null);
       setChangelog(null);
+      return;
+    }
+    if (!detailRecord) {
+      const inline = (value: string | null) =>
+        value && value.includes("\n") ? value.slice(0, 20_000) : null;
+      setReadme(inline(detail.readme));
+      setChangelog(inline(detail.changelog));
       return;
     }
     let cancelled = false;
@@ -993,6 +1133,12 @@ export default function ExtensionsScreen() {
 
   const stateLabel = (entry: ExtensionMetadata) => {
     const state = deriveExtensionInstallState(entry, records);
+    // Revocation wins over update hints: a revoked extension is never
+    // offered an update (§24).
+    if (state === "revoked") return "Revoked";
+    if (state !== "update-available" && updateIds.has(entry.id)) {
+      return "Update available";
+    }
     switch (state) {
       case "installed":
         return "Installed";
@@ -1019,13 +1165,45 @@ export default function ExtensionsScreen() {
     () =>
       filterCatalogEntries(entries, records, {
         category,
+        channel: preferences.updateChannel,
         installedOnly: section === "installed",
         query,
         searchIndex,
         state: section === "installed" ? stateFilter : null,
       }),
-    [category, entries, records, query, searchIndex, section, stateFilter],
+    [
+      category,
+      entries,
+      preferences.updateChannel,
+      records,
+      query,
+      searchIndex,
+      section,
+      stateFilter,
+    ],
   );
+  /**
+   * The state filter derives from catalog comparison only, so server-only
+   * update hints are unioned back in: they passed the same newer-version
+   * check when they were recorded (§19).
+   */
+  const matchedWithServerUpdates = useMemo(() => {
+    if (
+      section !== "installed" ||
+      stateFilter !== "update-available" ||
+      serverUpdates.size === 0
+    ) {
+      return matched;
+    }
+    const seen = new Set(matched.map((entry) => entry.id));
+    const extra = entries.filter(
+      (entry) =>
+        !seen.has(entry.id) &&
+        updateIds.has(entry.id) &&
+        records.some((item) => item.id === entry.id),
+    );
+    return [...matched, ...extra];
+  }, [entries, matched, records, section, serverUpdates.size, stateFilter, updateIds]);
   // Featured shelf (§28): presentation-only ordering, shown on the unsearched
   // Explore view so it can never displace a search result.
   const featured = useMemo(
@@ -1036,15 +1214,15 @@ export default function ExtensionsScreen() {
     [category, entries, query, section],
   );
   // Sorting and paging happen here so the catalog cache stays untouched (§66).
-  const ordered = useMemo(() => sortCatalogEntries(matched, sort), [matched, sort]);
+  const ordered = useMemo(
+    () => sortCatalogEntries(matchedWithServerUpdates, sort),
+    [matchedWithServerUpdates, sort],
+  );
   const visible = useMemo(
     () => ordered.slice(0, pageLimit),
     [ordered, pageLimit],
   );
-  const updateCount = useMemo(
-    () => findUpdateAvailable(entries, records).size,
-    [entries, records],
-  );
+  const updateCount = updateIds.size;
   const detailIconUri = useMemo(
     () =>
       detail
@@ -1199,6 +1377,34 @@ export default function ExtensionsScreen() {
               not run.
             </Text>
           ) : null}
+          {(() => {
+            // Server-reported update the synced catalog does not show (§19):
+            // only when the catalog itself shows no update, so the two
+            // sources never double-report.
+            if (!record || !detail) return null;
+            const reported = serverUpdates.get(detail.id);
+            if (
+              !reported ||
+              compareExtensionVersions(reported, record.version) <= 0
+            ) {
+              return null;
+            }
+            const catalogEntry = entries.find(
+              (entry) => entry.id === detail.id,
+            );
+            if (
+              catalogEntry &&
+              compareExtensionVersions(catalogEntry.version, record.version) > 0
+            ) {
+              return null;
+            }
+            return (
+              <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                The registry reports v{reported} while the synced catalog
+                shows v{record.version} — Update all downloads the latest.
+              </Text>
+            );
+          })()}
 
           {/* Plugin commands (§45): registered inside the runtime document and
               mirrored here, so they can be listed and run from the app. */}
@@ -1260,6 +1466,84 @@ export default function ExtensionsScreen() {
               <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
                 Commands live inside the plugin runtime document and are only
                 available while it is running.
+              </Text>
+            </>
+          ) : null}
+
+          {/* Plugin formatters (§50): registered inside the runtime document,
+              with a per-language default that persists in preferences. */}
+          {detailFormatters.length > 0 ? (
+            <>
+              <Separator />
+              <View className="flex-row items-center gap-sp-2">
+                <Brush color={theme.text} size={16} strokeWidth={2} />
+                <Text className="font-sans text-xs font-semibold text-foreground dark:text-foreground-dark">
+                  Formatters ({detailFormatters.length})
+                </Text>
+              </View>
+              {detailFormatters.map((formatter) => (
+                <View className="gap-sp-1" key={formatter.formatterId}>
+                  <Text className="font-mono text-xs text-foreground dark:text-foreground-dark">
+                    {formatter.displayName || formatter.formatterId}
+                  </Text>
+                  <Text className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                    {formatter.extensions.join(", ")}
+                  </Text>
+                  {languageIdsForExtensions(
+                    formatter.extensions,
+                    EXTENSION_TO_MODE_KEY,
+                  ).map((languageId) => {
+                    const selected = preferences.formatters[languageId] ?? null;
+                    const selectedName = selected
+                      ? (formatterNameById.get(selected) ?? selected)
+                      : null;
+                    const isDefault = selected === formatter.formatterId;
+                    return (
+                      <View
+                        className="flex-row items-center gap-sp-2"
+                        key={languageId}
+                      >
+                        <View className="min-w-0 flex-1">
+                          <Text className="font-mono text-xs text-foreground dark:text-foreground-dark">
+                            {languageId}
+                          </Text>
+                          <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                            {isDefault
+                              ? "This formatter is the default"
+                              : selectedName
+                                ? `Default: ${selectedName}`
+                                : "Default: automatic"}
+                          </Text>
+                        </View>
+                        {isDefault ? (
+                          <Button
+                            onPress={() => void clearFormatter(languageId)}
+                            variant="outline"
+                          >
+                            Clear
+                          </Button>
+                        ) : (
+                          <Button
+                            onPress={() =>
+                              void selectFormatter(
+                                languageId,
+                                formatter.formatterId,
+                              )
+                            }
+                            variant="outline"
+                          >
+                            Use as default
+                          </Button>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
+              <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                Formatters live inside the plugin runtime document and are only
+                available while it is running. Clearing a default restores
+                Acode&apos;s automatic choice.
               </Text>
             </>
           ) : null}
@@ -1347,8 +1631,14 @@ export default function ExtensionsScreen() {
           ) : null}
         </Card>
 
+        {detail.revoked ? (
+          <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+            Revoked by the registry — this extension cannot be installed,
+            updated, or re-enabled. Uninstall removes it entirely.
+          </Text>
+        ) : null}
         <View className="flex-row flex-wrap gap-sp-2">
-          {!record ? (
+          {!record && !detail.revoked ? (
             <Button
               leftIcon={<Download color={theme.accentForeground} size={16} />}
               loading={busyKey === `install:${detail.id}`}
@@ -1366,7 +1656,7 @@ export default function ExtensionsScreen() {
               Update to v{detail.version}
             </Button>
           ) : null}
-          {record ? (
+          {record && (record.enabled || !detail.revoked) ? (
             <>
               <Button
                 loading={busyKey === `toggle:${detail.id}`}
@@ -1383,6 +1673,15 @@ export default function ExtensionsScreen() {
                 Uninstall
               </Button>
             </>
+          ) : null}
+          {record && detail.revoked && !record.enabled ? (
+            <Button
+              leftIcon={<Trash2 color={theme.textSecondary} size={16} />}
+              onPress={() => setUninstallTarget(detail)}
+              variant="outline"
+            >
+              Uninstall
+            </Button>
           ) : null}
           {detailRepository ? (
             <Button
@@ -1797,6 +2096,29 @@ export default function ExtensionsScreen() {
                   approve every request and see its capabilities first.
                 </Text>
               </View>
+            </View>
+            {/* Update channel (§44): higher-risk channels never leak into a
+                lower one. Production default is stable. */}
+            <View className="gap-sp-2">
+              <Text className="font-sans text-sm text-foreground dark:text-foreground-dark">
+                Update channel
+              </Text>
+              <View className="flex-row gap-sp-2">
+                {(["stable", "beta", "preview"] as const).map((channel) => (
+                  <Button
+                    key={channel}
+                    onPress={() => {
+                      void savePreference({ updateChannel: channel });
+                    }}
+                    variant={preferences.updateChannel === channel ? "default" : "outline"}
+                  >
+                    {channel[0]?.toUpperCase() + channel.slice(1)}
+                  </Button>
+                ))}
+              </View>
+              <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                Beta also offers stable releases; preview offers everything.
+              </Text>
             </View>
 
             <Separator />

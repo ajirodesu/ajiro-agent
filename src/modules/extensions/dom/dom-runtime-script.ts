@@ -86,7 +86,7 @@ const RUNTIME_JS = String.raw`(function () {
     var message = describeError(error);
     post({
       type: "error",
-      pluginId: pluginId || currentPluginId,
+      pluginId: pluginId || executingPluginId(),
       phase: phase,
       message: message,
     });
@@ -105,7 +105,7 @@ const RUNTIME_JS = String.raw`(function () {
   window.onerror = function (message, source, line, column, error) {
     post({
       type: "error",
-      pluginId: currentPluginId,
+      pluginId: executingPluginId(),
       phase: "execute",
       message: describeError(error || message),
     });
@@ -115,7 +115,7 @@ const RUNTIME_JS = String.raw`(function () {
   window.addEventListener("unhandledrejection", function (event) {
     post({
       type: "error",
-      pluginId: currentPluginId,
+      pluginId: executingPluginId(),
       phase: "execute",
       message: "Unhandled promise rejection: " + describeError(event.reason),
     });
@@ -130,16 +130,24 @@ const RUNTIME_JS = String.raw`(function () {
   var nativeAddEventListener = window.addEventListener.bind(window);
 
   window.setTimeout = function (fn, delay) {
-    var id = nativeSetTimeout(fn, delay);
-    if (currentPluginId && resources[currentPluginId]) {
-      resources[currentPluginId].timers.push({ id: id, interval: false });
+    var id = nativeSetTimeout(
+      withPluginContext(executingPluginId(), fn),
+      delay
+    );
+    var timerOwner = executingPluginId();
+    if (timerOwner && resources[timerOwner]) {
+      resources[timerOwner].timers.push({ id: id, interval: false });
     }
     return id;
   };
   window.setInterval = function (fn, delay) {
-    var id = nativeSetInterval(fn, delay);
-    if (currentPluginId && resources[currentPluginId]) {
-      resources[currentPluginId].timers.push({ id: id, interval: true });
+    var id = nativeSetInterval(
+      withPluginContext(executingPluginId(), fn),
+      delay
+    );
+    var intervalOwner = executingPluginId();
+    if (intervalOwner && resources[intervalOwner]) {
+      resources[intervalOwner].timers.push({ id: id, interval: true });
     }
     return id;
   };
@@ -150,16 +158,64 @@ const RUNTIME_JS = String.raw`(function () {
     nativeClearInterval(id);
   };
   window.addEventListener = function (type, listener, options) {
-    if (currentPluginId) {
-      resource(currentPluginId).listeners.push({ listener: listener, type: type });
+    var listenerOwner = executingPluginId();
+    if (listenerOwner) {
+      resource(listenerOwner).listeners.push({ listener: listener, type: type });
     }
-    return nativeAddEventListener(type, listener, options);
+    return nativeAddEventListener(
+      type,
+      withPluginContext(executingPluginId(), listener),
+      options
+    );
+  };
+
+  /* Async plugin context: init/unmount return before their promise chains
+   * settle, and currentPluginId is cleared synchronously on return — so a
+   * bridged call inside .then(), a timer, or a listener would otherwise look
+   * ownerless and be refused. Capturing the calling plugin at registration
+   * and restoring it around the callback keeps confirm().then(prompt())
+   * chains (and notifications, exec, format, fetch) working the way Acode
+   * plugins expect. The previous context is restored on return, so nothing
+   * leaks across plugins. */
+  var asyncPluginId = null;
+
+  function executingPluginId() {
+    return currentPluginId || asyncPluginId;
+  }
+
+  function withPluginContext(pluginId, fn) {
+    if (typeof fn !== "function") return fn;
+    return function () {
+      var previous = asyncPluginId;
+      asyncPluginId = pluginId;
+      try {
+        return fn.apply(this, arguments);
+      } finally {
+        asyncPluginId = previous;
+      }
+    };
+  }
+
+  var nativeThen = Promise.prototype.then;
+  Promise.prototype.then = function (onFulfilled, onRejected) {
+    var captured = executingPluginId();
+    return nativeThen.call(
+      this,
+      withPluginContext(captured, onFulfilled),
+      withPluginContext(captured, onRejected)
+    );
   };
 
   /* Network is a granted capability, not an ambient one (§50). Plugin-local
      reads (anything under the plugin's own baseUrl) are served from the
      package over the bridge instead of the network. */
   var nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+
+  function requireUi(api) {
+    if (!hasPermission(executingPluginId(), "ui")) {
+      throw new Error("acode." + api + " requires the ui capability.");
+    }
+  }
 
   function definitionFor(pluginId) {
     return pluginId ? definitions[pluginId] : null;
@@ -178,12 +234,12 @@ const RUNTIME_JS = String.raw`(function () {
   }
 
   window.fetch = function (input, init) {
-    var definition = definitionFor(currentPluginId);
+    var definition = definitionFor(executingPluginId());
     var url = resolveFetchUrl(input);
     if (definition && definition.baseUrl && url.indexOf(definition.baseUrl) === 0) {
       return request({
         type: "fs-read",
-        pluginId: currentPluginId,
+        pluginId: executingPluginId(),
         path: url.slice(definition.baseUrl.length),
       }).then(function (text) {
         return new Response(text, {
@@ -192,7 +248,8 @@ const RUNTIME_JS = String.raw`(function () {
         });
       });
     }
-    if (currentPluginId && definition && !hasPermission(currentPluginId, "network")) {
+    var fetchCaller = executingPluginId();
+    if (fetchCaller && definition && !hasPermission(fetchCaller, "network")) {
       return Promise.reject(
         new Error("Network access was not granted to this plugin.")
       );
@@ -214,7 +271,7 @@ const RUNTIME_JS = String.raw`(function () {
       post({
         type: "console",
         level: level,
-        pluginId: currentPluginId,
+        pluginId: executingPluginId(),
         text: parts.join(" "),
       });
       original.apply(null, arguments);
@@ -321,6 +378,15 @@ const RUNTIME_JS = String.raw`(function () {
           }
         }
         post({ type: "page", action: "shown", pluginId: pluginId, title: page.title });
+        return page;
+      },
+      /* Acode's page title setter (used by real plugins, e.g. the Python
+       * plugin's $page.settitle call): updates the overlay title. */
+      settitle(title) {
+        page.title = String(title == null ? "" : title) || "Plugin";
+        if (resource(pluginId).visiblePage === id) {
+          post({ type: "page", action: "shown", pluginId: pluginId, title: page.title });
+        }
         return page;
       },
       hide() {
@@ -451,6 +517,21 @@ const RUNTIME_JS = String.raw`(function () {
       };
     }
 
+    /* Native dialog modules (§48): the same functions acode.* exposes,
+     * requireable the way Acode defines them (toast, alert, select,
+     * loader, prompt, confirm, multiPrompt). Acode's generic DOM
+     * builders (dialogBox, colorPicker, palette, ...) are not mapped:
+     * they construct Acode's own DOM, which does not exist here. */
+    if (permissions.indexOf("ui") !== -1) {
+      scoped.toast = acode.toast;
+      scoped.alert = acode.alert;
+      scoped.confirm = acode.confirm;
+      scoped.prompt = acode.prompt;
+      scoped.select = acode.select;
+      scoped.loader = acode.loader;
+      scoped.multiPrompt = acode.multiPrompt;
+    }
+
     if (permissions.indexOf("filesystem") !== -1) {
       scoped.filesystem = {
         readFile: function (path) {
@@ -483,6 +564,27 @@ const RUNTIME_JS = String.raw`(function () {
       if (error) entry.reject(error);
       else entry.resolve(true);
     });
+  }
+
+  /* Formatter registry (verified against Acode's acode.js): newest first,
+   * records shaped like id, name, exts and format, with extensions
+   * normalized exactly as Acode normalizes them (array filtered, single
+   * string wrapped, otherwise match-all). */
+  var formatters = {};
+
+  function normalizeFormatterExtensions(input) {
+    var cleaned;
+    if (Array.isArray(input)) {
+      cleaned = input
+        .filter(function (entry) { return typeof entry === "string"; })
+        .map(function (entry) { return entry.trim().toLowerCase().replace(/^\.+/, ""); })
+        .filter(function (entry) { return !!entry; });
+      return cleaned.length > 0 ? cleaned : ["*"];
+    }
+    if (typeof input === "string" && input.trim()) {
+      return [input.trim().toLowerCase().replace(/^\.+/, "")];
+    }
+    return ["*"];
   }
 
   var acode = {
@@ -518,7 +620,7 @@ const RUNTIME_JS = String.raw`(function () {
       var key = String(name).toLowerCase();
       var shared = modules["global::" + key];
       if (shared) return shared;
-      var scoped = modules[currentPluginId];
+      var scoped = modules[executingPluginId()];
       if (scoped && scoped[key]) return scoped[key];
       throw new Error(
         'The module "' + name + '" is not available to this plugin: it is ' +
@@ -527,13 +629,13 @@ const RUNTIME_JS = String.raw`(function () {
       );
     },
     exec: function (name, value) {
-      var entry = commands[currentPluginId + "::" + name];
+      var entry = commands[executingPluginId() + "::" + name];
       if (entry && typeof entry.command.exec === "function") {
         return entry.command.exec(value);
       }
       post({
         type: "exec-request",
-        pluginId: currentPluginId,
+        pluginId: executingPluginId(),
         name: String(name),
         value: value,
       });
@@ -542,9 +644,89 @@ const RUNTIME_JS = String.raw`(function () {
     installPlugin: function (targetId, installerName) {
       return request({
         type: "install-plugin",
-        pluginId: currentPluginId || String(installerName || "unknown"),
+        pluginId: executingPluginId() || String(installerName || "unknown"),
         targetId: String(targetId),
       });
+    },
+    registerFormatter: function (id, extensions, format, displayName) {
+      var formatterId = String(id == null ? "" : id).trim();
+      if (!formatterId) throw new Error("acode.registerFormatter requires an id.");
+      if (typeof format !== "function") {
+        throw new Error("acode.registerFormatter requires a format function.");
+      }
+      var exts = normalizeFormatterExtensions(extensions);
+      formatters[formatterId] = {
+        pluginId: executingPluginId(),
+        extensions: exts,
+        displayName: displayName == null ? "" : String(displayName),
+        format: format,
+      };
+      post({
+        type: "formatter-register",
+        pluginId: executingPluginId(),
+        formatterId: formatterId,
+        extensions: exts,
+        displayName: displayName == null ? "" : String(displayName),
+      });
+    },
+    unregisterFormatter: function (id) {
+      var formatterId = String(id == null ? "" : id).trim();
+      var entry = formatters[formatterId];
+      /* Only the owning plugin may remove its formatter: silent cross-plugin
+       * removal is sabotage, not compatibility. */
+      if (entry && entry.pluginId === executingPluginId()) delete formatters[formatterId];
+      post({ type: "formatter-unregister", pluginId: executingPluginId(), formatterId: formatterId });
+    },
+    get formatters() {
+      return Object.keys(formatters).map(function (formatterId) {
+        var entry = formatters[formatterId];
+        return { id: formatterId, name: entry.displayName || formatterId, exts: entry.extensions.slice() };
+      });
+    },
+    getFormatterFor: function (extensions) {
+      var wanted = {};
+      (Array.isArray(extensions) ? extensions : [extensions]).forEach(function (entry) {
+        if (typeof entry === "string" && entry.trim()) wanted[entry.trim().toLowerCase()] = true;
+      });
+      var options = [[null, "None"]];
+      Object.keys(formatters).forEach(function (formatterId) {
+        var entry = formatters[formatterId];
+        var supports = entry.extensions.indexOf("*") !== -1 ||
+          entry.extensions.some(function (ext) { return !!wanted[ext]; });
+        if (supports) options.push([formatterId, entry.displayName || formatterId]);
+      });
+      return options;
+    },
+    format: function (selectIfNull) {
+      /* Capture the caller now: the async context propagates it through
+       * .then() chains, timers, and listeners, so a format() issued from a
+       * promise continuation still attributes to the calling plugin. */
+      var callerId = executingPluginId();
+      return request({ type: "format-request", pluginId: callerId })
+        .then(function (job) {
+          if (!job || !job.formatterId) return false;
+          var entry = formatters[job.formatterId];
+          if (!entry || typeof entry.format !== "function") return false;
+          var previousPluginId = currentPluginId;
+          currentPluginId = entry.pluginId;
+          try {
+            var result = entry.format(job.text, { languageId: job.languageId, path: job.path });
+            return Promise.resolve(result).then(function (text) {
+              if (typeof text !== "string") return false;
+              return request({
+                type: "format-apply",
+                pluginId: callerId,
+                text: text,
+              }).then(function () { return true; });
+            });
+          } catch (error) {
+            return false;
+          } finally {
+            currentPluginId = previousPluginId;
+          }
+        })
+        .catch(function () { return false; });
+      void selectIfNull;
     },
     waitForPlugin: function (pluginId) {
       if (activated[pluginId]) return Promise.resolve(true);
@@ -562,40 +744,198 @@ const RUNTIME_JS = String.raw`(function () {
     pushNotification: function (title, message, options) {
       post({
         type: "notify",
-        pluginId: currentPluginId,
+        pluginId: executingPluginId(),
         level: (options && options.type) || "info",
         text: String(title || "") + (message ? " — " + String(message) : ""),
       });
     },
-    addIcon: function (name, src) {
+    addIcon: function (name, src, options) {
+      var className = String(name);
+      if (!className) throw new Error("acode.addIcon requires an icon name.");
+      /* Acode registers each icon once; a second call for the same icon is
+       * a no-op rather than a duplicate stylesheet. */
+      if (document.head.querySelector('style[icon="' + className + '"]')) return;
+      var safeSrc = String(src).replace(/"/g, "%22");
       var style = document.createElement("style");
-      style.textContent =
-        "." + String(name) + " { background-image: url(\"" + String(src) +
-        "\"); background-size: contain; }";
+      style.setAttribute("icon", className);
+      if (options && options.monochrome) {
+        /* Acode's monochrome mask form (versionCode 967+): inherits the
+         * theme's currentColor instead of the source colors. */
+        style.textContent =
+          ".icon." + className + "::before { content: ''; display: inline-block; " +
+          "width: 24px; height: 24px; vertical-align: middle; " +
+          "-webkit-mask: url(\"" + safeSrc + "\") no-repeat center / contain; " +
+          "mask: url(\"" + safeSrc + "\") no-repeat center / contain; " +
+          "background-color: currentColor; }";
+      } else {
+        style.textContent =
+          ".icon." + className + " { background-image: url(\"" + safeSrc +
+          "\"); background-size: contain; }";
+      }
       document.head.appendChild(style);
     },
     toInternalUrl: function (url) {
       var target = String(url);
       if (/^https?:/i.test(target)) return Promise.resolve(target);
-      var definition = definitionFor(currentPluginId);
+      var definition = definitionFor(executingPluginId());
       var relative = target;
       if (definition && definition.baseUrl && target.indexOf(definition.baseUrl) === 0) {
         relative = target.slice(definition.baseUrl.length);
       }
       return request({
         type: "fs-read",
-        pluginId: currentPluginId,
+        pluginId: executingPluginId(),
         path: relative,
       }).then(function (text) {
         return URL.createObjectURL(new Blob([text], { type: "text/plain" }));
       });
     },
-    newEditorFile: function () {
-      throw new Error("newEditorFile is not supported by the Ajiro plugin runtime.");
+    /* Native dialogs (verified against Acode's src/dialogs/* + acode.js).
+     * Arguments are collected here; the app renders. Option shapes accept
+     * everything Acode accepts (bare strings, positional arrays, objects);
+     * function-valued options (match/test/onclick/onchange) cannot cross the
+     * bridge — match may be a RegExp, whose source is forwarded. */
+    alert: function (title, message, onhide) {
+      requireUi("alert");
+      var dialog = { title: title, message: message };
+      request({ type: "dialog", kind: "alert", pluginId: executingPluginId(), payload: dialog })
+        .then(function () { if (typeof onhide === "function") onhide(); })
+        .catch(function () { if (typeof onhide === "function") onhide(); });
+    },
+    confirm: function (title, message) {
+      requireUi("confirm");
+      return request({
+        type: "dialog", kind: "confirm", pluginId: executingPluginId(),
+        payload: { title: title, message: message },
+      });
+    },
+    prompt: function (message, defaultValue, type, options) {
+      requireUi("prompt");
+      var opts = options || {};
+      var payload = {
+        message: message,
+        defaultValue: defaultValue == null ? "" : String(defaultValue),
+        type: type == null ? "text" : String(type),
+        placeholder: typeof opts.placeholder === "string" ? opts.placeholder : "",
+        required: opts.required === true,
+      };
+      if (opts.match instanceof RegExp) payload.matchSource = opts.match.source;
+      return request({ type: "dialog", kind: "prompt", pluginId: executingPluginId(), payload: payload });
+    },
+    select: function (title, options, config) {
+      requireUi("select");
+      var items = [];
+      (Array.isArray(options) ? options : [options]).forEach(function (item) {
+        if (typeof item === "string") {
+          if (item.trim()) items.push({ value: item, text: item, disabled: false });
+        } else if (Array.isArray(item)) {
+          var value = item[0];
+          if (typeof value !== "string" || !value) return;
+          var flag = null;
+          item.slice(2).forEach(function (entry) {
+            if (typeof entry === "boolean" && flag === null) flag = entry;
+          });
+          items.push({
+            value: value,
+            text: typeof item[1] === "string" && item[1] ? item[1] : value,
+            disabled: flag === null ? false : !flag,
+          });
+        } else if (item && typeof item === "object") {
+          if (typeof item.value !== "string" || !item.value) return;
+          items.push({
+            value: item.value,
+            text: typeof item.text === "string" && item.text ? item.text : item.value,
+            subText: typeof item.subText === "string" ? item.subText : undefined,
+            disabled: item.disabled === true,
+          });
+        }
+      });
+      var rejectOnCancel = config === true || (!!config && config.rejectOnCancel === true);
+      return request({
+        type: "dialog", kind: "select", pluginId: executingPluginId(),
+        payload: {
+          title: title, options: items.slice(0, 50),
+          defaultValue: config && typeof config.default === "string" ? config.default : undefined,
+          rejectOnCancel: rejectOnCancel,
+        },
+      });
+    },
+    multiPrompt: function (title, inputs, help) {
+      requireUi("multiPrompt");
+      var flat = [];
+      (Array.isArray(inputs) ? inputs : []).forEach(function (entry) {
+        if (Array.isArray(entry)) flat.push.apply(flat, entry);
+        else flat.push(entry);
+      });
+      var fields = [];
+      flat.forEach(function (entry) {
+        if (!entry || typeof entry !== "object" || typeof entry.id !== "string" || !entry.id) return;
+        if (fields.length >= 12) return;
+        fields.push({
+          id: entry.id,
+          label: typeof entry.name === "string" ? entry.name : undefined,
+          type: typeof entry.type === "string" ? entry.type : "text",
+          defaultValue: entry.value == null ? "" : String(entry.value),
+          placeholder: typeof entry.placeholder === "string" ? entry.placeholder : undefined,
+          required: entry.required === true,
+          disabled: entry.disabled === true,
+          hidden: entry.hidden === true,
+        });
+      });
+      return request({
+        type: "dialog", kind: "multi-prompt", pluginId: executingPluginId(),
+        payload: { title: title, inputs: fields, help: typeof help === "string" ? help : undefined },
+      });
+    },
+    loader: function (title, message, options) {
+      requireUi("loader");
+      var proxy = { id: null, destroyed: false };
+      var queue = [];
+      var timeoutMs = options && typeof options.timeout === "number" ? options.timeout : undefined;
+      request({
+        type: "dialog-loader-create", pluginId: executingPluginId(),
+        title: title, message: message, options: { timeoutMs: timeoutMs },
+      }).then(function (id) {
+        proxy.id = id;
+        // The queue already holds destroy when destroy() ran before create
+        // resolved, so flushing is the whole teardown — no second post.
+        queue.forEach(function (op) { post(op); });
+        queue = [];
+      }).catch(function () {});
+      var send = function (op, value) {
+        var message = { type: "dialog-loader-op", pluginId: executingPluginId(), loaderId: proxy.id, op: op, value: value };
+        if (proxy.id) post(message);
+        else queue.push(message);
+      };
+      proxy.setTitle = function (value) { send("setTitle", String(value)); };
+      proxy.setMessage = function (value) { send("setMessage", String(value)); };
+      proxy.hide = function () { send("hide"); };
+      proxy.show = function () { send("show"); };
+      proxy.destroy = function () { proxy.destroyed = true; send("destroy"); };
+      return proxy;
+    },
+    toast: function (text, duration) {
+      post({ type: "toast", pluginId: executingPluginId(), text: String(text == null ? "" : text), durationMs: duration });
+    },
+    fileBrowser: function (mode, info, openLast) {
+      requireUi("fileBrowser");
+      void info; void openLast;
+      return request({
+        type: "file-browser", pluginId: executingPluginId(),
+        mode: typeof mode === "string" ? mode : "file",
+      }).then(function (uris) { return Array.isArray(uris) ? uris : []; });
+    },
+    newEditorFile: function (filename, options) {
+      var opts = options || {};
+      return request({
+        type: "editor-new-file", pluginId: executingPluginId(),
+        filename: String(filename == null ? "" : filename),
+        text: typeof opts.text === "string" ? opts.text : "",
+      });
     },
     /* Ajiro-original: the page factory Acode passes into init as $page. */
     page: function (id, title) {
-      return createPage(currentPluginId, id, title);
+      return createPage(executingPluginId(), id, title);
     },
   };
 
@@ -731,6 +1071,11 @@ const RUNTIME_JS = String.raw`(function () {
     Object.keys(commands).forEach(function (key) {
       if (key.indexOf(pluginId + "::") === 0) delete commands[key];
     });
+    Object.keys(formatters).forEach(function (formatterId) {
+      if (formatters[formatterId] && formatters[formatterId].pluginId === pluginId) {
+        delete formatters[formatterId];
+      }
+    });
     delete resources[pluginId];
     delete definitions[pluginId];
     delete modules[pluginId];
@@ -785,7 +1130,7 @@ const RUNTIME_JS = String.raw`(function () {
     } catch (error) {
       /* runPlugin already reported load failures; everything else is here. */
       if (!error || !error.__ajiroReported) {
-        reportError(currentPluginId, "execute", error);
+        reportError(executingPluginId(), "execute", error);
       }
     }
   }

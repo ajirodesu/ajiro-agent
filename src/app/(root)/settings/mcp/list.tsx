@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
+import Constants from "expo-constants";
 import { Plus } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { Platform, Text, View } from "react-native";
 
 import { McpScreenHeader } from "@/components/settings/mcp/screen-header";
 import { Container } from "@/components/shared/container";
@@ -23,7 +24,13 @@ import {
   fetchMcpServerCatalogCached,
   type McpServerPreset,
 } from "@/modules/mcp/catalog";
+import {
+  checkMcpPresetSupport,
+  deriveMcpPresetStatus,
+  findMissingMcpDependencies,
+} from "@/modules/mcp/mcp-compat";
 import { isMcpOAuthCanceledError } from "@/modules/mcp/oauth";
+import { describeDynamicUpdateStatus } from "@/modules/updates/extension-framework";
 
 import { McpServerForm } from "./add";
 
@@ -90,6 +97,26 @@ export default function McpCatalogScreen() {
   }, []);
 
   const connectPreset = async (preset: McpServerPreset) => {
+    // Revoked and runtime-incompatible presets never reach setup (§§24, 35).
+    const support = checkMcpPresetSupport(preset, {
+      appVersion: Constants.expoConfig?.version ?? null,
+      platform: Platform.OS,
+    });
+    // Declared dependencies configure first (§6): never half-wire a server.
+    const missingDeps = findMissingMcpDependencies(
+      preset,
+      mcpServers.map((server) => server.id),
+    );
+    if (missingDeps.length > 0) {
+      setError(
+        `Set up ${missingDeps.join(", ")} first: "${preset.label}" depends on it.`,
+      );
+      return;
+    }
+    if (support.status === "revoked" || support.status === "requires-app-update") {
+      setError(support.reason ?? "This MCP server cannot be set up.");
+      return;
+    }
     if (preset.authMode !== "oauth") {
       setSetupPresetId(preset.id);
       setSetupDrawerOpen(true);
@@ -164,19 +191,33 @@ export default function McpCatalogScreen() {
           {filteredPresets.length > 0 ? (
             <Card className="overflow-hidden">
               {filteredPresets.map((preset, index) => {
-                const connected = mcpServers.some(
+                const installed = mcpServers.find(
                   (server) =>
                     normalizeMcpUrl(server.url) === normalizeMcpUrl(preset.url),
-                );
+                ) ?? null;
+                const support = deriveMcpPresetStatus(preset, installed, {
+                  appVersion: Constants.expoConfig?.version ?? null,
+                  platform: Platform.OS,
+                });
 
                 return (
                   <View key={preset.id}>
                     {index > 0 ? <Separator /> : null}
                     <PresetRow
                       busy={busyKey === preset.id}
-                      connected={connected}
+                      connected={installed !== null}
                       onPress={() => connectPreset(preset).catch(console.error)}
                       preset={preset}
+                      statusLabel={
+                        support.status === "installed" || support.status === "not-installed"
+                          ? null
+                          : (support.reason ??
+                            describeDynamicUpdateStatus(support.status))
+                      }
+                      unavailable={
+                        support.status === "revoked" ||
+                        support.status === "requires-app-update"
+                      }
                     />
                   </View>
                 );
@@ -246,11 +287,15 @@ function PresetRow({
   connected,
   onPress,
   preset,
+  statusLabel,
+  unavailable,
 }: {
   busy: boolean;
   connected: boolean;
   onPress: () => void;
   preset: McpServerPreset;
+  statusLabel: string | null;
+  unavailable: boolean;
 }) {
   return (
     <View className="flex-row items-center gap-sp-3 px-sp-4 py-sp-4">
@@ -261,15 +306,27 @@ function PresetRow({
         <Text className="font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
           {preset.description}
         </Text>
+        {preset.publisher || preset.version ? (
+          <Text className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
+            {[preset.publisher, preset.version ? `v${preset.version}` : null]
+              .filter(Boolean)
+              .join(" · ")}
+          </Text>
+        ) : null}
+        {statusLabel ? (
+          <Text className="font-mono text-xs text-muted-foreground dark:text-muted-foreground-dark">
+            {statusLabel}
+          </Text>
+        ) : null}
       </View>
       <Button
-        disabled={connected}
+        disabled={connected || unavailable}
         loading={busy}
         onPress={onPress}
         size="sm"
         variant={connected ? "secondary" : "outline"}
       >
-        {connected ? "Added" : "Set up"}
+        {connected ? "Added" : unavailable ? "Unavailable" : "Set up"}
       </Button>
     </View>
   );

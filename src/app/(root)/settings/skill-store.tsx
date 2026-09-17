@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
+import Constants from "expo-constants";
 import { ChevronLeft, RefreshCw, Search } from "lucide-react-native";
-import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { Container } from "@/components/shared/container";
 import { SkillAvatar } from "@/components/skills/skill-avatar";
@@ -17,16 +18,29 @@ import { slugifySkillName, parseSkillMarkdown } from "@/modules/skills/skill-mar
 import { fetchSkillMarkdownFromUrl } from "@/modules/skills/skill-github";
 import { extractFrontmatterField } from "@/modules/skills/skill-validation";
 import {
-  deriveInstallState,
   filterStoreCatalog,
   loadStoreCatalog,
   searchStoreCatalog,
   storeCategories,
   type StoreSkillEntry,
 } from "@/modules/skills/skill-store-catalog";
+import {
+  fetchSkillRegistry,
+  type SkillRegistryEntry,
+} from "@/modules/skills/skill-registry";
+import {
+  deriveSkillUpdateStatus,
+  findMissingSkillDependencies,
+  findRevokedInstalledSkills,
+} from "@/modules/skills/skill-update-status";
 import { isSkillUpdateAvailable } from "@/modules/skills/skill-install";
 import { resolveSkillMcpStatus } from "@/modules/skills/skill-scopes";
 import type { SkillInstallProgress } from "@/modules/skills/skill-install";
+import {
+  channelVisible,
+  describeDynamicUpdateStatus,
+  type UpdateChannel,
+} from "@/modules/updates/extension-framework";
 
 type LiveDetail = {
   description: string;
@@ -58,9 +72,25 @@ function StateBadge({ state }: { state: string }) {
 export default function SkillStoreScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { installStoreSkill, mcpServers, skills, uninstallStoreSkill } = useConfig();
+  const {
+    installStoreSkill,
+    mcpServers,
+    skills,
+    uninstallStoreSkill,
+    updateSkill,
+    rollbackStoreSkill,
+    canRollbackStoreSkill,
+  } = useConfig();
 
-  const catalog = useMemo(() => loadStoreCatalog(), []);
+  // Cache-first catalog (§17): the bundled catalog renders instantly, then a
+  // remote sync replaces it — newly published skills appear with no rebuild.
+  const bundledCatalog = useMemo(() => loadStoreCatalog(), []);
+  const [registryEntries, setRegistryEntries] = useState<SkillRegistryEntry[] | null>(
+    null,
+  );
+  const [registryOffline, setRegistryOffline] = useState(false);
+  const catalog: StoreSkillEntry[] = registryEntries ?? bundledCatalog;
+  const [channel, setChannel] = useState<UpdateChannel>("stable");
   const categories = useMemo(() => storeCategories(catalog), [catalog]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -73,6 +103,53 @@ export default function SkillStoreScreen() {
   const [importOpen, setImportOpen] = useState(false);
   const [live, setLive] = useState<Record<string, LiveDetail>>({});
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchSkillRegistry()
+      .then((result) => {
+        if (cancelled) return;
+        setRegistryEntries(result.entries);
+        setRegistryOffline(result.source === "bundled");
+      })
+      .catch(() => {
+        if (!cancelled) setRegistryOffline(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Revocation sweep (§24): disable installed skills the registry revoked.
+  // Runs when the remote catalog lands; matching is by normalized slug, the
+  // same key installs use.
+  const installedSlugs = useMemo(
+    () => skills.map((skill) => slugifySkillName(skill.title)),
+    [skills],
+  );
+  useEffect(() => {
+    if (!registryEntries) return;
+    const revoked = findRevokedInstalledSkills(registryEntries, installedSlugs);
+    if (revoked.length === 0) return;
+    void (async () => {
+      const disabled: string[] = [];
+      for (const slug of revoked) {
+        const installed = skills.find(
+          (skill) => slugifySkillName(skill.title) === slug,
+        );
+        if (installed?.enabled) {
+          await updateSkill(installed.id, { enabled: false }).catch(() => {});
+          disabled.push(slug);
+        }
+      }
+      if (disabled.length > 0) {
+        setError(
+          `Disabled ${disabled.length} skill(s): revoked by the registry (${disabled.join(", ")}).`,
+        );
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registryEntries, skills.length]);
+
   const installedBySlug = useMemo(() => {
     const map = new Map<string, (typeof skills)[number]>();
     for (const skill of skills) {
@@ -81,10 +158,27 @@ export default function SkillStoreScreen() {
     return map;
   }, [skills]);
 
+  const registryBySlug = useMemo(
+    () => new Map((registryEntries ?? []).map((entry) => [entry.slug, entry])),
+    [registryEntries],
+  );
+  const revokedSlugs = useMemo(
+    () =>
+      new Set(
+        (registryEntries ?? []).filter((entry) => entry.revoked).map((entry) => entry.slug),
+      ),
+    [registryEntries],
+  );
+
   const visible = useMemo(() => {
     const searched = searchStoreCatalog(catalog, query);
-    return filterStoreCatalog(searched, { category });
-  }, [catalog, query, category]);
+    const filtered = filterStoreCatalog(searched, { category });
+    // Update channel (§44): entries above the selected channel stay hidden.
+    // Bundled-only entries carry no channel and read as stable.
+    return filtered.filter((entry) =>
+      channelVisible(registryBySlug.get(entry.slug)?.channel, channel),
+    );
+  }, [catalog, query, category, channel, registryBySlug]);
 
   const openDetail = (entry: StoreSkillEntry) => {
     setDetailSlug(entry.slug);
@@ -141,6 +235,18 @@ export default function SkillStoreScreen() {
 
   const handleInstall = (entry: StoreSkillEntry) =>
     runAction(entry.slug, async () => {
+      const registry = registryBySlug.get(entry.slug);
+      if (registry) {
+        const missingDeps = findMissingSkillDependencies(
+          registry,
+          installedSlugs,
+        );
+        if (missingDeps.length > 0) {
+          throw new Error(
+            `Install ${missingDeps.join(", ")} first: "${registry.slug}" depends on it.`,
+          );
+        }
+      }
       await installStoreSkill({
         author: entry.author,
         slug: entry.slug,
@@ -148,7 +254,25 @@ export default function SkillStoreScreen() {
         onProgress: (progress: SkillInstallProgress) => {
           setPhase(progress.phase === "done" || progress.phase === "error" ? null : progress.phase);
         },
+        guards: registry
+          ? {
+              appVersion: Constants.expoConfig?.version ?? null,
+              expectedHash: registry.hash,
+              maxAppVersion: registry.maxAppVersion,
+              minAppVersion: registry.minAppVersion,
+              platform: Platform.OS,
+              platforms: registry.platforms,
+              requiredCapabilities: registry.requiredCapabilities,
+              revokedSlugs,
+              signaturePresent: registry.signature != null,
+            }
+          : { revokedSlugs },
       });
+    });
+
+  const handleRollback = (entry: StoreSkillEntry) =>
+    runAction(entry.slug, async () => {
+      await rollbackStoreSkill(entry.slug);
     });
 
   const handleUninstall = (entry: StoreSkillEntry) =>
@@ -190,25 +314,45 @@ export default function SkillStoreScreen() {
 
   const stateLabel = (entry: StoreSkillEntry): string => {
     const installed = installedBySlug.get(entry.slug);
-    if (!installed) return "Not installed";
-    const state = deriveInstallState(
-      entry,
-      [
-        {
-          contentHash: null,
-          enabled: installed.enabled,
-          id: installed.id,
-          slug: entry.slug,
-          title: installed.title,
-        },
-      ],
-      updates,
+    // Registry-aware statuses (§§12, 24, 35–37, 43): revocation, channel
+    // rollout, runtime floor, and deprecation resolve offline; content-hash
+    // updates arrive through the manual check and union in here.
+    const registry =
+      registryBySlug.get(entry.slug) ??
+      ({
+        author: entry.author,
+        category: entry.category,
+        channel: null,
+        changelog: null,
+        dependencies: [],
+        deprecated: false,
+        description: entry.description,
+        hash: null,
+        maxAppVersion: null,
+        minAppVersion: null,
+        name: entry.name,
+        platforms: [],
+        publishedAt: null,
+        requiredCapabilities: [],
+        revoked: false,
+        rolloutPercent: null,
+        signature: null,
+        slug: entry.slug,
+        sourceUrl: entry.sourceUrl,
+        updatedAt: null,
+        version: null,
+      } satisfies SkillRegistryEntry);
+    const { status } = deriveSkillUpdateStatus(
+      registry,
+      installed ? { enabled: installed.enabled } : null,
+      {
+        appVersion: Constants.expoConfig?.version ?? null,
+        channel,
+        platform: Platform.OS,
+        updateAvailable: updates.has(entry.slug),
+      },
     );
-    return state === "installed"
-      ? "Installed"
-      : state === "installed-disabled"
-        ? "Disabled"
-        : "Update available";
+    return describeDynamicUpdateStatus(status);
   };
 
   return (
@@ -294,7 +438,13 @@ export default function SkillStoreScreen() {
           }
           actions={
             <>
-              {!detailInstalled ? (
+              {stateLabel(detailEntry) === "Revoked" ? (
+                <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+                  Revoked by the registry — this skill cannot be installed or
+                  updated. Uninstall removes it entirely.
+                </Text>
+              ) : null}
+              {!detailInstalled && stateLabel(detailEntry) !== "Revoked" ? (
                 <Button
                   disabled={busySlug !== null}
                   onPress={() => handleInstall(detailEntry)}
@@ -303,14 +453,25 @@ export default function SkillStoreScreen() {
                     ? `Installing…${phase ? ` (${phase})` : ""}`
                     : "Install"}
                 </Button>
-              ) : (
+              ) : null}
+              {detailInstalled ? (
                 <>
-                  {updates.has(detailEntry.slug) ? (
+                  {updates.has(detailEntry.slug) &&
+                  stateLabel(detailEntry) !== "Revoked" ? (
                     <Button
                       disabled={busySlug !== null}
                       onPress={() => handleInstall(detailEntry)}
                     >
                       {busySlug === detailEntry.slug ? "Updating…" : "Update"}
+                    </Button>
+                  ) : null}
+                  {canRollbackStoreSkill(detailEntry.slug) ? (
+                    <Button
+                      disabled={busySlug !== null}
+                      onPress={() => handleRollback(detailEntry)}
+                      variant="outline"
+                    >
+                      {busySlug === detailEntry.slug ? "Rolling back…" : "Roll back"}
                     </Button>
                   ) : null}
                   <Button
@@ -327,7 +488,7 @@ export default function SkillStoreScreen() {
                     Manage
                   </Button>
                 </>
-              )}
+              ) : null}
             </>
           }
         />
@@ -366,6 +527,27 @@ export default function SkillStoreScreen() {
               />
             ))}
           </ScrollView>
+
+          {/* Update channel (§44): higher-risk channels never leak downward. */}
+          <View className="flex-row items-center gap-sp-2">
+            <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+              Channel:
+            </Text>
+            {(["stable", "beta", "preview"] as const).map((option) => (
+              <FilterChip
+                key={option}
+                active={channel === option}
+                label={option[0]?.toUpperCase() + option.slice(1)}
+                onPress={() => setChannel(option)}
+              />
+            ))}
+          </View>
+
+          {registryOffline ? (
+            <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+              Registry unreachable — showing the bundled catalog.
+            </Text>
+          ) : null}
 
           {visible.length === 0 ? (
             <Card className="px-sp-4 py-sp-4">

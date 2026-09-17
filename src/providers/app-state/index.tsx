@@ -86,6 +86,7 @@ import {
     installSkillFromEntry,
     uninstallSkill,
     type InstallResult,
+    type SkillInstallGuards,
     type SkillInstallProgress,
 } from "@/modules/skills/skill-install";
 import type {
@@ -135,6 +136,7 @@ import { executeClaimedAgentRun, executeSubagentTask, type AgentRunDeps } from "
 import { isNativeAgentId, resolveConversationAgent } from "@/modules/agents/registry";
 import { normalizeAgentName, parseAgentMarkdown, serializeAgentToMarkdown } from "@/modules/agents/agent-markdown";
 import { fetchSkillMarkdownFromUrl } from "@/modules/skills/skill-github";
+import { createSkillRollbackStore } from "@/modules/skills/skill-rollback";
 import { createRunUiPublisher } from "./run-ui-publisher";
 import { resolveConfig } from "./config-resolution";
 import {
@@ -162,6 +164,9 @@ export type CompactConversationResult =
           summaryChars: number;
       }
     | { compacted: false; reason: string };
+
+/** Pre-update skill snapshots for rollback (§25); process-wide by slug. */
+const skillRollbackStore = createSkillRollbackStore();
 
 type AppStateContextValue = {
     compactConversation: (
@@ -324,7 +329,11 @@ type AppStateContextValue = {
         slug: string;
         sourceUrl: string;
         onProgress?: (progress: SkillInstallProgress) => void;
+        guards?: SkillInstallGuards;
     }) => Promise<InstallResult>;
+    /** Restore the pre-update copy when a rollback snapshot exists (§25). */
+    rollbackStoreSkill: (slug: string) => Promise<void>;
+    canRollbackStoreSkill: (slug: string) => boolean;
     uninstallStoreSkill: (skillId: string) => Promise<void>;
     deleteSavedPrompt: (savedPromptId: string) => Promise<void>;
     disconnectOpenAIOAuth: () => Promise<void>;
@@ -1961,6 +1970,7 @@ Your output must be:
         slug: string;
         sourceUrl: string;
         onProgress?: (progress: SkillInstallProgress) => void;
+        guards?: SkillInstallGuards;
     }) {
         const result = await installSkillFromEntry(
             {
@@ -1968,9 +1978,22 @@ Your output must be:
                 onProgress: input.onProgress,
             },
             { author: input.author ?? null, slug: input.slug, sourceUrl: input.sourceUrl },
+            { ...input.guards, rollback: skillRollbackStore },
         );
         await hydrate();
         return result;
+    }
+
+    function canRollbackStoreSkill(slug: string): boolean {
+        return skillRollbackStore.has(slug);
+    }
+
+    async function rollbackStoreSkill(slug: string) {
+        await skillRollbackStore.rollback(
+            repositoriesRef.current.skillRepository,
+            slug,
+        );
+        await hydrate();
     }
 
     async function uninstallStoreSkill(skillId: string) {
@@ -4235,6 +4258,8 @@ Your output must be:
                 deleteSkill,
                 installStoreSkill,
                 uninstallStoreSkill,
+                rollbackStoreSkill,
+                canRollbackStoreSkill,
                 getProjectSkillIds,
                 setProjectSkillIds,
                 deleteWorkspaceFile,
@@ -4372,6 +4397,8 @@ export function useConfig() {
         deleteSkill: context.deleteSkill,
         installStoreSkill: context.installStoreSkill,
         uninstallStoreSkill: context.uninstallStoreSkill,
+        rollbackStoreSkill: context.rollbackStoreSkill,
+        canRollbackStoreSkill: context.canRollbackStoreSkill,
         getProjectSkillIds: context.getProjectSkillIds,
         setProjectSkillIds: context.setProjectSkillIds,
         deleteWorkspaceFile: context.deleteWorkspaceFile,

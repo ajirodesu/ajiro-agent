@@ -10,6 +10,11 @@
  */
 import { compareExtensionVersions } from "./compatibility";
 import {
+  channelVisible,
+  rolloutAllows,
+  type UpdateChannel,
+} from "@/modules/updates/extension-framework";
+import {
   isRecord,
   type ExtensionCatalogChange,
   type ExtensionInstallState,
@@ -185,6 +190,9 @@ export function deriveExtensionInstallState(
   metadata: ExtensionMetadata,
   installed: InstalledExtensionRecord[],
 ): ExtensionInstallState {
+  // Revocation wins over everything (§24): a revoked extension is never
+  // offered, updated, or shown as healthy, installed or not.
+  if (metadata.revoked) return "revoked";
   const record = installed.find((entry) => entry.id === metadata.id);
   if (!record) return "not-installed";
   if (record.runtimeState === "broken") return "installed-broken";
@@ -195,13 +203,21 @@ export function deriveExtensionInstallState(
   return "installed";
 }
 
-/** All extensions with an update available, keyed by id (§26). */
+/**
+ * All extensions with an update available, keyed by id (§26). Revoked
+ * entries never surface, and channel/rollout gating applies: an update on
+ * a channel the user did not opt into is not offered.
+ */
 export function findUpdateAvailable(
   catalog: ExtensionMetadata[],
   installed: InstalledExtensionRecord[],
+  channel: UpdateChannel = "stable",
 ): Set<string> {
   const updates = new Set<string>();
   for (const metadata of catalog) {
+    if (metadata.revoked) continue;
+    if (!channelVisible(metadata.channel, channel)) continue;
+    if (!rolloutAllows(metadata.rolloutPercent, `plugin:${metadata.id}`)) continue;
     const record = installed.find((entry) => entry.id === metadata.id);
     if (!record) continue;
     if (compareExtensionVersions(metadata.version, record.version) > 0) {
@@ -209,6 +225,52 @@ export function findUpdateAvailable(
     }
   }
   return updates;
+}
+
+/** Installed extensions whose catalog entry was revoked (§24): disable these. */
+export function findRevokedInstalled(
+  catalog: ExtensionMetadata[],
+  installed: InstalledExtensionRecord[],
+): string[] {
+  const revoked = new Set(
+    catalog.filter((entry) => entry.revoked).map((entry) => entry.id),
+  );
+  return installed.filter((record) => revoked.has(record.id)).map((record) => record.id);
+}
+
+/**
+ * Per-plugin update probe behind catalog comparison, using Acode's
+ * `plugin/check-update/<id>/<version>` endpoint (§19). When the synced
+ * catalog has no newer entry — stale page, plugin missing from the listing —
+ * the server can still report a newer version, and that hint is actionable:
+ * updating re-downloads the latest package from the registry directly.
+ * Providers without `checkUpdate` (offline seed) yield no hints, and a
+ * per-plugin failure resolves to "no hint" rather than failing the batch.
+ */
+export async function checkServerUpdates(
+  provider: Pick<RegistryProvider, "checkUpdate">,
+  installed: InstalledExtensionRecord[],
+): Promise<Map<string, string>> {
+  const hints = new Map<string, string>();
+  if (typeof provider.checkUpdate !== "function") return hints;
+  const checkUpdate = provider.checkUpdate.bind(provider);
+  await Promise.all(
+    installed.map(async (record) => {
+      try {
+        const answer = await checkUpdate(record.id, record.version);
+        if (
+          answer?.update &&
+          typeof answer.version === "string" &&
+          compareExtensionVersions(answer.version, record.version) > 0
+        ) {
+          hints.set(record.id, answer.version);
+        }
+      } catch {
+        // Offline or unknown plugin: catalog comparison stays the source.
+      }
+    }),
+  );
+  return hints;
 }
 
 /** Categories derive from explicit categories, falling back to keywords. */
@@ -328,6 +390,8 @@ function intersectGramCandidates(
 
 export type CatalogFilter = {
   category?: string | null;
+  /** Update channel (§44): entries above the user's channel are hidden. */
+  channel?: UpdateChannel;
   installedOnly?: boolean;
   query?: string | null;
   /** Prebuilt index; pass it to avoid re-indexing on every keystroke. */
@@ -352,6 +416,18 @@ export function filterCatalogEntries(
         : searchCatalogIndex(buildCatalogSearchIndex(entries), needle);
   return searched.filter((entry) => {
     if (filter.category && entry.category !== filter.category) return false;
+    if (filter.channel && !channelVisible(entry.channel, filter.channel)) {
+      return false;
+    }
+    // Rollout gates discovery, never management: an installed extension
+    // stays visible (and updatable only through findUpdateAvailable, which
+    // applies the same gate) so the user can always remove what they have.
+    if (
+      !installed.some((item) => item.id === entry.id) &&
+      !rolloutAllows(entry.rolloutPercent, `plugin:${entry.id}`)
+    ) {
+      return false;
+    }
     if (filter.updateOnly || filter.installedOnly || filter.state) {
       const record = installed.find((item) => item.id === entry.id);
       if (filter.updateOnly || filter.installedOnly) {
@@ -378,6 +454,7 @@ export type CatalogStateFilter =
   | "enabled"
   | "disabled"
   | "broken"
+  | "revoked"
   | "update-available";
 
 export const CATALOG_STATE_FILTERS: readonly CatalogStateFilter[] = [
@@ -385,6 +462,7 @@ export const CATALOG_STATE_FILTERS: readonly CatalogStateFilter[] = [
   "enabled",
   "disabled",
   "broken",
+  "revoked",
   "update-available",
 ];
 
@@ -401,6 +479,8 @@ function stateMatchesFilter(
       return state === "installed-disabled";
     case "broken":
       return state === "installed-broken";
+    case "revoked":
+      return state === "revoked";
     case "update-available":
       return state === "update-available";
     default:

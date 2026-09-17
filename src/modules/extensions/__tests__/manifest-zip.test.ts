@@ -41,6 +41,17 @@ describe("plugin manifest", () => {
     expect(authorLabel(manifest.author)).toBe("Someone");
   });
 
+  it("resolves dot-slashed asset paths against the archive entries", () => {
+    // Real manifests declare "./src/main.js" while archive entries never
+    // carry the leading "./": without the stripped-form fallback these
+    // packages collapse to main.js and fail entry validation.
+    const manifest = parsePluginManifest(
+      JSON.stringify({ ...VALID_MANIFEST, main: "./dist/main.js" }),
+      ["dist/main.js", "icon.png", "plugin.json", "readme.md"],
+    );
+    expect(manifest.main).toBe("dist/main.js");
+  });
+
   it("rejects malformed JSON", () => {
     expect(() => parsePluginManifest("{nope", null)).toThrow(ManifestError);
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkServerUpdates,
   computeCatalogChanges,
   deriveExtensionInstallState,
   filterCatalogEntries,
@@ -21,11 +22,13 @@ import type { ExtensionMetadata, InstalledExtensionRecord } from "../models";
 import { AcodeRegistryProvider, SeededRegistryProvider } from "../registry";
 
 function metadata(overrides: Partial<ExtensionMetadata>): ExtensionMetadata {
-  return {
+  const base: ExtensionMetadata = {
     author: null,
     category: null,
+    channel: null,
     changelog: null,
     dependencies: [],
+    deprecated: false,
     description: "desc",
     download: null,
     icon: null,
@@ -38,11 +41,13 @@ function metadata(overrides: Partial<ExtensionMetadata>): ExtensionMetadata {
     price: 0,
     readme: null,
     repository: null,
+    revoked: false,
+    rolloutPercent: null,
     source: "registry",
     updatedAt: null,
     version: "1.0.0",
-    ...overrides,
   };
+  return Object.assign(base, overrides);
 }
 
 function record(
@@ -236,6 +241,82 @@ describe("update + install state derivation", () => {
     expect(deriveExtensionInstallState(catalog[1], installed)).toBe("installed");
   });
 
+  it("probes the server for updates the catalog missed", async () => {
+    // Mirrors Acode's per-plugin `plugin/check-update/<id>/<version>` flow:
+    // the provider answers per installed plugin, failures resolve to no
+    // hint, and only strictly newer reported versions are kept.
+    const provider = {
+      async checkUpdate(id: string, version: string) {
+        if (id === "plugin.new") return { update: true, version: "2.0.0" };
+        if (id === "plugin.same") return { update: false, version };
+        if (id === "plugin.stale") return { update: true, version: "1.0.0" };
+        throw new Error("unknown plugin");
+      },
+    };
+    const installed = [
+      record({ id: "plugin.new", version: "1.0.0" }),
+      record({ id: "plugin.same", version: "1.0.0" }),
+      record({ id: "plugin.stale", version: "1.0.0" }),
+      record({ id: "plugin.gone", version: "1.0.0" }),
+    ];
+    const hints = await checkServerUpdates(provider, installed);
+    expect([...hints]).toEqual([["plugin.new", "2.0.0"]]);
+  });
+
+  it("yields no server hints without checkUpdate support", async () => {
+    const hints = await checkServerUpdates({}, [record({ id: "plugin.a" })]);
+    expect(hints.size).toBe(0);
+  });
+
+  it("reports revoked first, whatever the install state", () => {
+    const catalog = [metadata({ id: "a", revoked: true, version: "2.0.0" })];
+    expect(deriveExtensionInstallState(catalog[0], [])).toBe("revoked");
+    expect(
+      deriveExtensionInstallState(catalog[0], [record({ id: "a", version: "2.0.0" })]),
+    ).toBe("revoked");
+  });
+
+  it("finds revoked installs for the disable sweep", async () => {
+    const { findRevokedInstalled } = await import("../catalog");
+    const installed = [record({ id: "a" }), record({ id: "b" })];
+    expect(
+      findRevokedInstalled([metadata({ id: "a", revoked: true })], installed),
+    ).toEqual(["a"]);
+  });
+
+  it("gates updates on revocation, channel, and rollout", () => {
+    const catalog = [
+      metadata({ id: "ok", version: "1.1.0" }),
+      metadata({ id: "revoked", revoked: true, version: "1.1.0" }),
+      metadata({ id: "beta", channel: "beta", version: "1.1.0" }),
+      metadata({ id: "held", rolloutPercent: 0, version: "1.1.0" }),
+    ];
+    const installed = [
+      record({ id: "ok", version: "1.0.0" }),
+      record({ id: "revoked", version: "1.0.0" }),
+      record({ id: "beta", version: "1.0.0" }),
+      record({ id: "held", version: "1.0.0" }),
+    ];
+    expect(findUpdateAvailable(catalog, installed)).toEqual(new Set(["ok"]));
+    expect(findUpdateAvailable(catalog, installed, "beta")).toEqual(
+      new Set(["ok", "beta"]),
+    );
+  });
+
+  it("filters catalog entries by channel", async () => {
+    const { filterCatalogEntries } = await import("../catalog");
+    const entries = [
+      metadata({ id: "a" }),
+      metadata({ id: "b", channel: "beta" }),
+    ];
+    expect(
+      filterCatalogEntries(entries, [], { channel: "stable" }).map((entry) => entry.id),
+    ).toEqual(["a"]);
+    expect(
+      filterCatalogEntries(entries, [], { channel: "preview" }).map((entry) => entry.id),
+    ).toEqual(["a", "b"]);
+  });
+
   it("reports broken and disabled states", () => {
     const catalog = [metadata({ id: "a" })];
     expect(
@@ -291,7 +372,8 @@ describe("compatibility evaluator", () => {
     );
     expect(report.level).toBe("partial");
     expect(report.reasons.join(" ")).toMatch(/does not provide: project/);
-    expect(report.reasons.join(" ")).toMatch(/acode.newEditorFile/);
+    // newEditorFile is a supported bridge call, not a missing module.
+    expect(report.reasons.join(" ")).not.toMatch(/acode.newEditorFile/);
   });
 
   it("treats the scoped editor module as provided, but not the editor instance", () => {
@@ -337,6 +419,45 @@ describe("compatibility evaluator", () => {
     expect(compareExtensionVersions("1.10.0", "1.9.0")).toBe(1);
     expect(compareExtensionVersions("1.0.0", "1.0.0")).toBe(0);
     expect(compareExtensionVersions("0.9", "1.0.0")).toBe(-1);
+  });
+});
+
+describe("per-plugin update check (Acode check-update endpoint)", () => {
+  function checkProvider(payload: unknown, status = 200) {
+    return new AcodeRegistryProvider(async () => ({
+      json: async () => payload,
+      ok: status === 200,
+      status,
+    }));
+  }
+
+  it("reports an available update with the registry's version", async () => {
+    const provider = checkProvider({ update: true, version: "1.5.0" });
+    expect(await provider.checkUpdate?.("a", "1.4.0")).toEqual({
+      update: true,
+      version: "1.5.0",
+    });
+  });
+
+  it("reports no update without a version", async () => {
+    const provider = checkProvider({ update: false });
+    expect(await provider.checkUpdate?.("a", "1.4.0")).toEqual({
+      update: false,
+      version: null,
+    });
+  });
+
+  it("returns null on HTTP failure, malformed bodies, and exceptions", async () => {
+    expect(await checkProvider({}, 500).checkUpdate?.("a", "1.0.0")).toBeNull();
+    expect(await checkProvider(null).checkUpdate?.("a", "1.0.0")).toBeNull();
+    expect(await checkProvider({ update: "yes" }).checkUpdate?.("a", "1.0.0")).toEqual({
+      update: false,
+      version: null,
+    });
+    const throwing = new AcodeRegistryProvider(async () => {
+      throw new Error("offline");
+    });
+    expect(await throwing.checkUpdate?.("a", "1.0.0")).toBeNull();
   });
 });
 

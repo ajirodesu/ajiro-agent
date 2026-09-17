@@ -12,8 +12,8 @@
       "repository": "https://github.com/Acode-Foundation/acode-plugin-python",
       "minVersionCode": 290,
       "download": {
-        "kind": "url",
-        "url": "https://github.com/Acode-Foundation/acode-plugin-python/archive/refs/heads/main.zip"
+        "kind": "registry",
+        "pluginId": "acode.plugin.python"
       }
     },
     {
@@ -28,8 +28,8 @@
       "repository": "https://github.com/Acode-Foundation/acode-runner-plugin",
       "minVersionCode": 963,
       "download": {
-        "kind": "url",
-        "url": "https://github.com/Acode-Foundation/acode-runner-plugin/archive/refs/heads/main.zip"
+        "kind": "registry",
+        "pluginId": "acode.runner.plugin"
       }
     },
     {
@@ -43,8 +43,8 @@
       "category": "Productivity",
       "repository": "https://github.com/deadlyjack/acode-plugin-snippets",
       "download": {
-        "kind": "url",
-        "url": "https://github.com/deadlyjack/acode-plugin-snippets/archive/refs/heads/main.zip"
+        "kind": "registry",
+        "pluginId": "acode.plugin.snippets"
       }
     }
   ]

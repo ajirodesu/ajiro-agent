@@ -11,6 +11,7 @@ export * from "./dependencies";
 export * from "./diagnostics";
 export * from "./dom";
 export * from "./events";
+export * from "./formatters";
 export * from "./installer";
 export * from "./key-bindings";
 export * from "./manager";

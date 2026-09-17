@@ -43,6 +43,20 @@ describe("parsing preference files", () => {
     expect(parsed.trustedSigningKeys).toEqual({});
   });
 
+  it("defaults the update channel to stable and rejects unknown channels", () => {
+    expect(parseExtensionPreferences(JSON.stringify({})).updateChannel).toBe(
+      "stable",
+    );
+    expect(
+      parseExtensionPreferences(JSON.stringify({ updateChannel: "beta" }))
+        .updateChannel,
+    ).toBe("beta");
+    expect(
+      parseExtensionPreferences(JSON.stringify({ updateChannel: "nightly" }))
+        .updateChannel,
+    ).toBe("stable");
+  });
+
   it("keeps only usable trusted keys", () => {
     const parsed = parseExtensionPreferences(
       JSON.stringify({
@@ -90,9 +104,11 @@ describe("reading and writing preferences", () => {
     const loaded = await prefs.load();
     expect(loaded).toEqual({
       allowPluginInstallRequests: true,
+      formatters: {},
       notifyOnDiscovery: false,
       requireSignedPackages: true,
       trustedSigningKeys: { "ajiros.publisher": "AAAA" },
+      updateChannel: "stable",
     });
     // The patch really was merged, not written as a partial document.
     const reread = parseExtensionPreferences(await prefs.deps.platform.readText(
@@ -107,5 +123,21 @@ describe("reading and writing preferences", () => {
     const [first, second] = await Promise.all([prefs.load(), prefs.load()]);
     expect(first).toEqual(second);
     expect(first.requireSignedPackages).toBe(true);
+  });
+
+  it("keeps formatter selections and drops garbage on file read", async () => {
+    const prefs = reader();
+    await prefs.save({ formatters: { typescript: "pretty" } });
+    expect((await prefs.load()).formatters).toEqual({ typescript: "pretty" });
+
+    // A hand-edited file with garbage entries parses down to usable ones.
+    await prefs.deps.platform.writeText(
+      prefs.deps.paths.preferencesFile,
+      JSON.stringify({ formatters: { typescript: "pretty", "": "x", python: "", nested: { a: 1 } } }),
+    );
+    const parsed = parseExtensionPreferences(
+      await prefs.deps.platform.readText(prefs.deps.paths.preferencesFile),
+    );
+    expect(parsed.formatters).toEqual({ typescript: "pretty" });
   });
 });

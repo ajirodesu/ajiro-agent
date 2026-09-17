@@ -44,6 +44,7 @@ import {
   type PluginNotification,
 } from "@/modules/extensions";
 import { PERMISSION_LABELS } from "@/modules/extensions/permissions";
+import { usePluginUiHandler } from "@/components/extensions/plugin-dialogs";
 
 /** How long a plugin notification stays on screen. */
 const NOTICE_TIMEOUT_MS = 6_000;
@@ -54,6 +55,10 @@ const INSTALL_REFUSED_MESSAGE =
 export function PluginHostSurface() {
   const theme = useTheme();
   const bridge = useMemo(() => getPluginRuntimeBridge(), []);
+  // Native dialogs, loaders, toasts, the file browser, and new editor
+  // files for plugin code (§48). Hooked before the early return below so
+  // the hook order stays stable whether the document is needed or not.
+  const pluginUi = usePluginUiHandler();
   const [status, setStatus] = useState(() => bridge.status());
   const [needed, setNeeded] = useState(false);
   const [notice, setNotice] = useState<PluginNotification | null>(null);
@@ -129,6 +134,13 @@ export function PluginHostSurface() {
   }, [bridge]);
 
   useEffect(() => bridge.subscribe(setStatus), [bridge]);
+
+  useEffect(() => {
+    bridge.setUiHandler(pluginUi.handler);
+    return () => {
+      bridge.setUiHandler(null);
+    };
+  }, [bridge, pluginUi.handler]);
 
   useEffect(() => {
     if (!notice) return;
@@ -320,6 +332,9 @@ export function PluginHostSurface() {
           </View>
         </Pressable>
       ) : null}
+
+      {/* Plugin dialogs, loaders, and toasts (§48). */}
+      {pluginUi.element}
 
       {/* Consent for `acode.installPlugin` (§42): a plugin can ask, never act. */}
       <Drawer

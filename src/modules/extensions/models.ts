@@ -51,6 +51,18 @@ export type ExtensionMetadata = {
   /** Where the metadata came from, for provenance display. */
   source: "registry" | "bundled" | "local";
   updatedAt: string | null;
+  /**
+   * Dynamic-update metadata (Dynamic Updates prompt §§24, 44–45). Registries
+   * that predate these fields omit them; normalization fills stable,
+   * unrevoked, fully-rolled-out defaults so old entries keep working.
+   */
+  /** True when the registry revoked this extension: never installable. */
+  revoked: boolean;
+  deprecated: boolean;
+  /** Update channel; null means stable. */
+  channel: string | null;
+  /** Gradual rollout percent, null means fully rolled out. */
+  rolloutPercent: number | null;
 };
 
 export type ExtensionCatalog = {
@@ -198,6 +210,7 @@ export type ExtensionInstallState =
   | "installed-broken"
   | "installed-disabled"
   | "not-installed"
+  | "revoked"
   | "update-available";
 
 export type ExtensionDiagnostic = {

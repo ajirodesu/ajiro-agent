@@ -61,17 +61,24 @@ function mountDocument(overrides: Partial<PluginHostServices> = {}): Rig {
   const sent: PluginBridgeInbound[] = [];
 
   const services: PluginHostServices = {
+    createLoader: async () => "loader-1",
+    destroyLoader: () => {},
     execHostCommand: () => false,
     listPluginData: async () => [],
     log: () => {},
     notify: () => {},
     onCommandRegistered: () => {},
     onCommandRemoved: () => {},
+    openNewFile: async (_pluginId, filename) => filename,
+    operateLoader: () => {},
+    pickFiles: async () => [],
     readActiveEditor: () => null,
     readPackageFile: async () => null,
     readPluginData: async () => ({}),
     requestPluginInstall: async () => {},
     setPluginSetting: async () => {},
+    showDialog: async () => null,
+    toast: () => {},
     writeActiveEditor: () => false,
     writePluginData: async () => {},
     writePluginFile: async () => {},
@@ -476,6 +483,112 @@ acode.setPluginInit("${PLUGIN_ID}", function () {
     ).resolves.toBeUndefined();
   });
 
+  it("registers a formatter and formats the active document end to end", async () => {
+    let written: string | null = null;
+    const rig = mount({
+      readActiveEditor: () => ({ languageId: "typescript", path: "a.ts", text: "const x=1" }),
+      writeActiveEditor: (text) => {
+        written = text;
+        return true;
+      },
+    });
+    await rig.host.waitForReady(2_000);
+    await rig.host.load(PLUGIN_ID, {
+      baseUrl: "https://plugin.ajiro.invalid/com.example.real",
+      grantedPermissions: ["editor"],
+      settings: {},
+      source: `acode.setPluginInit("${PLUGIN_ID}", function () {
+        acode.registerFormatter("upper", ["ts"], function (text) { return text.toUpperCase(); }, "Upper");
+        window.__fmtList = acode.formatters;
+        window.__fmtOpts = acode.getFormatterFor(["ts"]);
+        acode.format().then(function (ok) { window.__fmtResult = ok; });
+      });`,
+      storage: {},
+    });
+    await rig.host.activate(PLUGIN_ID, { firstInit: true });
+    await settle(150);
+
+    const windowRef = rig.dom.window as unknown as Record<string, unknown>;
+    // The auto-pick rule fires: exactly one candidate for TypeScript.
+    expect(written).toBe("CONST X=1");
+    expect(windowRef.__fmtResult).toBe(true);
+    expect(windowRef.__fmtList).toEqual([{ id: "upper", name: "Upper", exts: ["ts"] }]);
+    expect(windowRef.__fmtOpts).toEqual([[null, "None"], ["upper", "Upper"]]);
+    expect(rig.host.listFormatters()).toHaveLength(1);
+    expect(rig.outbound.map((message) => message.type)).toContain("formatter-register");
+  });
+
+  it("unregisters a formatter from the document and the host mirror", async () => {
+    const rig = mount({
+      readActiveEditor: () => ({ languageId: "typescript", path: "a.ts", text: "const x=1" }),
+      writeActiveEditor: () => true,
+    });
+    await rig.host.waitForReady(2_000);
+    await rig.host.load(PLUGIN_ID, {
+      baseUrl: "https://plugin.ajiro.invalid/com.example.real",
+      grantedPermissions: ["editor"],
+      settings: {},
+      source: `acode.setPluginInit("${PLUGIN_ID}", function () {
+        acode.registerFormatter("upper", ["ts"], function (text) { return text; }, "Upper");
+        acode.unregisterFormatter("upper");
+        window.__afterUnreg = acode.formatters.length;
+      });`,
+      storage: {},
+    });
+    await rig.host.activate(PLUGIN_ID, { firstInit: true });
+    await settle(100);
+    expect((rig.dom.window as unknown as Record<string, unknown>).__afterUnreg).toBe(0);
+    expect(rig.host.listFormatters()).toEqual([]);
+  });
+
+  it("format() refuses honestly with no document or no formatter", async () => {
+    const rig = mount({
+      readActiveEditor: () => null,
+      writeActiveEditor: () => false,
+    });
+    await rig.host.waitForReady(2_000);
+    await rig.host.load(PLUGIN_ID, {
+      baseUrl: "https://plugin.ajiro.invalid/com.example.real",
+      grantedPermissions: ["editor"],
+      settings: {},
+      source: `acode.setPluginInit("${PLUGIN_ID}", function () {
+        acode.registerFormatter("upper", ["py"], function (text) { return text; }, "Upper");
+        acode.format().then(function (ok) { window.__fmtResult = ok; });
+      });`,
+      storage: {},
+    });
+    await rig.host.activate(PLUGIN_ID, { firstInit: true });
+    await settle(100);
+    // No document open: false, not a throw and not a write.
+    expect((rig.dom.window as unknown as Record<string, unknown>).__fmtResult).toBe(false);
+  });
+
+  it("sets page titles and dedupes icons with monochrome support", async () => {
+    const rig = mount();
+    await rig.host.waitForReady(2_000);
+    await rig.host.load(PLUGIN_ID, {
+      baseUrl: "https://plugin.ajiro.invalid/com.example.real",
+      grantedPermissions: [],
+      settings: {},
+      source: `acode.setPluginInit("${PLUGIN_ID}", function (baseUrl, $page) {
+        $page.show();
+        $page.settitle("New Title");
+        acode.addIcon("my-icon", "https://example.com/i.png");
+        acode.addIcon("my-icon", "https://example.com/i.png");
+        acode.addIcon("mono-icon", "https://example.com/m.svg", { monochrome: true });
+      });`,
+      storage: {},
+    });
+    await rig.host.activate(PLUGIN_ID, { firstInit: true });
+    await settle();
+    expect(rig.host.getPage()).toEqual({ pluginId: PLUGIN_ID, title: "New Title" });
+    const styles = rig.dom.window.document.head.querySelectorAll("style[icon]");
+    expect(styles.length).toBe(2);
+    const mono = rig.dom.window.document.head.querySelector('style[icon="mono-icon"]');
+    expect(mono?.textContent).toContain("mask");
+    expect(mono?.textContent).toContain("currentColor");
+  });
+
   it("reloads cleanly when the document is replaced", async () => {
     const first = mount();
     await first.host.waitForReady(2_000);
@@ -508,5 +621,128 @@ acode.setPluginInit("${PLUGIN_ID}", function () {
     expect(
       second.dom.window.document.getElementById("title")?.textContent,
     ).toBe("Runs: 4");
+  });
+});
+
+const DIALOG_PLUGIN_ID = "com.example.dialogs";
+
+const DIALOG_PLUGIN_SOURCE = `
+acode.setPluginInit("${DIALOG_PLUGIN_ID}", function (baseUrl, $page, cache) {
+  var results = {};
+  var toastModule = acode.require("toast");
+  toastModule("hello from require", 1500);
+  acode.toast("hello from global");
+  acode.confirm("Sure?", "Really sure?").then(function (ok) {
+    results.confirm = ok;
+    return acode.prompt("Name?", "Ada", "text", { required: true });
+  }).then(function (name) {
+    results.prompt = name;
+    return acode.select("Pick", ["a", ["b", "Bee"], { value: "c", text: "Cee", disabled: true }], { default: "b" });
+  }).then(function (choice) {
+    results.select = choice;
+    return acode.multiPrompt("Form", [{ id: "nick", name: "Nick", value: "Al" }]);
+  }).then(function (values) {
+    results.multi = values;
+    var loader = acode.loader("Loading", "Please wait");
+    loader.setTitle("Still loading");
+    loader.destroy();
+    return acode.newEditorFile("notes.md", { text: "# hi" });
+  }).then(function (path) {
+    results.file = path;
+    return acode.fileBrowser("file");
+  }).then(function (uris) {
+    results.browser = uris;
+    $page.innerHTML = "<h1 id='dialog-results'>" + JSON.stringify(results) + "</h1>";
+    $page.show();
+  });
+});
+`;
+
+describe("plugin dialogs (executed in a real DOM)", () => {
+  it("round-trips every dialog kind through the bridge with Acode shapes", async () => {
+    const shown: { kind: string; payload: unknown }[] = [];
+    const rig = mount({
+      createLoader: async () => "loader-9",
+      openNewFile: async (_pluginId, filename) => `project/${filename}`,
+      pickFiles: async () => ["file:///picked/a.txt"],
+      showDialog: async (kind, payload) => {
+        shown.push({ kind, payload });
+        if (kind === "confirm") return true;
+        if (kind === "prompt") return "Ada";
+        if (kind === "select") return "b";
+        if (kind === "multi-prompt") return { nick: "Al" };
+        return null;
+      },
+    });
+    await rig.host.waitForReady(2_000);
+    await rig.host.load(DIALOG_PLUGIN_ID, {
+      baseUrl: "https://plugin.ajiro.invalid/com.example.dialogs",
+      grantedPermissions: ["editor", "storage", "ui"],
+      settings: {},
+      source: DIALOG_PLUGIN_SOURCE,
+      storage: {},
+    });
+    await rig.host.activate(DIALOG_PLUGIN_ID, { firstInit: true });
+    await settle(100);
+
+    // Every toast reached the host without any grant.
+    const toasts = rig.outbound.filter((message) => message.type === "toast");
+    expect(toasts).toHaveLength(2);
+
+    // The select payload carries the normalized Acode shapes.
+    const selectCall = shown.find((entry) => entry.kind === "select");
+    expect(selectCall?.payload).toMatchObject({
+      options: [
+        { disabled: false, text: "a", value: "a" },
+        { disabled: false, text: "Bee", value: "b" },
+        { disabled: true, text: "Cee", value: "c" },
+      ],
+      rejectOnCancel: false,
+    });
+
+    // Loader lifecycle ops were posted, create resolved with the host id.
+    const loaderOps = rig.outbound.filter(
+      (message) => message.type === "dialog-loader-op",
+    );
+    expect(loaderOps.map((message) => message.op).sort()).toEqual([
+      "destroy",
+      "setTitle",
+    ]);
+
+    // The plugin saw every answer and the created/picked paths.
+    const results = JSON.parse(
+      rig.dom.window.document.getElementById("dialog-results")?.textContent ?? "{}",
+    );
+    expect(results).toEqual({
+      browser: ["file:///picked/a.txt"],
+      confirm: true,
+      file: "project/notes.md",
+      multi: { nick: "Al" },
+      prompt: "Ada",
+      select: "b",
+    });
+  });
+
+  it("refuses dialogs for plugins without the ui grant", async () => {
+    const rig = mount();
+    await rig.host.waitForReady(2_000);
+    await rig.host.load(DIALOG_PLUGIN_ID, {
+      baseUrl: "https://plugin.ajiro.invalid/com.example.dialogs",
+      grantedPermissions: ["storage"],
+      settings: {},
+      source: `
+acode.setPluginInit("${DIALOG_PLUGIN_ID}", function () {
+  try {
+    acode.confirm("T?", "M");
+  } catch (error) {
+    document.title = String(error && error.message);
+  }
+});
+`,
+      storage: {},
+    });
+    await rig.host.activate(DIALOG_PLUGIN_ID, { firstInit: true });
+    await settle();
+    expect(rig.dom.window.document.title).toContain("ui capability");
   });
 });

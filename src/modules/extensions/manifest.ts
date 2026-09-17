@@ -39,6 +39,13 @@ export type AcodePluginManifest = {
   } | null;
   /** Acode installer extension: list of plugin ids this plugin needs. */
   dependencies: string[];
+  /**
+   * Ajiro extension: native capabilities the plugin needs (Dynamic Updates
+   * prompt §36). Unknown to Acode, preserved like any manifest field, and
+   * checked at install time — a missing capability refuses with Requires
+   * App Update rather than installing a plugin that cannot run.
+   */
+  nativeCapabilities: string[];
 };
 
 /** Acode falls back to these defaults when manifest files are missing. */
@@ -213,9 +220,21 @@ export function parsePluginManifest(
 
   if (packageFiles) {
     const files = new Set(packageFiles);
-    if (!main || !files.has(main)) main = ACODE_DEFAULT_MAIN;
-    if (!icon || !files.has(icon)) icon = ACODE_DEFAULT_ICON;
-    if (!readme || !files.has(readme)) readme = ACODE_DEFAULT_README;
+    // Real manifests declare asset paths like "./src/main.js" while archive
+    // entries never carry the leading "./" — resolve through the stripped
+    // form before falling back to Acode's defaults, and keep the resolved
+    // path so later reads hit the file that is actually there.
+    const resolveAsset = (value: string | null, fallback: string): string => {
+      if (value && files.has(value)) return value;
+      if (value) {
+        const stripped = value.replace(/^\.\//, "");
+        if (stripped !== value && files.has(stripped)) return stripped;
+      }
+      return fallback;
+    };
+    main = resolveAsset(main, ACODE_DEFAULT_MAIN);
+    icon = resolveAsset(icon, ACODE_DEFAULT_ICON);
+    readme = resolveAsset(readme, ACODE_DEFAULT_README);
     if (!files.has(main)) {
       fail(`Entry point "${main}" is missing from the plugin package.`);
     }
@@ -251,6 +270,12 @@ export function parsePluginManifest(
     main: normalizePackagePath(main ?? ACODE_DEFAULT_MAIN, "Manifest main"),
     minVersionCode,
     name,
+    nativeCapabilities: stringList(parsed, "nativeCapabilities").map((entry) => {
+      if (!entry || entry.length > 64) {
+        fail("Manifest nativeCapabilities must list capability names.");
+      }
+      return entry;
+    }),
     price,
     raw: parsed,
     readme: readme ? normalizePackagePath(readme, "Manifest readme") : null,

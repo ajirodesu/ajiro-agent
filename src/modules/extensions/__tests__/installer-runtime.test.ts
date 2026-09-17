@@ -4,15 +4,20 @@ import {
   installPackage,
   loadInstalledRecords,
   parseInstalledRecords,
+  saveInstalledRecords,
   uninstallPackage,
   type InstallDeps,
   type InstallOutcome,
 } from "../installer";
-import type { ExtensionPermissionKey } from "../models";
+import type { ExtensionPermissionKey, InstalledExtensionRecord } from "../models";
 import { createExtensionManager } from "../manager";
 import type { RegistryProvider } from "../registry";
-import { ExtensionRuntime, installAcodeRuntime } from "../runtime";
-import { planExtensionPaths } from "../storage";
+import {
+  ExtensionRuntime,
+  installAcodeRuntime,
+  isThemePluginId,
+} from "../runtime";
+import { planExtensionPaths, pluginDataDir, pluginDir } from "../storage";
 import {
   createFakeExecutionHost,
   createMemoryPlatform,
@@ -562,6 +567,67 @@ describe("acode compatibility runtime", () => {
     expect(second).toBe(first);
     expect(globalThis.acode).toBeDefined();
     expect(typeof globalThis.acode?.require).toBe("function");
+  });
+
+  it("detects theme plugins the way Acode does", () => {
+    // Acode's isThemePlugin: case-insensitive substring match on the id.
+    expect(isThemePluginId("acode.plugin.monokai")).toBe(true);
+    expect(isThemePluginId("ACODE.PLUGIN.DRACULA-THEME")).toBe(true);
+    expect(isThemePluginId("acode.plugin.extra_syntax_highlights")).toBe(true);
+    expect(isThemePluginId("com.example.tools")).toBe(false);
+    expect(isThemePluginId("acode.plugin.python")).toBe(false);
+  });
+
+  it("restores theme plugins before other plugins", async () => {
+    // Acode loads theme plugins first so a theme is in place before other
+    // plugins initialize; the order here is installation order, proving the
+    // runtime re-sorts rather than inheriting it.
+    const { deps } = setup();
+    const record = (id: string): InstalledExtensionRecord => ({
+      compatibility: { level: "compatible", reasons: [] },
+      enabled: true,
+      id,
+      installedAt: "2026-01-01T00:00:00Z",
+      manifest: { main: "main.js" },
+      packageSha256: null,
+      permissions: [],
+      runtimeError: null,
+      runtimeState: "enabled",
+      signature: null,
+      source: "registry",
+      sourceUrl: null,
+      updatedAt: "2026-01-01T00:00:00Z",
+      version: "1.0.0",
+    });
+    const records = [record("com.example.tools"), record("com.example.monokai")];
+    await saveInstalledRecords(deps, records);
+    for (const entry of records) {
+      await deps.platform.writeText(
+        `${pluginDir(deps.paths, entry.id)}/main.js`,
+        "acode.setPluginInit('x', () => {});",
+      );
+    }
+    const runtime = new ExtensionRuntime(deps);
+    const host = createFakeExecutionHost();
+    runtime.setExecutionHost(host);
+    await runtime.restoreActivePlugins();
+    expect(host.activated).toEqual(["com.example.monokai", "com.example.tools"]);
+  });
+
+  it("clears the plugin cache directory on deactivation, keeping settings", async () => {
+    // Mirrors Acode's unmountPlugin, which always deletes the plugin cache.
+    const { platform } = createMemoryPlatform();
+    const deps: InstallDeps = { paths: planExtensionPaths("file:///docs/"), platform };
+    const cacheDir = pluginDataDir(deps.paths, "com.example.plugin", "cache");
+    const settingsDir = pluginDataDir(deps.paths, "com.example.plugin", "settings");
+    await platform.writeText(`${cacheDir}/cache.json`, "{}");
+    await platform.writeText(`${settingsDir}/settings.json`, "{}");
+
+    const runtime = new ExtensionRuntime(deps);
+    await runtime.deactivate("com.example.plugin");
+
+    expect(await platform.exists(cacheDir, "directory")).toBe(false);
+    expect(await platform.exists(`${settingsDir}/settings.json`, "file")).toBe(true);
   });
 });
 

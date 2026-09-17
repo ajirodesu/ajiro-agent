@@ -9,11 +9,13 @@ import type { ExtensionMetadata } from "../models";
 import { AcodeRegistryProvider } from "../registry";
 
 function metadata(overrides: Partial<ExtensionMetadata>): ExtensionMetadata {
-  return {
+  const base: ExtensionMetadata = {
     author: null,
     category: null,
+    channel: null,
     changelog: null,
     dependencies: [],
+    deprecated: false,
     description: "desc",
     download: null,
     icon: null,
@@ -26,11 +28,13 @@ function metadata(overrides: Partial<ExtensionMetadata>): ExtensionMetadata {
     price: 0,
     readme: null,
     repository: null,
+    revoked: false,
+    rolloutPercent: null,
     source: "registry",
     updatedAt: null,
     version: "1.0.0",
-    ...overrides,
   };
+  return Object.assign(base, overrides);
 }
 
 function persistence(cache: CatalogCache | null): CatalogPersistence {
