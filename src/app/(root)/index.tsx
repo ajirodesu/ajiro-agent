@@ -77,6 +77,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { ProcessTodoList } from "@/components/ui/process-todo-list";
 import { Questionnaire } from "@/components/ui/questionnaire";
 import {
   MessageScroller,
@@ -2210,6 +2211,8 @@ const ChatInput = memo(function ChatInput({
             )}
           </View>
         ) : null}
+
+        <ProcessTodoList />
 
         <ComposerCapsule
           value={prompt}

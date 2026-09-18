@@ -10,7 +10,8 @@
     "owner": "ajirodesu",
     "platforms": [
       "android",
-      "ios"
+      "ios",
+      "web"
     ],
     "ios": {
       "icon": "./assets/images/new-icon.png",

@@ -153,7 +153,9 @@
     "vendor:git-providers": "node ./scripts/vendor-git-providers.mjs",
     "lint": "expo lint",
     "postinstall": "node ./scripts/patch-ai-sdk-react-native.js",
-    "vendor:intel": "node ./scripts/vendor-intel.mjs"
+    "vendor:intel": "node ./scripts/vendor-intel.mjs",
+    "contracts:check": "node ./scripts/contracts-check.mjs",
+    "archive:e2e:web": "node ./scripts/archive-e2e-web.mjs"
   },
   "private": true,
   "expo": {

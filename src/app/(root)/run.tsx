@@ -28,6 +28,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -46,6 +47,7 @@ import {
   ICON_INNER,
 } from "@/components/ui/chrome";
 import { withAlpha } from "@/components/ui/chrome-spec";
+import { NativeViewUnavailable } from "@/components/ui/native-unavailable";
 import { useProjectRun, type RunPhase } from "@/hooks/use-project-run";
 import { useTheme } from "@/hooks/use-theme";
 import { useIdeWorkspace } from "@/providers/ide-workspace";
@@ -406,6 +408,16 @@ function WebviewPage({
         <Text className="text-center font-sans text-sm text-muted-foreground dark:text-muted-foreground-dark">
           Start the project to preview its live output here.
         </Text>
+      </View>
+    );
+  }
+  if (Platform.OS === "web") {
+    return (
+      <View className="min-h-0 flex-1 justify-center px-sp-6">
+        <NativeViewUnavailable
+          title="Live preview unavailable"
+          detail="The dev server runs on-device. Live app preview needs the Android app build."
+        />
       </View>
     );
   }

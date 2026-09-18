@@ -7,7 +7,7 @@
  * (`bot_<botId>_cmd_<name>_apiKey`); the MD config, generated `.ts`, repo
  * imports, and download zip carry only `${API_KEY}` + Send As.
  */
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "@/core/services/secure-store";
 
 import type { BotCommandRepository } from "@/core/db/repositories/bot-command-repository";
 import { fetchWithTimeout } from "@/core/fetch-with-timeout";

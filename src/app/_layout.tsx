@@ -40,6 +40,7 @@ import { X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -58,22 +59,24 @@ import "./global.css";
 
 SplashScreen.preventAutoHideAsync();
 
-Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async (notification) => {
     const data = notification.request.content.data as
       | { type?: string }
       | null;
     const alertKind = data?.type;
 
-    return {
-      shouldPlaySound:
-        alertKind === "tool-approval" || alertKind === "run-finished",
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    };
-  },
-});
+      return {
+        shouldPlaySound:
+          alertKind === "tool-approval" || alertKind === "run-finished",
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    },
+  });
+}
 
 function NotificationObserver() {
   const { resolveNotificationApproval, selectConversation } = useChat();

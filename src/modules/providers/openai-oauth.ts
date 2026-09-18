@@ -1,7 +1,7 @@
 import { prepareOpenAICallbackSession } from "@/core/services/local-server";
 import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "@/core/services/secure-store";
 import * as WebBrowser from "expo-web-browser";
 
 const OPENAI_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";

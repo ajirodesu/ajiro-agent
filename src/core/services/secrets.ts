@@ -11,17 +11,14 @@ import {
 } from "@/modules/providers/openai-oauth";
 import type { ProviderConfig } from "@/core/types/app-state";
 
-function getProviderApiKeyKey(providerId: string) {
-  return `provider_${providerId}_apiKey`;
-}
-
-function getMcpHeaderValuesKey(serverId: string) {
-  return `mcp_${serverId}_headers`;
-}
-
-function getMcpOAuthTokensKey(serverId: string) {
-  return `mcp_${serverId}_oauth_tokens`;
-}
+import {
+  getMcpHeaderValuesKey,
+  getMcpOAuthTokensKey,
+  getProviderApiKeyKey,
+  isRecord,
+  normalizeExpiresAt,
+  parseHeaderValues,
+} from "@/core/services/secrets-shared";
 
 export type McpOAuthTokens = {
   accessToken: string;
@@ -58,14 +55,6 @@ export interface SecretStore {
   setMcpOAuthSession(serverId: string, session: McpOAuthSession): Promise<void>;
   setMcpOAuthTokens(serverId: string, tokens: McpOAuthTokens): Promise<void>;
   setProviderApiKey(providerId: string, apiKey: string): Promise<void>;
-}
-
-function normalizeExpiresAt(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function parseMcpOAuthSession(raw: string | null): McpOAuthSession | null {
@@ -145,27 +134,7 @@ export const secureSecretStore: SecretStore = {
   },
   async getMcpHeaderValues(serverId) {
     const raw = await SecureStore.getItemAsync(getMcpHeaderValuesKey(serverId));
-
-    if (!raw) {
-      return {};
-    }
-
-    try {
-      const parsed = JSON.parse(raw);
-
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return {};
-      }
-
-      return Object.fromEntries(
-        Object.entries(parsed).filter(
-          (entry): entry is [string, string] =>
-            typeof entry[0] === "string" && typeof entry[1] === "string",
-        ),
-      );
-    } catch {
-      return {};
-    }
+    return parseHeaderValues(raw);
   },
   async getMcpOAuthSession(serverId) {
     return parseMcpOAuthSession(
