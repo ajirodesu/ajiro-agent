@@ -150,8 +150,8 @@ function HistoryActions({
       </Button>
       <Button size="sm" disabled={disabled} onPress={onReset}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Clock size={16} color="#FFFFFF" />
-          <Text style={{ color: "#FFFFFF", fontSize: 13 }}>
+          <Clock size={16} color={theme.accentForeground} />
+          <Text style={{ color: theme.accentForeground, fontSize: 13 }}>
             Reset editor to here
           </Text>
         </View>

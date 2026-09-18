@@ -37,6 +37,8 @@ export type SkillRegistryEntry = StoreSkillEntry & {
   /** Expected content hash / signature (§§21–22); verified on install. */
   hash: string | null;
   signature: string | null;
+  /** Key id claiming the signature; null when the entry is unsigned. */
+  signatureKeyId: string | null;
   changelog: string | null;
   updatedAt: string | null;
   rolloutPercent: number | null;
@@ -209,6 +211,7 @@ function parseRegistryEntry(value: unknown): SkillRegistryEntry | null {
       revoked: value.revoked === true,
       rolloutPercent: optionalPercent(value, "rolloutPercent"),
       signature: optionalString(value, "signature", 4096),
+      signatureKeyId: optionalString(value, "signatureKeyId", 128),
       slug,
       sourceUrl,
       updatedAt: optionalString(value, "updatedAt", 32),

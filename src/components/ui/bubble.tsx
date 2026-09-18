@@ -49,7 +49,9 @@ const bubbleContentVariants = cva("rounded-card px-sp-4 py-sp-3", {
 const bubbleTextVariants = cva("font-sans text-base", {
   variants: {
     variant: {
-      default: "text-[#f0f0f0] dark:text-[#f0f0f0]",
+      // Default renders on the accent fill (user messages): foreground
+      // contrasts in both modes, unlike a fixed near-white.
+      default: "text-foreground dark:text-foreground-dark",
       secondary: "text-foreground dark:text-foreground-dark",
       muted: "text-foreground dark:text-foreground-dark",
       tinted: "text-foreground dark:text-foreground-dark",

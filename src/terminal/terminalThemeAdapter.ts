@@ -59,7 +59,7 @@ export function adaptAppThemeToTerminalTheme(
   const accent = resolveAccent(theme, userAccent);
   const dark = theme.dark;
 
-  const background = dark ? colors.surfaceContainerLowest : "#FFFFFF";
+  const background = dark ? colors.surfaceContainerLowest : colors.surface;
   const foreground = dark ? colors.onSurface : colors.onSurface;
 
   return {

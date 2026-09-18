@@ -41,6 +41,8 @@
     "@codemirror/state": "^6.7.4",
     "@codemirror/view": "^6.43.11",
     "@emmetio/codemirror6-plugin": "^0.4.1",
+    "@expo-google-fonts/geist": "^0.4.2",
+    "@expo-google-fonts/geist-mono": "^0.4.3",
     "@expo/metro-runtime": "^57.0.15",
     "@expo/ui": "~57.0.17",
     "@noble/curves": "^2.4.0",

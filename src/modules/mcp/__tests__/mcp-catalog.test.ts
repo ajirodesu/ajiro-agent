@@ -7,7 +7,18 @@ import {
   findMissingMcpDependencies,
   findRevokedMcpServers,
 } from "../mcp-compat";
-import { parseMcpServerCatalog, resetMcpServerCatalogCache } from "../catalog";
+import {
+  buildMcpCatalogSigningPayload,
+  fetchMcpServerCatalog,
+  parseMcpCatalogSignature,
+  parseMcpServerCatalog,
+  resetMcpServerCatalogCache,
+} from "../catalog";
+import {
+  createPublisherTrustStore,
+  generatePublisherKeypair,
+  signContent,
+} from "@/modules/updates/publisher-trust";
 import type { McpServerPreset } from "../catalog";
 
 function preset(overrides: Partial<McpServerPreset> = {}): McpServerPreset {
@@ -20,6 +31,7 @@ function preset(overrides: Partial<McpServerPreset> = {}): McpServerPreset {
     deprecated: false,
     description: "Test server.",
     headerTemplate: null,
+    icon: null,
     id: "test-server",
     label: "Test",
     maxAppVersion: null,
@@ -42,6 +54,147 @@ function preset(overrides: Partial<McpServerPreset> = {}): McpServerPreset {
   };
   return Object.assign(base, overrides);
 }
+
+describe("mcp catalog signatures", () => {
+  const body = () => ({
+    servers: [
+      {
+        authMode: "none",
+        description: "d",
+        id: "a",
+        label: "A",
+        transport: "http",
+        url: "https://example.com/mcp",
+      },
+    ],
+    version: 1,
+  });
+
+  function served(
+    catalogBody: unknown,
+    headers: Record<string, string> = {},
+  ) {
+    return async () => ({
+      headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
+      json: async () => catalogBody,
+      ok: true,
+      status: 200,
+    });
+  }
+
+  it("parses signature blocks and builds a stable payload", () => {
+    expect(parseMcpCatalogSignature(body())).toBeNull();
+    expect(
+      parseMcpCatalogSignature({ ...body(), signature: { keyId: "a", value: "v" } }),
+    ).toEqual({ keyId: "a", value: "v" });
+    expect(
+      parseMcpCatalogSignature({ ...body(), signature: { algorithm: "rsa" } }),
+    ).toBeNull();
+    // Key order does not affect the payload publishers sign.
+    expect(buildMcpCatalogSigningPayload({ b: 1, a: [1, 2] })).toBe(
+      buildMcpCatalogSigningPayload({ a: [1, 2], b: 1 }),
+    );
+    expect(buildMcpCatalogSigningPayload(body())).toContain("mcp-catalog-v1:");
+  });
+
+  it("accepts valid signatures and falls back on invalid ones", async () => {
+    resetMcpServerCatalogCache();
+    const keys = generatePublisherKeypair();
+    const trustStore = createPublisherTrustStore({ alice: keys.publicKeyBase64 });
+    const unsigned = body();
+    const payload = buildMcpCatalogSigningPayload(unsigned);
+    const signed = {
+      ...unsigned,
+      signature: {
+        keyId: "alice",
+        value: signContent({ content: payload, secretKeyBase64: keys.secretKeyBase64 }),
+      },
+    };
+    const valid = await fetchMcpServerCatalog(undefined, {
+      fetchImpl: served(signed),
+      trustStore,
+    });
+    expect(valid.source).toBe("github");
+    expect(valid.presets.map((preset) => preset.id)).toEqual(["a"]);
+
+    // Tampered after signing: fail closed into the bundled fallback.
+    resetMcpServerCatalogCache();
+    const tampered = {
+      ...unsigned,
+      servers: [
+        { ...unsigned.servers[0], url: "https://evil.example/mcp" },
+      ],
+      signature: signed.signature,
+    };
+    const fallback = await fetchMcpServerCatalog(undefined, {
+      fetchImpl: served(tampered),
+      trustStore,
+    });
+    expect(fallback.source).toBe("bundled");
+
+    // Unknown key or no signature: the ecosystem default, still installable.
+    resetMcpServerCatalogCache();
+    const untrusted = await fetchMcpServerCatalog(undefined, {
+      fetchImpl: served(signed),
+      trustStore: createPublisherTrustStore(),
+    });
+    expect(untrusted.source).toBe("github");
+    resetMcpServerCatalogCache();
+    const plain = await fetchMcpServerCatalog(undefined, {
+      fetchImpl: served(unsigned),
+      trustStore,
+    });
+    expect(plain.source).toBe("github");
+    resetMcpServerCatalogCache();
+  });
+});
+
+describe("mcp preset icons", () => {
+  it("accepts https icons and drops anything else without failing", () => {
+    const [icon] = parseMcpServerCatalog({
+      servers: [
+        {
+          authMode: "none",
+          description: "d",
+          icon: "https://example.com/icon.png",
+          id: "a",
+          label: "A",
+          transport: "http",
+          url: "https://example.com/mcp",
+        },
+      ],
+      version: 1,
+    });
+    expect(icon?.icon).toBe("https://example.com/icon.png");
+    const [http, malformed] = parseMcpServerCatalog({
+      servers: [
+        {
+          authMode: "none",
+          description: "d",
+          icon: "http://example.com/icon.png",
+          id: "a",
+          label: "A",
+          transport: "http",
+          url: "https://example.com/mcp",
+        },
+        {
+          authMode: "none",
+          description: "d",
+          icon: "not a url",
+          id: "b",
+          label: "B",
+          transport: "http",
+          url: "https://example.com/mcp",
+        },
+      ],
+      version: 1,
+    });
+    // Icons are decoration: a bad one degrades to the initial, never to a
+    // rejected preset.
+    expect(http?.icon).toBeNull();
+    expect(malformed?.icon).toBeNull();
+  });
+});
 
 describe("mcp catalog parsing", () => {
   it("accepts the legacy shape without dynamic metadata", () => {
@@ -157,7 +310,7 @@ describe("mcp preset metadata", () => {
         ],
         version: 1,
       }),
-    ).toEqual([]);
+    ).toThrow(/platforms/);
   });
 });
 

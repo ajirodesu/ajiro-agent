@@ -21,6 +21,7 @@ import type {
   McpServerConfig,
   McpServerStatus,
   McpServerTransport,
+  MemoryEntry,
   MessageMetadata,
   ModelPreset,
   NotificationSettings,
@@ -136,6 +137,7 @@ export interface MessageRepository {
   }): Promise<StoredMessage>;
   getNextSequence(conversationId: string): Promise<number>;
   listByConversation(conversationId: string): Promise<StoredMessage[]>;
+  listAll(): Promise<StoredMessage[]>;
   listStreaming(): Promise<StoredMessage[]>;
   /** Delete every message of a conversation with `sequence < given`. Used by
       context compaction to trim older history. */
@@ -322,6 +324,27 @@ export interface SkillRepository {
   deleteFilesForSkill(skillId: string): Promise<void>;
 }
 
+export interface MemoryEntryRepository {
+  create(input: {
+    content: string;
+    enabled?: boolean;
+    id?: string;
+    sourceConversationId?: string | null;
+    sourceMessageId?: string | null;
+  }): Promise<MemoryEntry>;
+  delete(id: string): Promise<void>;
+  deleteAll(): Promise<void>;
+  getById(id: string): Promise<MemoryEntry | null>;
+  list(): Promise<MemoryEntry[]>;
+  setEnabled(id: string, enabled: boolean): Promise<void>;
+}
+
+export type UserProfile = {
+  aboutMe: string | null;
+  nickname: string | null;
+  occupation: string | null;
+};
+
 export interface SavedPromptRepository {
   create(input: {
     content: string;
@@ -392,6 +415,7 @@ export interface ScheduleRunRepository {
     status: ScheduleRunStatus;
   }): Promise<ScheduleRun>;
   getById(id: string): Promise<ScheduleRun | null>;
+  listAll(): Promise<ScheduleRun[]>;
   listBySchedule(scheduleId: string, limit?: number): Promise<ScheduleRun[]>;
   update(
     id: string,
@@ -433,6 +457,8 @@ export interface ConfigRepository {
   }): Promise<void>;
   setBuiltInToolSettings(input: Partial<BuiltInToolSettings>): Promise<void>;
   setMemoryEnabled(enabled: boolean): Promise<void>;
+  getUserProfile(): Promise<UserProfile>;
+  updateUserProfile(input: Partial<UserProfile>): Promise<UserProfile>;
   setSchedulingEnabled(enabled: boolean): Promise<void>;
   setThemeMode(mode: ThemeMode): Promise<void>;
   setToolApprovalMode(mode: ToolApprovalMode): Promise<void>;
@@ -464,6 +490,8 @@ export interface ConfigRepository {
     email: string | null,
   ): Promise<void>;
   setSetting(key: string, value: string | null): Promise<void>;
+  /** Raw app_settings rows for backup (values may be null). */
+  listRawSettings(): Promise<Record<string, string | null>>;
 }
 
 export interface ProvenanceRepository {
@@ -500,6 +528,7 @@ export type Repositories = {
   editorRevisionRepository: EditorRevisionRepository;
   memoryStore: MemoryStore;
   mcpServerRepository: McpServerRepository;
+  memoryEntryRepository: MemoryEntryRepository;
   messageRepository: MessageRepository;
   provenanceRepository: ProvenanceRepository;
   savedPromptRepository: SavedPromptRepository;

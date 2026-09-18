@@ -21,6 +21,8 @@ export const Colors: {
     destructive: string;
     destructiveForeground: string;
     success: string;
+    warning: string;
+    info: string;
   };
   dark: {
     text: string;
@@ -44,6 +46,8 @@ export const Colors: {
     destructive: string;
     destructiveForeground: string;
     success: string;
+    warning: string;
+    info: string;
   };
 };
 

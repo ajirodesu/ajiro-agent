@@ -53,6 +53,7 @@ import type { IntelSettings } from "@/modules/intel/settings";
 import { useAppTheme } from "@/hooks/use-app-theme";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
+import { withAlpha } from "@/components/ui/chrome-spec";
 
 export type CodeMirrorEditorProps = {
   path: string;
@@ -718,6 +719,7 @@ function EditorToolButton({
   active?: boolean;
   primary?: boolean;
 }) {
+  const theme = useTheme();
   return (
     <Pressable
       accessibilityLabel={label}
@@ -726,19 +728,16 @@ function EditorToolButton({
       className="items-center justify-center rounded-ui px-sp-2 py-sp-1"
       style={({ pressed }) => ({
         backgroundColor: primary
-          ? "#3B82F6"
+          ? theme.accent
           : active
-            ? "rgba(59,130,246,0.25)"
+            ? withAlpha(theme.accent, 0.25)
             : "transparent",
         opacity: pressed ? 0.7 : 1,
       })}
     >
       <Text
-        className={
-          primary
-            ? "font-mono text-xs text-white"
-            : "font-mono text-xs text-foreground dark:text-foreground-dark"
-        }
+        className="font-mono text-xs text-foreground dark:text-foreground-dark"
+        style={primary ? { color: theme.accentForeground } : undefined}
       >
         {label}
       </Text>

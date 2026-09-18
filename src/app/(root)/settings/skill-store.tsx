@@ -264,6 +264,12 @@ export default function SkillStoreScreen() {
               platforms: registry.platforms,
               requiredCapabilities: registry.requiredCapabilities,
               revokedSlugs,
+              signature: registry.signature
+                ? {
+                    keyId: registry.signatureKeyId ?? "",
+                    value: registry.signature,
+                  }
+                : null,
               signaturePresent: registry.signature != null,
             }
           : { revokedSlugs },
@@ -337,6 +343,7 @@ export default function SkillStoreScreen() {
         revoked: false,
         rolloutPercent: null,
         signature: null,
+        signatureKeyId: null,
         slug: entry.slug,
         sourceUrl: entry.sourceUrl,
         updatedAt: null,

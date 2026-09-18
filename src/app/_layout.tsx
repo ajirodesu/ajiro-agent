@@ -22,6 +22,17 @@ import {
   ThemeProvider,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { useFonts } from "expo-font";
+import {
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+  Geist_700Bold,
+} from "@expo-google-fonts/geist";
+import {
+  GeistMono_400Regular,
+  GeistMono_500Medium,
+} from "@expo-google-fonts/geist-mono";
 import { SQLiteProvider } from "expo-sqlite";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
@@ -264,10 +275,30 @@ function ReleaseUpdateBanner() {
   );
 }
 
-function SplashScreenController() {
+/**
+ * Brand typefaces, loaded before first paint and held behind the splash.
+ * A load failure never blocks launch: the font stacks fall back to system
+ * typefaces (declared alongside every Geist family).
+ */
+export function useBrandFonts(): boolean {
+  const [loaded, error] = useFonts({
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+    GeistMono_400Regular,
+    GeistMono_500Medium,
+  });
   useEffect(() => {
-    SplashScreen.hide();
-  }, []);
+    if (error) console.warn("[fonts] Geist failed to load, using system fallback.", error);
+  }, [error]);
+  return loaded || !!error;
+}
+
+function SplashScreenController({ ready }: { ready: boolean }) {
+  useEffect(() => {
+    if (ready) SplashScreen.hide();
+  }, [ready]);
 
   return null;
 }
@@ -323,6 +354,7 @@ export default function MainLayout() {
   // theme, status bar, system background) stay in sync with the app content.
   const scheme = useColorScheme();
   const isDark = scheme === "dark";
+  const fontsReady = useBrandFonts();
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(
@@ -345,7 +377,7 @@ export default function MainLayout() {
               <AppStateProvider>
                 <IdeWorkspaceProvider>
                   <UpdateProvider>
-                    <SplashScreenController />
+                    <SplashScreenController ready={fontsReady} />
                     <NotificationObserver />
                     <ExtensionCatalogObserver />
                     <InAppNotificationBanner />

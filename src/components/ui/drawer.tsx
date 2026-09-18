@@ -460,7 +460,7 @@ export const DrawerContent = forwardRef<
                         style={{
                           width: 36,
                           height: 4,
-                          backgroundColor: "#5a5a5e",
+                          backgroundColor: theme.textSecondary,
                         }}
                       />
                     </View>
@@ -472,7 +472,7 @@ export const DrawerContent = forwardRef<
                       style={{
                         width: 36,
                         height: 4,
-                        backgroundColor: "#5a5a5e",
+                        backgroundColor: theme.textSecondary,
                       }}
                     />
                   </View>

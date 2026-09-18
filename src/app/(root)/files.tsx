@@ -149,14 +149,19 @@ const TreeRowView = memo(function TreeRowView({
       {dirty ? (
         <View
           className="rounded-full"
-          style={{ width: 8, height: 8, backgroundColor: "#E0A23C" }}
+          style={{ width: 8, height: 8, backgroundColor: theme.warning }}
         />
       ) : null}
       {gitMark ? (
         <Text
           className="font-mono text-xs"
           style={{
-            color: gitMark === "?" ? "#3B82F6" : gitMark === "D" ? "#EF4444" : "#E0A23C",
+            color:
+              gitMark === "?"
+                ? theme.info
+                : gitMark === "D"
+                  ? theme.destructive
+                  : theme.warning,
           }}
         >
           {gitMark}

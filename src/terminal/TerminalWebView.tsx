@@ -212,8 +212,8 @@ function buildDocument(params: BootstrapParams): string {
         try {
           var searchOptions = {
             decorations: {
-              matchBackground: (CURRENT_THEME.selectionBackground || "#264F78"),
-              activeMatchBackground: (CURRENT_THEME.cursor || "#0A84FF"),
+              matchBackground: CURRENT_THEME.selectionBackground,
+              activeMatchBackground: CURRENT_THEME.cursor,
             },
           };
           found = msg.direction === "prev"

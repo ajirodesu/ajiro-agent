@@ -144,6 +144,8 @@ type LegacyPalette = {
   destructive: string;
   destructiveForeground: string;
   success: string;
+  warning: string;
+  info: string;
 };
 
 /**
@@ -177,5 +179,7 @@ export function toLegacyPalette(theme: AppTheme): LegacyPalette {
     destructive: colors.error,
     destructiveForeground: colors.onError,
     success: colors.success,
+    warning: colors.warning,
+    info: colors.info,
   };
 }

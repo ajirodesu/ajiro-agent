@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Archive,
   Bell,
@@ -13,9 +13,11 @@ import {
   Copy,
   Cpu,
   Database,
+  DatabaseBackup,
   Info,
   KeyRound,
   RefreshCw,
+  Search,
   Server,
   Share2,
   Terminal,
@@ -52,6 +54,7 @@ import { useTheme } from "@/hooks/use-theme";
 import {
   ACCENT_CHOICES,
   BUILT_IN_THEMES,
+  LEGACY_DEFAULT_ACCENT,
 } from "@/theme/themes";
 import { countEnabledBuiltInFileTools } from "@/modules/config/built-in-tools";
 import { shareLatestRelease } from "@/modules/about/app-links";
@@ -213,6 +216,22 @@ export default function SettingsScreen() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [openDrawer, setOpenDrawer] = useState<DrawerKey>(null);
   const [agentActive, setAgentActive] = useState(false);
+  // Deep-link a drawer (used by Search Settings results that live in
+  // drawers rather than pages): /settings?drawer=theme opens it directly.
+  const params = useLocalSearchParams<{ drawer?: string }>();
+  useEffect(() => {
+    const drawer = params.drawer;
+    if (
+      drawer === "current-model" ||
+      drawer === "db" ||
+      drawer === "theme" ||
+      drawer === "accent" ||
+      drawer === "background" ||
+      drawer === "notifications"
+    ) {
+      setOpenDrawer(drawer);
+    }
+  }, [params.drawer]);
   const [batteryOptimizationGranted, setBatteryOptimizationGranted] = useState<
     boolean | null
   >(null);
@@ -266,6 +285,16 @@ export default function SettingsScreen() {
             </CircleIconButton>
           }
           title="Settings"
+          right={
+            <CircleIconButton
+              accessibilityLabel="Search settings"
+              onPress={() => {
+                router.push("/settings/search" as never);
+              }}
+            >
+              <Search color={theme.text} size={20} strokeWidth={2} />
+            </CircleIconButton>
+          }
         />
         <ScrollView
           className="flex-1"
@@ -417,6 +446,14 @@ export default function SettingsScreen() {
               value={memoryEnabled ? "Local" : "Disabled"}
               onPress={() => {
                 router.push("/settings/memory" as never);
+              }}
+            />
+            <SettingsRefRow
+              icon={DatabaseBackup}
+              title="Data Controls"
+              value="Backup & restore"
+              onPress={() => {
+                router.push("/settings/data-controls" as never);
               }}
             />
             <Drawer
@@ -685,7 +722,7 @@ export default function SettingsScreen() {
                         }}
                         selected={
                           choice.value === null
-                            ? activeAccent === "#0A84FF"
+                            ? activeAccent === LEGACY_DEFAULT_ACCENT
                             : choice.value === activeAccent
                         }
                         leading={

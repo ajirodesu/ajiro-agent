@@ -1,19 +1,19 @@
 /**
- * Canonical terminal UI — the SOLE terminal component in production.
+ * Canonical terminal UI â€” the SOLE terminal component in production.
  *
  * Composition (replaces the old `TerminalView` + `InProcessAdapter` screen):
  *
- *   Ajiro AppTheme → useAppTheme → terminalThemeAdapter → TerminalTheme
- *     → TerminalWebView (local xterm) ⇄ useLinuxTerminal (native PTY)
+ *   Ajiro AppTheme â†’ useAppTheme â†’ terminalThemeAdapter â†’ TerminalTheme
+ *     â†’ TerminalWebView (local xterm) â‡„ useLinuxTerminal (native PTY)
  *
- * - Theme changes update xterm live via `postInbound({type:"theme"})` — the
+ * - Theme changes update xterm live via `postInbound({type:"theme"})` â€” the
  *   PTY/PRoot/Linux session is never restarted for visual updates.
- * - PTY output bypasses React state (DeviceEventEmitter → WebView postMessage)
+ * - PTY output bypasses React state (DeviceEventEmitter â†’ WebView postMessage)
  *   so large output stays responsive.
  * - Tapping the terminal focuses a hidden TextInput so the OS keyboard
  *   appears; keystrokes go straight to the PTY. A theme-aware toolbar
  *   provides ESC / Tab / Ctrl-C / arrows for mobile coding.
- * - Copy: WebView posts selected text → RN copies via expo-clipboard.
+ * - Copy: WebView posts selected text â†’ RN copies via expo-clipboard.
  *   Paste: toolbar button writes clipboard text to the PTY.
  */
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -44,10 +44,10 @@ const TOOLBAR_KEYS: { label: string; data: string }[] = [
   { label: "ESC", data: "\x1b" },
   { label: "TAB", data: "\t" },
   { label: "^C", data: "\x03" },
-  { label: "←", data: "\x1b[D" },
-  { label: "↑", data: "\x1b[A" },
-  { label: "↓", data: "\x1b[B" },
-  { label: "→", data: "\x1b[C" },
+  { label: "â†", data: "\x1b[D" },
+  { label: "â†‘", data: "\x1b[A" },
+  { label: "â†“", data: "\x1b[B" },
+  { label: "â†’", data: "\x1b[C" },
   { label: "|", data: "|" },
   { label: "~", data: "~" },
   { label: "/", data: "/" },
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  bannerText: { flex: 1, fontSize: 12, fontFamily: "monospace" },
+  bannerText: { flex: 1, fontSize: 12, fontFamily: "GeistMono_400Regular" },
   bannerButton: {
     borderWidth: 1,
     borderRadius: 8,
@@ -374,5 +374,5 @@ const styles = StyleSheet.create({
     minWidth: 44,
     alignItems: "center",
   },
-  toolbarLabel: { fontSize: 12, fontFamily: "monospace", fontWeight: "600" },
+  toolbarLabel: { fontSize: 12, fontFamily: "GeistMono_400Regular", fontWeight: "600" },
 });

@@ -71,10 +71,16 @@ the same channel installs and updates use.
 - Channels: stable ⊂ beta ⊂ preview. Production default is stable
   (extension preferences + Skill Store chips). Higher-risk channels never
   leak downward; rollout percentages gate deterministically per id.
-- Trust (`evaluateExtensionTrust`): verified > trusted > unknown, with
-  `invalid`/`blocked`/`revoked` failing closed. Skill hash mismatches fail
-  closed at install; skill signatures are presence-recorded until a
-  publisher keyring exists (never upgraded on presence alone).
+- Trust (`evaluateExtensionTrust` + `publisher-trust.ts`): verified >
+  trusted > unknown, with `invalid`/`blocked`/`revoked` failing closed.
+  Skill hash mismatches fail closed at install; skill SKILL.md bytes verify
+  against publisher Ed25519 keys (`signature` + `signatureKeyId` on the
+  entry, `requireSigned` policy supported, invalid always fails closed);
+  the MCP catalog verifies its top-level signature the same way, falling
+  back to bundled on invalid. Publisher guide: `generatePublisherKeypair()`
+  → sign the exact bytes (`content.trim()` for skills,
+  `buildMcpCatalogSigningPayload()` for catalogs) → publish
+  `{keyId, value}`; users add keys via the skill publisher trust API.
 - Revocation is registry-fed: revoked entries refuse install/update,
   installed ones are disabled with a persisted reason on the next sync
   (plugin sweep, skill sweep, MCP setup block + installed finder).
@@ -106,7 +112,7 @@ Statuses: **Done** · **Partial** (deliberate, with reason).
 | 3 | Two-layer architecture | Done | Layer A: native binary; Layer B: this document's systems |
 | 4 | Versioned registry API (skills/mcp/plugins/providers/models/compat) | Done | Registry modules; provider/model metadata already live-cataloged |
 | 5 | Dynamic Skill registry, no hardcoded skills | Done | `skill-registry.ts` (remote + bundled fallback); deltas via 304/hash |
-| 6 | Dynamic MCP registry with full metadata | Done | `mcp/catalog.ts` (+ version/channel/revoked/deprecated/floor/caps/changelog/rollout) |
+| 6 | Dynamic MCP registry with full metadata | Done | `mcp/catalog.ts` (+ version/channel/revoked/deprecated/floor/ceiling/platforms/publisher/icon/capabilities/dependencies/timestamps/changelog/rollout; integrity N/A — live endpoints download nothing to hash); publisher/version/icon render in the catalog row |
 | 7 | MCP install as config through existing transport | Done | Existing runtime untouched; presets configure, never compile in |
 | 8 | Plugin version discovery → detect → check → verify → install → activate | Done | Extension platform (prior work) + revocation/channel/native gates (this work) |
 | 9 | Plugin runtime boundary + capability permissions | Done | Document host + permission grants (prior work) |
@@ -122,7 +128,7 @@ Statuses: **Done** · **Partial** (deliberate, with reason).
 | 19 | Configurable intervals/TTLs | Done | Per-registry TTL constants; manual Refresh in each store |
 | 20 | Delta/incremental (ETag/Last-Modified/hashes, no re-downloads) | Done | Conditional fetch everywhere; hash-short-circuit installs |
 | 21 | Content addressing (verify hash, never trust name/URL/version) | Done | Skill `expectedHash` gate; package SHA recording (plugins) |
-| 22 | Signed registry data (verify, reject failures) | Partial | Plugins: full Ed25519 (prior work). Skills/MCP: hash verification now; signatures presence-recorded until a keyring exists |
+| 22 | Signed registry data (verify, reject failures) | Done | Plugins: full Ed25519 (prior work). Skills: content signatures verified against a publisher keyring (`publisher-trust.ts`), invalid fails closed, `requireSigned` supported. MCP: catalog-level signature verified on sync, invalid falls back to bundled |
 | 23 | Trust states, no silent invalid installs | Done | `evaluateExtensionTrust` + fail-closed paths in all installers |
 | 24 | Emergency revocation (stop/prevent/disable/notify/restore) | Done | Registry-fed revocation in all three systems + sweeps + rollback |
 | 25 | Rollback every update | Done | Plugin retained backups; skill snapshots + Store button; validate-before-write |
@@ -136,7 +142,7 @@ Statuses: **Done** · **Partial** (deliberate, with reason).
 | 35 | Compatibility engine (version+runtime+platform+caps+deps+permissions) | Done | Per-type gates + `checkNativeRequirements`; incompatible shows Requires App Update (§42) |
 | 36 | Native capability manifest | Done | `NATIVE_CAPABILITIES` + requirement checks pre-install |
 | 37 | Rebuild decision classification | Done | §1 table enforced in code, not just docs |
-| 38–40 | Expo OTA layer, separate from registries, safe strategy | Done | Config + `ota.ts` (runtime-gated check/stage/apply/recover); rebuild prerequisite stated |
+| 38–40 | Expo OTA layer, separate from registries, safe strategy | Done | Config + `ota.ts` (runtime-gated check/stage/apply/recover) + `UpdateProvider` trigger (startup/foreground/manual, staged-restart offered); rebuild prerequisite stated |
 | 41 | No-rebuild guarantees | Done | All four green paths work; native-requiring paths refuse with reason |
 | 42 | Requires-update UX, no install anyway | Done | "Requires App Update" states + install/setup refusal in all stores |
 | 43 | Store version visibility from real data | Done | All eight states derived, not hardcoded |
@@ -153,9 +159,9 @@ Statuses: **Done** · **Partial** (deliberate, with reason).
 ## 7. Verification
 
 ```
-npx vitest run src/modules/updates src/modules/skills src/modules/mcp  # 96+ tests
-npx vitest run src/modules/extensions                                  # 278 tests (+3 network-gated skips)
-npx vitest run                                                          # 1163 tests (+3 skips), 122 files
+npx vitest run src/modules/updates src/modules/skills src/modules/mcp  # 100+ tests
+npx vitest run src/modules/extensions                                  # 280+ tests (+3 network-gated skips)
+npx vitest run                                                          # 1180 tests (+3 skips), 123 files
 AJIRO_E2E_NETWORK=1 npx vitest run src/modules/extensions/__tests__/e2e-archives.test.ts
 npx tsc --noEmit   # one pre-existing error in EditorStatusFooter.tsx
 npx expo lint <touched paths>  # clean

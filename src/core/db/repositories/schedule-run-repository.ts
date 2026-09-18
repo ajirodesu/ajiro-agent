@@ -42,6 +42,9 @@ export function createScheduleRunRepository(
           .limit(1)
       )[0] ?? null;
     },
+    async listAll() {
+      return db.select().from(scheduleRuns).orderBy(scheduleRuns.startedAt);
+    },
     async listBySchedule(scheduleId, limit) {
       const query = db
         .select()

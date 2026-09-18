@@ -28,11 +28,23 @@ export function contextRingTone(percent: number | null): RingTone {
   return "ok";
 }
 
-export const RING_TONE_COLORS: Record<Exclude<RingTone, "unknown">, string> = {
-  ok: "#22C55E",
-  warn: "#EAB308",
-  critical: "#EF4444",
+export type RingTonePalette = {
+  destructive: string;
+  success: string;
+  warning: string;
 };
+
+/** Ring colors resolved from the active theme (never hardcoded). */
+export function ringToneColor(
+  tone: Exclude<RingTone, "unknown">,
+  palette: RingTonePalette,
+): string {
+  if (tone === "critical") return palette.destructive;
+  if (tone === "warn") return palette.warning;
+  return palette.success;
+}
+
+
 
 /**
  * Percentage of the context window currently loaded. Returns null when either

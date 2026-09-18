@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
+import { Image } from "expo-image";
 import { Plus } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { Platform, Text, View } from "react-native";
@@ -297,8 +298,26 @@ function PresetRow({
   statusLabel: string | null;
   unavailable: boolean;
 }) {
+  const theme = useTheme();
   return (
     <View className="flex-row items-center gap-sp-3 px-sp-4 py-sp-4">
+      <View
+        className="items-center justify-center overflow-hidden rounded-xl"
+        style={{ backgroundColor: theme.backgroundSelected, height: 40, width: 40 }}
+      >
+        {preset.icon ? (
+          <Image
+            cachePolicy="disk"
+            contentFit="cover"
+            source={{ uri: preset.icon }}
+            style={{ height: 40, width: 40 }}
+          />
+        ) : (
+          <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
+            {preset.label.slice(0, 1).toUpperCase()}
+          </Text>
+        )}
+      </View>
       <View className="min-w-0 flex-1 gap-1">
         <Text className="font-sans text-base font-semibold text-foreground dark:text-foreground-dark">
           {preset.label}

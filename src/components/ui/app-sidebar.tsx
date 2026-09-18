@@ -14,6 +14,7 @@ import {
   Images,
   Library,
   MessageCircle,
+  PanelLeft,
   Pencil,
   Pin,
   PinOff,
@@ -26,11 +27,19 @@ import {
   Trash2,
   X,
 } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ActivityIndicator,
   Modal as ReactNativeModal,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -46,7 +55,7 @@ import {
   CircleIconButton,
   FOOTER_ICON_SIZE,
 } from "@/components/ui/chrome";
-import { withAlpha } from "@/components/ui/chrome-spec";
+import { HEADER_HEIGHT, withAlpha } from "@/components/ui/chrome-spec";
 import {
   MessageMenu,
   type MenuAnchor,
@@ -123,12 +132,38 @@ const NAV_ITEMS: { label: string; route: string; icon: typeof Library }[] = [
   { label: "Plugins", route: "/extensions", icon: Puzzle },
 ];
 
-export function AppSidebar() {
+/**
+ * Exclusive tablet/desktop sidebar toggle: the lucide `panel-left` glyph
+ * (rect + divider, 24×24 viewBox, stroke 2, round caps/joins) rendered
+ * through the app's icon system so it inherits theme `currentColor`. The
+ * glyph stays 22px while the pressable + hitSlop give it a 40px+ touch
+ * target for tablet and touch-laptop use.
+ */
+export function SidebarToggleButton() {
+  const theme = useTheme();
+  const { compact, setCompact } = useSidebar();
+  return (
+    <Pressable
+      accessibilityHint="Toggles the sidebar between expanded and compact"
+      accessibilityLabel={compact ? "Expand sidebar" : "Collapse sidebar"}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: !compact }}
+      className="h-10 w-10 items-center justify-center rounded-full"
+      hitSlop={10}
+      onPress={() => setCompact(!compact)}
+      style={({ pressed }) => (pressed ? { opacity: 0.72 } : null)}
+    >
+      <PanelLeft color={theme.text} size={22} strokeWidth={2} />
+    </Pressable>
+  );
+}
+
+export function AppSidebar({ persistent = false }: { persistent?: boolean }) {
   const theme = useTheme();
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { setOpen: setSidebarOpen } = useSidebar();
+  const { compact, setOpen: setSidebarOpen } = useSidebar();
   const { agentRuns, hydrating } = useAppState();
   const {
     conversations,
@@ -299,27 +334,64 @@ export function AppSidebar() {
       });
   };
 
+  // Persistent tablet/desktop shell: same content, same chrome height and
+  // icon language; the header leads with the exclusive sidebar toggle
+  // immediately before the App Name on one line.
+  const showRail = persistent && compact;
   return (
     <>
-      <Sidebar>
-        {/* Fixed header — shared chrome: centered wordmark + search circle. */}
-        <AppHeader
-          title="Ajiro Agent"
-          right={
-            <CircleIconButton
-              accessibilityLabel="Search chats"
-              onPress={() => setSearchOpen(true)}
-            >
-              <Search
-                color={theme.text}
-                size={18}
-                strokeWidth={2}
+      <Sidebar variant={persistent ? "persistent" : "overlay"}>
+        {showRail ? (
+          <CompactSidebarRail
+            onNewChat={startNewChat}
+            onOpenRoute={openRoute}
+            onSearch={() => setSearchOpen(true)}
+          />
+        ) : (
+          <>
+            {persistent ? (
+              <View
+                className="flex-row items-center"
+                style={{ gap: 8, height: HEADER_HEIGHT }}
+              >
+                <SidebarToggleButton />
+                <Text
+                  numberOfLines={1}
+                  className="min-w-0 flex-1 font-sans text-lg font-semibold text-foreground dark:text-foreground-dark"
+                >
+                  Ajiro Agent
+                </Text>
+                <CircleIconButton
+                  accessibilityLabel="Search chats"
+                  onPress={() => setSearchOpen(true)}
+                >
+                  <Search
+                    color={theme.text}
+                    size={18}
+                    strokeWidth={2}
+                  />
+                </CircleIconButton>
+              </View>
+            ) : (
+              /* Fixed header — shared chrome: centered wordmark + search circle. */
+              <AppHeader
+                title="Ajiro Agent"
+                right={
+                  <CircleIconButton
+                    accessibilityLabel="Search chats"
+                    onPress={() => setSearchOpen(true)}
+                  >
+                    <Search
+                      color={theme.text}
+                      size={18}
+                      strokeWidth={2}
+                    />
+                  </CircleIconButton>
+                }
               />
-            </CircleIconButton>
-          }
-        />
+            )}
 
-        <SidebarContent
+            <SidebarContent
           contentContainerClassName="gap-sp-4 pb-sp-3"
           style={{ marginTop: 8 }}
         >
@@ -513,6 +585,8 @@ export function AppSidebar() {
             </Pressable>
           </CapsuleContainer>
         </SidebarFooter>
+        </>
+        )}
       </Sidebar>
 
       {/* Search */}
@@ -642,6 +716,109 @@ export function AppSidebar() {
         </View>
       </ReactNativeModal>
     </>
+  );
+}
+
+/**
+ * Compact icon-only navigation rail for the persistent tablet/desktop
+ * sidebar. Intentionally a rail — centered icon buttons with selected
+ * state and accessibility labels — never a squashed copy of the expanded
+ * layout: no text labels, no conversation lists, no badges, nothing that
+ * can clip or half-render at rail width.
+ */
+function CompactSidebarRail({
+  onNewChat,
+  onOpenRoute,
+  onSearch,
+}: {
+  onNewChat: () => void;
+  onOpenRoute: (route: string) => void;
+  onSearch: () => void;
+}) {
+  const theme = useTheme();
+  const pathname = usePathname();
+
+  const isActive = (route: string) =>
+    pathname === route.split("?")[0] ||
+    (route.startsWith("/settings/coding") &&
+      pathname.startsWith("/settings/coding"));
+
+  const railButton = (
+    key: string,
+    label: string,
+    icon: ReactNode,
+    active: boolean,
+    onPress: () => void,
+  ) => (
+    <Pressable
+      key={key}
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      className="h-12 w-12 items-center justify-center rounded-2xl"
+      hitSlop={6}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        backgroundColor: pressed
+          ? withAlpha(theme.text, 0.08)
+          : active
+            ? withAlpha(theme.text, 0.08)
+            : "transparent",
+        opacity: pressed ? 0.9 : 1,
+      })}
+    >
+      {icon}
+    </Pressable>
+  );
+
+  return (
+    <View className="flex-1 items-center">
+      <SidebarToggleButton />
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="items-center gap-sp-1"
+        showsVerticalScrollIndicator={false}
+      >
+        {railButton(
+          "new-chat",
+          "New chat",
+          <SquarePen color={theme.text} size={22} strokeWidth={2} />,
+          false,
+          onNewChat,
+        )}
+        {railButton(
+          "search",
+          "Search chats",
+          <Search color={theme.text} size={22} strokeWidth={2} />,
+          false,
+          onSearch,
+        )}
+        {railButton(
+          "bot",
+          "Bot console",
+          <Bot color={theme.text} size={22} strokeWidth={2} />,
+          pathname === "/bot" || pathname.startsWith("/bot/"),
+          () => onOpenRoute("/bot"),
+        )}
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return railButton(
+            item.label,
+            item.label,
+            <Icon color={theme.text} size={22} strokeWidth={2} />,
+            isActive(item.route),
+            () => onOpenRoute(item.route),
+          );
+        })}
+      </ScrollView>
+      {railButton(
+        "settings",
+        "Settings",
+        <Settings color={theme.text} size={22} strokeWidth={2} />,
+        pathname === "/settings" || pathname.startsWith("/settings/"),
+        () => onOpenRoute("/settings"),
+      )}
+    </View>
   );
 }
 

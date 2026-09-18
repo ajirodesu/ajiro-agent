@@ -187,6 +187,26 @@ export function createConfigRepository(db: AppDatabase): ConfigRepository {
     async setMemoryEnabled(enabled) {
       await this.setSetting("memory_enabled", enabled ? "true" : "false");
     },
+    async getUserProfile() {
+      const settings = await this.getSettings();
+      return {
+        aboutMe: settings.userAboutMe,
+        nickname: settings.userNickname,
+        occupation: settings.userOccupation,
+      };
+    },
+    async updateUserProfile(input) {
+      if (input.nickname !== undefined) {
+        await this.setSetting("user_nickname", input.nickname);
+      }
+      if (input.occupation !== undefined) {
+        await this.setSetting("user_occupation", input.occupation);
+      }
+      if (input.aboutMe !== undefined) {
+        await this.setSetting("user_about_me", input.aboutMe);
+      }
+      return this.getUserProfile();
+    },
     async setSchedulingEnabled(enabled) {
       await this.setSetting("scheduling_enabled", enabled ? "true" : "false");
     },
@@ -298,6 +318,10 @@ export function createConfigRepository(db: AppDatabase): ConfigRepository {
         target: appSettings.key,
         set: { value },
       });
+    },
+    async listRawSettings() {
+      const rows = await db.select().from(appSettings);
+      return Object.fromEntries(rows.map((row) => [row.key, row.value]));
     },
     async getProjectCodingSettings(session) {
       const rows = await db

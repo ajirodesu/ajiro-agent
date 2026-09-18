@@ -8,6 +8,7 @@ import { createConversationRepository } from "@/core/db/repositories/conversatio
 import { createEditorRevisionRepository } from "@/core/db/repositories/editor-revision-repository";
 import { createFileMemoryStore } from "@/modules/memory/file-memory-store";
 import { createMcpServerRepository } from "@/core/db/repositories/mcp-server-repository";
+import { createMemoryEntryRepository } from "@/core/db/repositories/memory-entry-repository";
 import { createMessageRepository } from "@/core/db/repositories/message-repository";
 import { createProvenanceRepository } from "@/core/db/repositories/provenance-repository";
 import { createSavedPromptRepository } from "@/core/db/repositories/saved-prompt-repository";
@@ -31,6 +32,7 @@ export function createRepositories(sqliteDb: SQLiteDatabase): Repositories {
     editorRevisionRepository: createEditorRevisionRepository(db),
     memoryStore: createFileMemoryStore(db),
     mcpServerRepository: createMcpServerRepository(db),
+    memoryEntryRepository: createMemoryEntryRepository(db),
     messageRepository: createMessageRepository(db),
     provenanceRepository: createProvenanceRepository(db),
     savedPromptRepository: createSavedPromptRepository(db),

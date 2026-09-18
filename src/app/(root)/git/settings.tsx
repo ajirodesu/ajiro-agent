@@ -1015,7 +1015,11 @@ function AuthorCard({
           {selected ? (
             <View
               className="rounded-full"
-              style={{ width: 8, height: 8, backgroundColor: "#FFFFFF" }}
+              style={{
+                width: 8,
+                height: 8,
+                backgroundColor: theme.accentForeground,
+              }}
             />
           ) : null}
         </View>

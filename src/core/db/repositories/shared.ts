@@ -86,6 +86,9 @@ export function buildSettings(rows: AppSettingRow[]): AppSettings {
       (settingsMap.get("database_mode") as DatabaseMode | null) ?? "local",
     databaseUrl: settingsMap.get("database_url") ?? null,
     memoryEnabled: settingsMap.get("memory_enabled") !== "false",
+    userNickname: settingsMap.get("user_nickname") ?? null,
+    userOccupation: settingsMap.get("user_occupation") ?? null,
+    userAboutMe: settingsMap.get("user_about_me") ?? null,
     maxToolSteps:
       Number.isInteger(parsedMaxToolSteps) && parsedMaxToolSteps >= 1
         ? Math.min(parsedMaxToolSteps, 100)

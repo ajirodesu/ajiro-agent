@@ -43,6 +43,8 @@ export interface CheckpointRepository {
     projectUri: string,
     limit?: number,
   ): Promise<CodingCheckpoint[]>;
+  /** Every checkpoint, oldest-first (backup use). */
+  listAll(): Promise<CodingCheckpoint[]>;
   deleteForConversation(conversationId: string, projectUri: string): Promise<void>;
 }
 
@@ -92,6 +94,13 @@ export function createCheckpointRepository(
         .limit(1);
 
       return rows[0] ? rowToCheckpoint(rows[0]) : null;
+    },
+    async listAll() {
+      const rows = await db
+        .select()
+        .from(codingCheckpoints)
+        .orderBy(codingCheckpoints.createdAt);
+      return rows.map(rowToCheckpoint);
     },
     async listByConversation(conversationId, projectUri, limit = 20) {
       const rows = await db

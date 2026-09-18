@@ -30,6 +30,11 @@ import {
   evaluateExtensionTrust,
   type ExtensionTrustState,
 } from "@/modules/updates/extension-framework";
+import {
+  verifyContentSignature,
+  type ContentSignature,
+  type PublisherTrustStore,
+} from "@/modules/updates/publisher-trust";
 import type { SkillRollbackStore } from "@/modules/skills/skill-rollback";
 
 export type SkillInstallProgress =
@@ -64,12 +69,15 @@ export interface SkillInstallGuards {
   /** Expected content hash (§21): a mismatch fails closed before parsing. */
   expectedHash?: string | null;
   /**
-   * Publisher signature presence (§22, reserved): skills have no publisher
-   * keyring yet, so presence alone never upgrades trust — the field rides
-   * along so registry entries with signatures flow through intact for the
-   * day verification exists.
+   * Publisher signature (§22): verified against `trustStore` over the exact
+   * trimmed markdown bytes. Absent without `requireSigned` stays "unknown";
+   * an INVALID signature always fails closed, even permissively.
    */
   signaturePresent?: boolean;
+  signature?: ContentSignature | null;
+  trustStore?: PublisherTrustStore;
+  /** Refuse installs without a verified publisher signature. */
+  requireSigned?: boolean;
   /** Native capabilities the skill declares (§36): missing ones refuse with Requires App Update. */
   requiredCapabilities?: string[];
   /** Runtime floor/ceiling + platforms from the registry entry (§§12, 35). */
@@ -137,28 +145,35 @@ export async function installSkillFromEntry(
       throw new Error(message);
     }
   }
+  // Version comparisons run OUTSIDE the try: the catch is only for
+  // unparseable version strings, and must never swallow the refusal below.
   if (guards.minAppVersion && guards.appVersion) {
+    let belowFloor = false;
     try {
-      if (compareDynamicVersions(guards.appVersion, guards.minAppVersion) < 0) {
-        const message =
-          `Skill "${entry.slug}" needs Ajiro Agent ${guards.minAppVersion} or newer.`;
-        emit({ phase: "error", message });
-        throw new Error(message);
-      }
+      belowFloor = compareDynamicVersions(guards.appVersion, guards.minAppVersion) < 0;
     } catch {
       // Unparseable floors fail open; content validation still applies.
     }
+    if (belowFloor) {
+      const message =
+        `Skill "${entry.slug}" needs Ajiro Agent ${guards.minAppVersion} or newer.`;
+      emit({ phase: "error", message });
+      throw new Error(message);
+    }
   }
   if (guards.maxAppVersion && guards.appVersion) {
+    let aboveCeiling = false;
     try {
-      if (compareDynamicVersions(guards.appVersion, guards.maxAppVersion) > 0) {
-        const message =
-          `Skill "${entry.slug}" supports Ajiro Agent up to ${guards.maxAppVersion}.`;
-        emit({ phase: "error", message });
-        throw new Error(message);
-      }
+      aboveCeiling =
+        compareDynamicVersions(guards.appVersion, guards.maxAppVersion) > 0;
     } catch {
       // Same fail-open reasoning as the floor above.
+    }
+    if (aboveCeiling) {
+      const message =
+        `Skill "${entry.slug}" supports Ajiro Agent up to ${guards.maxAppVersion}.`;
+      emit({ phase: "error", message });
+      throw new Error(message);
     }
   }
   emit({ phase: "fetching" });
@@ -168,12 +183,41 @@ export async function installSkillFromEntry(
     emit({ phase: "error", message });
     throw new Error(message);
   }
+  // Publisher signature verification (§22): byte-exact over the trimmed
+  // markdown, the same bytes the publisher signed. An invalid signature is
+  // tamper evidence and fails closed unconditionally; an unknown key or a
+  // missing signature only refuses under requireSigned.
+  let signatureStatus: "invalid" | "unknown" | "verified" = "unknown";
+  if (guards.signature && guards.trustStore) {
+    const verdict = verifyContentSignature({
+      content: content.trim(),
+      signature: guards.signature,
+      trustedKeys: guards.trustStore.keys(),
+    });
+    if (verdict.status === "verified") {
+      signatureStatus = "verified";
+    } else if (
+      verdict.status === "invalid" ||
+      verdict.status === "malformed" ||
+      verdict.status === "unsupported-algorithm"
+    ) {
+      const message = `Skill "${entry.slug}" failed signature validation (${verdict.detail}).`;
+      emit({ phase: "error", message });
+      throw new Error(message);
+    }
+  }
+  if (guards.requireSigned && signatureStatus !== "verified") {
+    const message = `Skill "${entry.slug}" requires a verified publisher signature.`;
+    emit({ phase: "error", message });
+    throw new Error(message);
+  }
   const trust = evaluateExtensionTrust({
     expectedHashPresent: guards.expectedHash != null,
     hashMatches:
       guards.expectedHash != null
         ? hashContent(content.trim()) === guards.expectedHash
         : undefined,
+    signatureValid: signatureStatus === "verified" ? true : undefined,
   });
   emit({ phase: "parsing" });
 

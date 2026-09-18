@@ -1,7 +1,21 @@
 import type { DocumentPickerAsset } from "expo-document-picker";
 import * as Crypto from "expo-crypto";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { useSQLiteContext } from "expo-sqlite";
+import {
+  applyBackupBundle,
+  clearChatHistory,
+  collectBackup,
+  parseBackupBundle,
+  type BackupReader,
+  type BackupRow,
+  type BackupTableName,
+  type CollectedBackup,
+} from "@/modules/backup/backup";
+import { drizzleBackupStore } from "@/modules/backup/drizzle-store";
+import { createDrizzleDb } from "@/core/db/repositories/shared";
 import { colorScheme } from "nativewind";
 import {
     createContext,
@@ -122,6 +136,7 @@ import type {
     WorkspaceFile,
 } from "@/core/types/app-state";
 import { createModelRef } from "@/core/types/app-state";
+import type { UserProfile } from "@/core/db/repositories/types";
 import type { AppThemeId } from "@/theme/types";
 import {
     computeNextRun,
@@ -137,6 +152,7 @@ import { isNativeAgentId, resolveConversationAgent } from "@/modules/agents/regi
 import { normalizeAgentName, parseAgentMarkdown, serializeAgentToMarkdown } from "@/modules/agents/agent-markdown";
 import { fetchSkillMarkdownFromUrl } from "@/modules/skills/skill-github";
 import { createSkillRollbackStore } from "@/modules/skills/skill-rollback";
+import { createPublisherTrustStore } from "@/modules/updates/publisher-trust";
 import { createRunUiPublisher } from "./run-ui-publisher";
 import { resolveConfig } from "./config-resolution";
 import {
@@ -167,6 +183,13 @@ export type CompactConversationResult =
 
 /** Pre-update skill snapshots for rollback (§25); process-wide by slug. */
 const skillRollbackStore = createSkillRollbackStore();
+
+/**
+ * Publisher keys trusted for skill content signatures (§22). Starts empty —
+ * an ecosystem that mostly ships unsigned installs by hash/content checks,
+ * and verification only constrains once keys are added here.
+ */
+const skillPublisherTrust = createPublisherTrustStore();
 
 type AppStateContextValue = {
     compactConversation: (
@@ -310,6 +333,22 @@ type AppStateContextValue = {
     ) => Promise<void>;
     updateSchedulingEnabled: (enabled: boolean) => Promise<void>;
     writeMemory: (content: string) => Promise<MemoryEntry>;
+    listMemoryEntries: () => Promise<MemoryEntry[]>;
+    deleteMemoryEntry: (id: string) => Promise<void>;
+    clearMemoryEntries: () => Promise<void>;
+    getUserProfile: () => Promise<UserProfile>;
+    updateUserProfile: (input: Partial<UserProfile>) => Promise<UserProfile>;
+    exportBackupData: () => Promise<CollectedBackup>;
+    importBackupData: (
+      files: Record<string, string>,
+      mode: "merge" | "replace",
+    ) => Promise<{ botCommands: number; mcpServers: number; providers: number }>;
+    clearChatHistoryData: () => Promise<{
+      agentRuns: number;
+      checkpoints: number;
+      conversations: number;
+      messages: number;
+    }>;
     currentConversation: Conversation | null;
     currentExternalFolderSession: ExternalFolderSession | null;
     pendingToolApproval: PendingToolApproval | null;
@@ -334,6 +373,10 @@ type AppStateContextValue = {
     /** Restore the pre-update copy when a rollback snapshot exists (§25). */
     rollbackStoreSkill: (slug: string) => Promise<void>;
     canRollbackStoreSkill: (slug: string) => boolean;
+    /** Publisher keys trusted to sign skill content (§22). */
+    addSkillPublisherKey: (keyId: string, publicKeyBase64: string) => void;
+    removeSkillPublisherKey: (keyId: string) => void;
+    listSkillPublisherKeys: () => string[];
     uninstallStoreSkill: (skillId: string) => Promise<void>;
     deleteSavedPrompt: (savedPromptId: string) => Promise<void>;
     disconnectOpenAIOAuth: () => Promise<void>;
@@ -1978,10 +2021,26 @@ Your output must be:
                 onProgress: input.onProgress,
             },
             { author: input.author ?? null, slug: input.slug, sourceUrl: input.sourceUrl },
-            { ...input.guards, rollback: skillRollbackStore },
+            {
+                trustStore: skillPublisherTrust,
+                rollback: skillRollbackStore,
+                ...input.guards,
+            },
         );
         await hydrate();
         return result;
+    }
+
+    function addSkillPublisherKey(keyId: string, publicKeyBase64: string): void {
+        skillPublisherTrust.addKey(keyId, publicKeyBase64);
+    }
+
+    function removeSkillPublisherKey(keyId: string): void {
+        skillPublisherTrust.removeKey(keyId);
+    }
+
+    function listSkillPublisherKeys(): string[] {
+        return skillPublisherTrust.keyIds();
     }
 
     function canRollbackStoreSkill(slug: string): boolean {
@@ -2202,6 +2261,174 @@ Your output must be:
         const memory = await repositoriesRef.current.memoryStore.write(content);
         await hydrate();
         return memory;
+    }
+
+    async function listMemoryEntries() {
+        return repositoriesRef.current.memoryEntryRepository.list();
+    }
+
+    async function deleteMemoryEntry(id: string) {
+        await repositoriesRef.current.memoryEntryRepository.delete(id);
+        await hydrate();
+    }
+
+    async function clearMemoryEntries() {
+        await repositoriesRef.current.memoryEntryRepository.deleteAll();
+        await hydrate();
+    }
+
+    async function getUserProfile() {
+        return repositoriesRef.current.configRepository.getUserProfile();
+    }
+
+    async function updateUserProfile(
+        input: Parameters<Repositories["configRepository"]["updateUserProfile"]>[0],
+    ) {
+        const profile =
+            await repositoriesRef.current.configRepository.updateUserProfile(input);
+        await hydrate();
+        return profile;
+    }
+
+    function backupReader(): BackupReader {
+        const repositories = repositoriesRef.current;
+        const asRows = (rows: unknown[]): BackupRow[] =>
+            rows as unknown as BackupRow[];
+        return {
+            async readMemoryDocument() {
+                const memory = await repositories.memoryStore.read();
+                return memory
+                    ? { content: memory.content, enabled: memory.enabled }
+                    : null;
+            },
+            async readSettings(keys: string[]) {
+                const all = await repositories.configRepository.listRawSettings();
+                if (keys.length === 0) return { ...all };
+                return Object.fromEntries(
+                    keys.map((key) => [key, all[key] ?? null]),
+                );
+            },
+            async readTable(table: BackupTableName) {
+                switch (table) {
+                    case "agentRuns":
+                        return asRows(await repositories.agentRunRepository.list());
+                    case "agents":
+                        return asRows(await repositories.agentRepository.list());
+                    case "appSettings": {
+                        const all =
+                            await repositories.configRepository.listRawSettings();
+                        return Object.entries(all).map(([key, value]) => ({
+                            key,
+                            value,
+                        }));
+                    }
+                    case "botCommandConfigs":
+                        return asRows(
+                            await repositories.botCommandRepository.listAllConfigs(),
+                        );
+                    case "botCommandRepositories":
+                        return asRows(
+                            await repositories.botCommandRepository.listAllRepositories(),
+                        );
+                    case "botCommandSecrets":
+                        return asRows(
+                            await repositories.botCommandRepository.listAllSecrets(),
+                        );
+                    case "botModes":
+                        return asRows(
+                            await repositories.botCommandRepository.listAllModes(),
+                        );
+                    case "codingCheckpoints":
+                        return asRows(
+                            await repositories.checkpointRepository.listAll(),
+                        );
+                    case "conversations":
+                        return asRows(
+                            await repositories.conversationRepository.list(),
+                        );
+                    case "editorFileRevisions":
+                        return asRows(
+                            await repositories.editorRevisionRepository.listAll(),
+                        );
+                    case "mcpServers":
+                        return asRows(await repositories.mcpServerRepository.list());
+                    case "memories":
+                        return asRows(await repositories.memoryEntryRepository.list());
+                    case "messages":
+                        return asRows(await repositories.messageRepository.listAll());
+                    case "modelPresets":
+                        return asRows(
+                            await repositories.configRepository.listModelPresets(),
+                        );
+                    case "providerConfigs":
+                        return asRows(
+                            await repositories.configRepository.listProviderConfigs(),
+                        );
+                    case "savedPrompts":
+                        return asRows(
+                            await repositories.savedPromptRepository.list(),
+                        );
+                    case "scheduleRuns":
+                        return asRows(
+                            await repositories.scheduleRunRepository.listAll(),
+                        );
+                    case "schedules":
+                        return asRows(await repositories.scheduleRepository.list());
+                    case "skillFiles": {
+                        const skills = await repositories.skillRepository.list();
+                        const files = await Promise.all(
+                            skills.map((skill) =>
+                                repositories.skillRepository.listFilesForSkill(skill.id),
+                            ),
+                        );
+                        return asRows(files.flat());
+                    }
+                    case "skills":
+                        return asRows(await repositories.skillRepository.list());
+                    case "workspaceFiles":
+                        return asRows(await repositories.workspaceRepository.list());
+                }
+            },
+        };
+    }
+
+    async function exportBackupData() {
+        return collectBackup({
+            appVersion: Constants.expoConfig?.version ?? null,
+            deviceInfo: Device.modelName ?? null,
+            reader: backupReader(),
+        });
+    }
+
+    async function importBackupData(
+        files: Record<string, string>,
+        mode: "merge" | "replace",
+    ) {
+        const parsed = parseBackupBundle(files);
+        const store = drizzleBackupStore(createDrizzleDb(db));
+        const counts = await applyBackupBundle(store, parsed, mode);
+        const memoryPayload = (parsed.files["memory.json"] ?? {}) as {
+            memoryDocument?: { content: string; enabled: boolean } | null;
+        };
+        // Tables (including app_settings) applied atomically above; the
+        // memory.md document follows as one near-atomic write, then every
+        // in-memory session rebuilds from the new rows.
+        if (memoryPayload.memoryDocument) {
+            await repositoriesRef.current.memoryStore.write(
+                memoryPayload.memoryDocument.content,
+            );
+        } else if (mode === "replace") {
+            await repositoriesRef.current.memoryStore.clear();
+        }
+        await hydrate();
+        return counts;
+    }
+
+    async function clearChatHistoryData() {
+        const store = drizzleBackupStore(createDrizzleDb(db));
+        const counts = await clearChatHistory(store, store);
+        await hydrate();
+        return counts;
     }
 
     async function clearMemory() {
@@ -4212,6 +4439,14 @@ Your output must be:
                 createMcpServer,
                 createMcpServerOAuth,
                 writeMemory,
+                listMemoryEntries,
+                deleteMemoryEntry,
+                clearMemoryEntries,
+                getUserProfile,
+                updateUserProfile,
+                exportBackupData,
+                importBackupData,
+                clearChatHistoryData,
                 createProvider,
                 createConversation,
                 createModelPreset,
@@ -4260,6 +4495,9 @@ Your output must be:
                 uninstallStoreSkill,
                 rollbackStoreSkill,
                 canRollbackStoreSkill,
+                addSkillPublisherKey,
+                removeSkillPublisherKey,
+                listSkillPublisherKeys,
                 getProjectSkillIds,
                 setProjectSkillIds,
                 deleteWorkspaceFile,
@@ -4382,6 +4620,14 @@ export function useConfig() {
         createMcpServer: context.createMcpServer,
         createMcpServerOAuth: context.createMcpServerOAuth,
         writeMemory: context.writeMemory,
+        listMemoryEntries: context.listMemoryEntries,
+        deleteMemoryEntry: context.deleteMemoryEntry,
+        clearMemoryEntries: context.clearMemoryEntries,
+        getUserProfile: context.getUserProfile,
+        updateUserProfile: context.updateUserProfile,
+        exportBackupData: context.exportBackupData,
+        importBackupData: context.importBackupData,
+        clearChatHistoryData: context.clearChatHistoryData,
         createProvider: context.createProvider,
         createModelPreset: context.createModelPreset,
         createSavedPrompt: context.createSavedPrompt,
@@ -4399,6 +4645,9 @@ export function useConfig() {
         uninstallStoreSkill: context.uninstallStoreSkill,
         rollbackStoreSkill: context.rollbackStoreSkill,
         canRollbackStoreSkill: context.canRollbackStoreSkill,
+        addSkillPublisherKey: context.addSkillPublisherKey,
+        removeSkillPublisherKey: context.removeSkillPublisherKey,
+        listSkillPublisherKeys: context.listSkillPublisherKeys,
         getProjectSkillIds: context.getProjectSkillIds,
         setProjectSkillIds: context.setProjectSkillIds,
         deleteWorkspaceFile: context.deleteWorkspaceFile,

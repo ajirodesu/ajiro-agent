@@ -54,6 +54,9 @@ export function createMessageRepository(db: AppDatabase): MessageRepository {
         .where(eq(messages.conversationId, conversationId))
         .orderBy(messages.sequence);
     },
+    async listAll() {
+      return db.select().from(messages).orderBy(messages.createdAt);
+    },
     async listStreaming() {
       return db
         .select()

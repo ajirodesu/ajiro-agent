@@ -504,6 +504,10 @@ export type AppSettings = {
   databaseMode: DatabaseMode;
   databaseUrl: string | null;
   memoryEnabled: boolean;
+  /** Personalization injected into the system prompt when memory is on. */
+  userNickname: string | null;
+  userOccupation: string | null;
+  userAboutMe: string | null;
   maxToolSteps: number;
   schedulingEnabled: boolean;
   themeMode: ThemeMode;

@@ -93,9 +93,12 @@ export function BotModeModal({
               style={{ backgroundColor: theme.accent, opacity: saving ? 0.6 : 1 }}
             >
               {saving ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={theme.accentForeground} />
               ) : (
-                <Text className="font-sans text-base font-semibold text-white">
+                <Text
+                  className="font-sans text-base font-semibold"
+                  style={{ color: theme.accentForeground }}
+                >
                   Save mode
                 </Text>
               )}

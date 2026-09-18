@@ -1,10 +1,10 @@
 /**
- * Offline CodeMirror document builder — the SOLE HTML factory for the
+ * Offline CodeMirror document builder â€” the SOLE HTML factory for the
  * editor WebView.
  *
  * - The vendored `CM_BUNDLE_JS` string is inlined: no CDN, no runtime
  *   network fetch, no file access.
- * - `INITIAL` (theme + grammar key + document) crosses the TS→HTML
+ * - `INITIAL` (theme + grammar key + document) crosses the TSâ†’HTML
  *   boundary JSON-encoded with `<` escaped, so hostile document text
  *   (e.g. `</script>`) can never break out of the bootstrap block.
  * - The bootstrap creates one `EditorView` with compartmentalized language
@@ -68,7 +68,7 @@ const BOOTSTRAP = `(function () {
   var currentGrammarKey = INITIAL.grammarKey;
   var currentAutocomplete = INITIAL.autocompleteEnabled !== false;
 
-  // Plugin command chords (canonical ids pushed by the host, §45). Only the
+  // Plugin command chords (canonical ids pushed by the host, Â§45). Only the
   // chords in this set are claimed; everything else stays the editor's.
   var boundChords = {};
 
@@ -192,7 +192,7 @@ const BOOTSTRAP = `(function () {
   var view = null;
 
   // Coding-intelligence mount (populated after the view exists; null when
-  // the intel bundle is absent or disabled — the editor is unaffected).
+  // the intel bundle is absent or disabled â€” the editor is unaffected).
   var INTEL = null;
   var intelVersion = 0;
   var currentTheme = INITIAL.theme;
@@ -220,10 +220,10 @@ const BOOTSTRAP = `(function () {
       case "enum":
       case "type":
       case "typeParameter":
-        return t.type || "#888888";
+        return t.type || t.foreground || "#888888";
       case "function":
       case "method":
-        return t.function || "#888888";
+        return t.function || t.foreground || "#888888";
       case "variable":
       case "parameter":
       case "property":
@@ -231,9 +231,9 @@ const BOOTSTRAP = `(function () {
         return t.variable || t.foreground || "#888888";
       case "namespace":
       case "module":
-        return t.tag || "#888888";
+        return t.tag || t.foreground || "#888888";
       case "keyword":
-        return t.keyword || "#888888";
+        return t.keyword || t.foreground || "#888888";
       default:
         return t.foreground || "#888888";
     }
@@ -418,11 +418,11 @@ const BOOTSTRAP = `(function () {
       CM.foldGutter({
         // Centered chevron cell inside the gutter: down = expanded,
         // right = collapsed. Only lines opening a foldable block render
-        // one at all — CodeMirror's foldGutter decides that for real
+        // one at all â€” CodeMirror's foldGutter decides that for real
         // foldable regions (functions, if/for/while, literals, comments).
         markerDOM: function (open) {
           var el = document.createElement("span");
-          el.textContent = open ? "▾" : "▸";
+          el.textContent = open ? "â–¾" : "â–¸";
           el.setAttribute("aria-hidden", "true");
           return el;
         },
@@ -676,7 +676,7 @@ const BOOTSTRAP = `(function () {
 
     // Mount the offline semantic engine beside the editor. Any failure
     // (missing bundle, old client, engine error) leaves plain editing
-    // fully working — intel is strictly additive.
+    // fully working â€” intel is strictly additive.
     try {
       if (window.AjiroIntel && INITIAL.intel && INITIAL.uri) {
         var intelSession = window.AjiroIntel.createSession({ post: post });
@@ -687,8 +687,12 @@ const BOOTSTRAP = `(function () {
           getUri: function () { return INTEL ? INTEL.uri : null; },
           getVersion: function () { return intelVersion; },
           colorFor: intelColorFor,
-          errorColor: (INITIAL.theme && INITIAL.theme.error) || "#ff5555",
-          warningColor: (INITIAL.theme && INITIAL.theme.warning) || "#ffaa00",
+          errorColor:
+            (INITIAL.theme && INITIAL.theme.error) ||
+            (INITIAL.theme && INITIAL.theme.foreground),
+          warningColor:
+            (INITIAL.theme && INITIAL.theme.warning) ||
+            (INITIAL.theme && INITIAL.theme.foreground),
         });
         INTEL = { session: intelSession, ui: intelUi, uri: INITIAL.uri, enabled: true };
         view.dispatch({

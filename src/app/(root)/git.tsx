@@ -1175,12 +1175,12 @@ function ChangeFileRow({
   const theme = useTheme();
   const badgeColor =
     badge === "?"
-      ? "#3B82F6"
+      ? theme.info
       : badge === "D"
-        ? "#EF4444"
+        ? theme.destructive
         : badge === "S"
-          ? "#76D39B"
-          : "#E0A23C";
+          ? theme.success
+          : theme.warning;
   return (
     <Pressable
       accessibilityLabel={path}

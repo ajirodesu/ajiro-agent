@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchSkillFiles } from "@/modules/skills/skill-files";
 import { fetchSkillMarkdownFromUrl } from "@/modules/skills/skill-github";
@@ -9,6 +9,11 @@ import {
   findMissingSkillDependencies,
   findRevokedInstalledSkills,
 } from "@/modules/skills/skill-update-status";
+import {
+  createPublisherTrustStore,
+  generatePublisherKeypair,
+  signContent,
+} from "@/modules/updates/publisher-trust";
 import type { SkillRegistryEntry } from "@/modules/skills/skill-registry";
 import { createMemorySkillRepository } from "@/modules/skills/__tests__/skill-store.test";
 
@@ -61,6 +66,7 @@ function entry(overrides: Partial<SkillRegistryEntry> = {}): SkillRegistryEntry 
     revoked: false,
     rolloutPercent: null,
     signature: null,
+    signatureKeyId: null,
     slug: "pdf",
     sourceUrl: "https://example.com/pdf/SKILL.md",
     updatedAt: null,
@@ -147,6 +153,10 @@ describe("skill update statuses", () => {
     expect(findMissingSkillDependencies(entry({ slug: "a" }), [])).toEqual([]);
   });
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("refuses platform, floor, and ceiling mismatches at install", async () => {
     mockFetch(MARKDOWN_V1);
     const repository = createMemorySkillRepository();
@@ -157,6 +167,19 @@ describe("skill update statuses", () => {
         platforms: ["ios"],
       }),
     ).rejects.toThrow(/does not support/);
+    await expect(
+      installSkillFromEntry({ repository }, base, {
+        appVersion: "1.0.0",
+        minAppVersion: "2.0.0",
+      }),
+    ).rejects.toThrow(/newer/);
+    await expect(
+      installSkillFromEntry({ repository }, base, {
+        appVersion: "3.0.0",
+        maxAppVersion: "2.0.0",
+      }),
+    ).rejects.toThrow(/up to/);
+    expect(repository.rows).toHaveLength(0);
     await expect(
       installSkillFromEntry({ repository }, base, {
         appVersion: "1.0.0",
@@ -245,5 +268,52 @@ describe("skill install guards", () => {
     const repository = createMemorySkillRepository();
     const rollback = createSkillRollbackStore();
     await expect(rollback.rollback(repository, "pdf")).rejects.toThrow(/snapshot/);
+  });
+
+  it("verifies publisher signatures and fails closed on tampering", async () => {
+    const keys = generatePublisherKeypair();
+    const trustStore = createPublisherTrustStore({ alice: keys.publicKeyBase64 });
+    mockFetch(MARKDOWN_V1);
+    const repository = createMemorySkillRepository();
+    const base = { slug: "pdf", sourceUrl: "https://example.com/pdf/SKILL.md" };
+    const signature = {
+      keyId: "alice",
+      value: signContent({ content: MARKDOWN_V1.trim(), secretKeyBase64: keys.secretKeyBase64 }),
+    };
+    const verified = await installSkillFromEntry({ repository }, base, {
+      signature,
+      trustStore,
+    });
+    expect(verified.trust).toBe("verified");
+
+    // Same signature, tampered content: fail closed even permissively.
+    mockFetch(`${MARKDOWN_V1}\nEvil.`);
+    await expect(
+      installSkillFromEntry({ repository }, base, { signature, trustStore }),
+    ).rejects.toThrow(/signature validation/);
+
+    // Unknown key: unknown trust, proceeds unless requireSigned.
+    const untrusted = createPublisherTrustStore();
+    mockFetch(MARKDOWN_V1);
+    const unknown = await installSkillFromEntry({ repository }, base, {
+      signature,
+      trustStore: untrusted,
+    });
+    expect(unknown.trust).toBe("unknown");
+    await expect(
+      installSkillFromEntry({ repository }, base, {
+        signature,
+        trustStore: untrusted,
+        requireSigned: true,
+      }),
+    ).rejects.toThrow(/verified publisher signature/);
+
+    // requireSigned without any signature refuses.
+    await expect(
+      installSkillFromEntry({ repository }, base, {
+        trustStore,
+        requireSigned: true,
+      }),
+    ).rejects.toThrow(/verified publisher signature/);
   });
 });

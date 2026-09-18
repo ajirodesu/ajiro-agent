@@ -108,7 +108,7 @@ export const Button = forwardRef<ComponentRef<typeof Pressable>, ButtonProps>(
       variant === "default"
         ? theme.background
         : variant === "destructive"
-          ? "#FFFFFF"
+          ? theme.destructiveForeground
           : theme.text;
 
     return (

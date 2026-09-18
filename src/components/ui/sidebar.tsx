@@ -38,11 +38,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cn } from "@/core/utils";
 import { useTheme } from "@/hooks/use-theme";
+import {
+  expandedSidebarWidth,
+  SIDEBAR_COMPACT_WIDTH,
+} from "@/components/ui/responsive";
 
 type SidebarContextValue = {
   open: boolean;
   setOpen: (open: boolean) => void;
   side: "left" | "right";
+  /**
+   * Persistent (tablet/desktop) sidebar density. False = normal expanded
+   * state with icons + labels; true = compact icon-only rail. The mobile
+   * overlay drawer ignores this. Defaults to expanded.
+   */
+  compact: boolean;
+  setCompact: (compact: boolean) => void;
 };
 
 const SidebarContext = createContext<SidebarContextValue | null>(null);
@@ -133,14 +144,17 @@ export function SidebarProvider({
     onChange: onOpenChange,
     value: open,
   });
+  const [compact, setCompact] = useState(false);
 
   const value = useMemo(
     () => ({
       open: isOpen,
       setOpen: setIsOpen,
       side,
+      compact,
+      setCompact,
     }),
-    [isOpen, setIsOpen, side],
+    [isOpen, setIsOpen, side, compact],
   );
 
   return (
@@ -223,6 +237,13 @@ export type SidebarProps = ComponentPropsWithoutRef<typeof View> & {
   overlayClassName?: string;
   showCloseButton?: boolean;
   width?: number;
+  /**
+   * "overlay" (default) is the fullscreen mobile drawer in a Modal.
+   * "persistent" is the tablet/desktop sidebar: always mounted in normal
+   * flow, resizing the content beside it via flexbox (never an overlay),
+   * with an animated width that follows the compact rail state.
+   */
+  variant?: "overlay" | "persistent";
 };
 
 export const Sidebar = forwardRef<ComponentRef<typeof View>, SidebarProps>(
@@ -234,12 +255,13 @@ export const Sidebar = forwardRef<ComponentRef<typeof View>, SidebarProps>(
       overlayClassName,
       showCloseButton = false,
       style,
+      variant = "overlay",
       width = 320,
       ...props
     },
     ref,
   ) => {
-    const { open, setOpen, side } = useSidebarContext("Sidebar");
+    const { compact, open, setOpen, side } = useSidebarContext("Sidebar");
     const insets = useSafeAreaInsets();
     const reduceMotion = useReducedMotion();
     const theme = useTheme();
@@ -251,9 +273,51 @@ export const Sidebar = forwardRef<ComponentRef<typeof View>, SidebarProps>(
     // (Hooks stay above the early return so open/close never reorders them.)
     const dragX = useSharedValue(0);
 
+    // Persistent width follows the compact rail state with a timed
+    // transition; flexbox beside it resizes content for free, so nothing
+    // can overflow or jump outside the viewport.
+    const persistentTargetWidth = compact
+      ? SIDEBAR_COMPACT_WIDTH
+      : expandedSidebarWidth(viewportWidth);
+    const persistentWidth = useSharedValue(persistentTargetWidth);
+    useEffect(() => {
+      persistentWidth.value = reduceMotion
+        ? persistentTargetWidth
+        : withTiming(persistentTargetWidth, { duration: 220 });
+    }, [persistentTargetWidth, persistentWidth, reduceMotion]);
+    const persistentStyle = useAnimatedStyle(() => ({
+      width: persistentWidth.value,
+    }));
+
     // Fullscreen: the sidebar is a page, not a peeking drawer.
     const panelWidth = viewportWidth;
     void width;
+
+    const persistentPanel = (
+      <Animated.View
+        ref={ref}
+        className={cn(
+          "border-border bg-sidebar dark:border-border-dark dark:bg-sidebar-dark",
+          // Compact rail needs tighter gutters: 76px rail minus 16px
+          // padding leaves 60px for 48px buttons; the full 24px gutters
+          // would clip them.
+          compact ? "px-sp-2" : "px-sp-4",
+          side === "left" ? "border-r" : "border-l",
+          className,
+        )}
+        style={[
+          {
+            paddingTop: insets.top + 12,
+            paddingBottom: insets.bottom + 12,
+          },
+          persistentStyle,
+          style,
+        ]}
+        {...props}
+      >
+        <View className="flex-1 gap-sp-2">{children}</View>
+      </Animated.View>
+    );
 
     const close = () => {
       setOpen(false);
@@ -286,6 +350,12 @@ export const Sidebar = forwardRef<ComponentRef<typeof View>, SidebarProps>(
     useEffect(() => {
       if (open) dragX.value = 0;
     }, [open, dragX]);
+
+    // Persistent sidebar ignores the modal open state: it is always
+    // mounted in normal flow (visible by default on tablet/desktop).
+    if (variant === "persistent") {
+      return persistentPanel;
+    }
 
     if (!open) {
       return null;

@@ -524,7 +524,13 @@ export function RenameDialog({
               }}
               style={{ flex: 1, padding: 12, borderRadius: 10, backgroundColor: theme.accent, opacity: !valid || busy ? 0.5 : 1 }}
             >
-              <Text style={{ color: "#FFFFFF", textAlign: "center", fontWeight: "600" }}>
+              <Text
+                style={{
+                  color: theme.accentForeground,
+                  textAlign: "center",
+                  fontWeight: "600",
+                }}
+              >
                 {busy ? "…" : "Apply"}
               </Text>
             </Pressable>

@@ -274,6 +274,7 @@ function SuggestionCard({
   card: (typeof EMPTY_STATE_CARDS)[number];
   onPress: () => void;
 }) {
+  const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -286,29 +287,31 @@ function SuggestionCard({
         padding: 14,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: "#2A2A2A",
-        backgroundColor: pressed ? "#2A2A2A" : "#212121",
+        borderColor: theme.border,
+        backgroundColor: pressed
+          ? theme.backgroundSelected
+          : theme.backgroundElement,
       })}
     >
       {card.icon === "chevron" ? (
-        <ChevronRight color="#8E8E93" size={17} strokeWidth={1.6} />
+        <ChevronRight color={theme.textSecondary} size={17} strokeWidth={1.6} />
       ) : card.icon === "clock" ? (
-        <Clock color="#8E8E93" size={17} strokeWidth={1.6} />
+        <Clock color={theme.textSecondary} size={17} strokeWidth={1.6} />
       ) : card.icon === "sun" ? (
-        <Sun color="#8E8E93" size={17} strokeWidth={1.6} />
+        <Sun color={theme.textSecondary} size={17} strokeWidth={1.6} />
       ) : (
-        <Box color="#8E8E93" size={17} strokeWidth={1.6} />
+        <Box color={theme.textSecondary} size={17} strokeWidth={1.6} />
       )}
       <Text
         className="font-sans"
-        style={{ fontSize: 13, fontWeight: "500", color: "#ECECEC" }}
+        style={{ fontSize: 13, fontWeight: "500", color: theme.text }}
       >
         {card.title}
       </Text>
       <Text
         numberOfLines={2}
         className="font-sans"
-        style={{ fontSize: 12, color: "#8E8E93", lineHeight: 16 }}
+        style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 16 }}
       >
         {card.desc}
       </Text>
@@ -863,7 +866,7 @@ export default function Screen() {
                       style={{
                         fontSize: 13,
                         fontWeight: "500",
-                        color: "#8E8E93",
+                        color: theme.textSecondary,
                         letterSpacing: 0.3,
                       }}
                     >
@@ -874,7 +877,7 @@ export default function Screen() {
                       style={{
                         fontSize: 25,
                         fontWeight: "500",
-                        color: "#ECECEC",
+                        color: theme.text,
                         letterSpacing: -0.25,
                         lineHeight: 33,
                       }}
@@ -883,7 +886,11 @@ export default function Screen() {
                     </Text>
                     <Text
                       className="text-center font-sans"
-                      style={{ fontSize: 14, color: "#8E8E93", lineHeight: 20 }}
+                      style={{
+                        fontSize: 14,
+                        color: theme.textSecondary,
+                        lineHeight: 20,
+                      }}
                     >
                       Ask a question, plan something, or hand off a task.
                     </Text>
@@ -1013,6 +1020,7 @@ export default function Screen() {
               setConversationAgent={setConversationAgent}
               currentConversation={currentConversation}
               currentConversationId={currentConversation?.id ?? null}
+              hasMessages={messages.length > 0}
               updateConversationModes={updateConversationModes}
               onOpenAgentSettings={() =>
                 router.push("/settings/agents" as never)
@@ -1226,6 +1234,7 @@ const ChatInput = memo(function ChatInput({
   setConversationAgent,
   currentConversation,
   currentConversationId,
+  hasMessages,
   updateConversationModes,
   onOpenAgentSettings,
 }: {
@@ -1292,6 +1301,8 @@ const ChatInput = memo(function ChatInput({
   ) => Promise<void>;
   currentConversation: Conversation | null;
   currentConversationId: string | null;
+  /** True once the active conversation holds any messages. */
+  hasMessages: boolean;
   updateConversationModes: (
     conversationId: string,
     input: {
@@ -1311,6 +1322,24 @@ const ChatInput = memo(function ChatInput({
   const sendingRef = useRef(false);
   const composerRef = useRef<TextInput>(null);
   const [prompt, setPrompt] = useState("");
+  /**
+   * Post-chat capsule form: set on send-button press (not on receive) and
+   * held for the conversation. Reset when the conversation changes or when
+   * a send fails leaving no messages behind.
+   */
+  const [sentOnce, setSentOnce] = useState(false);
+  const conversationKey = currentConversationId ?? "new";
+  useEffect(() => {
+    setSentOnce(false);
+  }, [conversationKey]);
+  useEffect(() => {
+    // A failed send leaves no messages and no generation behind: fall back
+    // to the pre-chat form instead of stranding the post form on an empty
+    // chat. sendingRef guards the press-to-generation window.
+    if (!hasMessages && !loading && !sendingRef.current) {
+      setSentOnce(false);
+    }
+  }, [hasMessages, loading, conversationKey]);
   // Visible keyboard height so the growth cap tracks the space actually left
   // on screen (short devices, landscape, floating keyboards).
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -2078,6 +2107,8 @@ const ChatInput = memo(function ChatInput({
       onEditSend(cleanEditPrompt).catch(console.error);
       return;
     }
+    // Post-chat capsule form starts here, on press — not on receive.
+    setSentOnce(true);
     handleGenerate().catch(console.error);
   };
 
@@ -2184,6 +2215,7 @@ const ChatInput = memo(function ChatInput({
           value={prompt}
           onChangeText={setPrompt}
           placeholder="Message Ajiro Agent"
+          postChat={sentOnce || hasMessages}
           inputRef={composerRef}
           selection={composerSelection.selectionProp}
           onSelectionChange={composerSelection.onSelectionChange}

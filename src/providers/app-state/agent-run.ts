@@ -1454,9 +1454,15 @@ export async function executeClaimedAgentRun(
       skillRuntime && runtimeSupportsTools && !readOnlyRun
         ? "You can create, update, delete, and list skills with the manageSkill tool. Skills follow the SKILL.md format: a name, a short description, and markdown instructions. Create a skill when the user explicitly asks to save one, or when a repeated task would benefit from reusable instructions."
         : undefined;
-    const memoryRuntimeSystem = snapshotRef.current.settings.memoryEnabled
+    const memorySettings = snapshotRef.current.settings;
+    const memoryRuntimeSystem = memorySettings.memoryEnabled
       ? buildMemorySystemPrompt(snapshotRef.current.memory, {
           canWrite: runtimeSupportsTools && !readOnlyRun,
+          profile: {
+            aboutMe: memorySettings.userAboutMe,
+            nickname: memorySettings.userNickname,
+            occupation: memorySettings.userOccupation,
+          },
         })
       : undefined;
     const agentModeRuntimeSystem = isPlanMode

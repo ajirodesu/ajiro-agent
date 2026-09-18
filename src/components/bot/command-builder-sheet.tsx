@@ -342,9 +342,14 @@ export function CommandBuilderSheet({
         style={{ backgroundColor: theme.accent, opacity: saving ? 0.6 : 1 }}
       >
         {saving ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
+          <ActivityIndicator size="small" color={theme.accentForeground} />
         ) : (
-          <Text className="font-sans text-base font-semibold text-white">Save command</Text>
+          <Text
+            className="font-sans text-base font-semibold"
+            style={{ color: theme.accentForeground }}
+          >
+            Save command
+          </Text>
         )}
       </Pressable>
     </ScrollView>

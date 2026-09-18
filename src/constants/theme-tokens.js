@@ -29,6 +29,8 @@ const lightPalette = {
   destructive: "#DC2626",
   destructiveForeground: "#FFFFFF",
   success: "#196B3A",
+  warning: "#8A5A00",
+  info: "#0B5CAD",
 };
 
 const darkPalette = {
@@ -55,6 +57,8 @@ const darkPalette = {
   destructive: "#EF4444",
   destructiveForeground: "#FFFFFF",
   success: "#76D39B",
+  warning: "#E0A23C",
+  info: "#3B82F6",
 };
 
 const Colors = {

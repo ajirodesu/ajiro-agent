@@ -38,25 +38,22 @@ import {
   contextRingTone,
   estimateStreamingTokens,
   formatTokenNumber,
-  RING_TONE_COLORS,
+  ringToneColor,
   sumNullable,
   type RingTone,
+  type RingTonePalette,
 } from "@/modules/context/usage";
 import type { CompactConversationResult } from "@/providers/app-state";
 
 export function contextRingColorForTone(
   tone: RingTone,
-  destructive: string,
+  palette: RingTonePalette,
 ): string | null {
   if (tone === "unknown") {
     return null;
   }
 
-  if (tone === "critical") {
-    return destructive;
-  }
-
-  return RING_TONE_COLORS[tone];
+  return ringToneColor(tone, palette);
 }
 
 export function ContextRing({
@@ -70,7 +67,7 @@ export function ContextRing({
 }) {
   const theme = useTheme();
   const tone = contextRingTone(percent);
-  const color = contextRingColorForTone(tone, theme.destructive);
+  const color = contextRingColorForTone(tone, theme);
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const filled = percent === null ? 0 : Math.min(100, Math.max(0, percent));

@@ -10,8 +10,22 @@ import {
   COMPOSER_RADIUS_MAX,
   COMPOSER_RADIUS_MIN,
   COMPOSER_STAGE_TABLE,
+  POST_CHAT_BOTTOM_OFFSET,
+  POST_CHAT_DURATION_MS,
+  POST_CHAT_HEIGHT,
+  POST_CHAT_MIC_CENTER_FROM_RIGHT,
+  POST_CHAT_PH_IN_MS,
+  POST_CHAT_PH_OUT_MS,
+  POST_CHAT_PLACEHOLDER,
+  POST_CHAT_PLUS_CENTER,
+  POST_CHAT_RADIUS,
+  POST_CHAT_ROW_DELAY_MS,
+  POST_CHAT_ROW_DURATION_MS,
+  POST_CHAT_ROW_HEIGHT,
   composerLayoutFor,
   composerTextCap,
+  postChatFrame,
+  postChatRowProgress,
 } from "@/modules/chat/composer-stages";
 
 describe("composer stage table", () => {
@@ -154,5 +168,76 @@ describe("composer stage table", () => {
     const margin = screenWidth * COMPOSER_MARGIN_RATIO;
     expect(Math.round(margin)).toBe(119);
     expect(Math.round(screenWidth - margin * 2)).toBe(1022);
+  });
+});
+
+describe("post-chat transformation spec", () => {
+  it("pins the geometry, timing, and placeholder contract", () => {
+    expect(POST_CHAT_HEIGHT).toBe(118);
+    expect(POST_CHAT_RADIUS).toBe(28);
+    expect(POST_CHAT_DURATION_MS).toBe(260);
+    expect(POST_CHAT_ROW_DELAY_MS).toBe(40);
+    expect(POST_CHAT_ROW_DURATION_MS).toBe(220);
+    expect(POST_CHAT_PH_OUT_MS).toBe(120);
+    expect(POST_CHAT_PH_IN_MS).toBe(120);
+    expect(POST_CHAT_PLACEHOLDER).toBe("Reply to Ajiro Agent");
+    expect(POST_CHAT_BOTTOM_OFFSET).toBe(16);
+    // Row-2 control centers on a 388 dp capsule.
+    expect(POST_CHAT_PLUS_CENTER).toBe(25);
+    expect(POST_CHAT_MIC_CENTER_FROM_RIGHT).toBe(85);
+    expect(POST_CHAT_ROW_HEIGHT).toBe(46);
+  });
+
+  it("keeps height and radius proportionate at every checkpoint", () => {
+    const preHeight = 56;
+    for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+      const frame = postChatFrame(t, t, preHeight);
+      // Monotone growth, no snapping.
+      expect(frame.minHeight).toBeGreaterThanOrEqual(preHeight);
+      expect(frame.minHeight).toBeLessThanOrEqual(POST_CHAT_HEIGHT);
+      expect(frame.radius).toBeGreaterThanOrEqual(preHeight / 2);
+      expect(frame.radius).toBeLessThanOrEqual(POST_CHAT_RADIUS);
+      // Radius tracks height: both are the same progress t applied to
+      // their ranges, so neither can snap ahead of the other.
+      expect(frame.minHeight).toBeCloseTo(
+        preHeight + (POST_CHAT_HEIGHT - preHeight) * t,
+        9,
+      );
+      expect(frame.radius).toBeCloseTo(
+        preHeight / 2 + (POST_CHAT_RADIUS - preHeight / 2) * t,
+        9,
+      );
+    }
+    const start = postChatFrame(0, 0, preHeight);
+    expect(start.minHeight).toBe(preHeight);
+    expect(start.radius).toBe(preHeight / 2);
+    expect(start.rowOpacity).toBe(0);
+    expect(start.rowTranslateY).toBe(8);
+    const end = postChatFrame(1, 1, preHeight);
+    expect(end.minHeight).toBe(POST_CHAT_HEIGHT);
+    expect(end.radius).toBe(POST_CHAT_RADIUS);
+    expect(end.rowOpacity).toBe(1);
+    expect(end.rowTranslateY).toBe(0);
+  });
+
+  it("staggers row 2 by 40 ms over a 220 ms run", () => {
+    expect(postChatRowProgress(0)).toBe(0);
+    expect(postChatRowProgress(39)).toBe(0);
+    expect(postChatRowProgress(40)).toBe(0);
+    expect(postChatRowProgress(150)).toBeCloseTo(0.5, 5);
+    expect(postChatRowProgress(260)).toBe(1);
+    expect(postChatRowProgress(999)).toBe(1);
+  });
+
+  it("never lets content exceed the animated minimum", () => {
+    // Single-line resting content must fit under minHeight at every
+    // checkpoint, so the container — not the content — drives the size.
+    for (const preHeight of [52, 56, 64]) {
+      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+        const frame = postChatFrame(t, t, preHeight);
+        const content = frame.padTop + COMPOSER_LINE_HEIGHT + frame.padBottom;
+        expect(content).toBeLessThanOrEqual(frame.minHeight + 1e-9);
+      }
+    }
   });
 });

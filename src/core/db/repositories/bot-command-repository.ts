@@ -43,6 +43,11 @@ function toRow(row: typeof botCommandConfigs.$inferSelect): BotCommandRow {
 }
 
 export interface BotCommandRepository {
+  /** Raw rows for backup (schema shape, all bots). */
+  listAllConfigs(): Promise<(typeof botCommandConfigs.$inferSelect)[]>;
+  listAllRepositories(): Promise<(typeof botCommandRepositories.$inferSelect)[]>;
+  listAllModes(): Promise<(typeof botModes.$inferSelect)[]>;
+  listAllSecrets(): Promise<(typeof botCommandSecrets.$inferSelect)[]>;
   listCommands(botId: string): Promise<BotCommandRow[]>;
   upsertCommand(row: BotCommandRow): Promise<void>;
   deleteCommand(botId: string, name: string): Promise<void>;
@@ -61,6 +66,18 @@ export interface BotCommandRepository {
 
 export function createBotCommandRepository(db: AppDatabase): BotCommandRepository {
   return {
+    async listAllConfigs() {
+      return db.select().from(botCommandConfigs);
+    },
+    async listAllRepositories() {
+      return db.select().from(botCommandRepositories);
+    },
+    async listAllModes() {
+      return db.select().from(botModes);
+    },
+    async listAllSecrets() {
+      return db.select().from(botCommandSecrets);
+    },
     async listCommands(botId) {
       const rows = await db
         .select()

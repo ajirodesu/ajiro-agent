@@ -40,6 +40,7 @@ function CheckRow({
   label: string;
   onToggle: () => void;
 }) {
+  const theme = useTheme();
   return (
     <Pressable
       accessibilityRole="checkbox"
@@ -53,11 +54,14 @@ function CheckRow({
           className={cn(
             "h-5 w-5 items-center justify-center rounded-full border",
             checked
-              ? "border-[#0A84FF] bg-[#0A84FF]"
+              ? "border-transparent"
               : "border-border dark:border-border-dark",
           )}
+          style={checked ? { backgroundColor: theme.accent } : undefined}
         >
-          {checked ? <Check color="#FFFFFF" size={13} strokeWidth={2.5} /> : null}
+          {checked ? (
+            <Check color={theme.accentForeground} size={13} strokeWidth={2.5} />
+          ) : null}
         </View>
         <Text className="font-sans text-base text-foreground dark:text-foreground-dark">
           {label}

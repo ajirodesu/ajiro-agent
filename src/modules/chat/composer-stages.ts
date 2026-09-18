@@ -34,6 +34,97 @@ export const COMPOSER_DESIGN_MAX_HEIGHT =
   COMPOSER_CHROME + COMPOSER_DESIGN_TEXT_CAP; // 314
 export const COMPOSER_RADIUS_MIN = 26;
 export const COMPOSER_RADIUS_MAX = 28;
+
+/**
+ * Post-send capsule transformation (chat screen only): after the first
+ * message is sent, the single-row pre-chat capsule becomes a fixed two-row
+ * form and stays there for the conversation. All values are dp, matched to
+ * the 1260x2800 reference (420x933 dp viewport at density 3.0).
+ */
+export const POST_CHAT_HEIGHT = 118;
+export const POST_CHAT_RADIUS = 28;
+/** Post placeholder: exact string, never truncated. */
+export const POST_CHAT_PLACEHOLDER = "Reply to Ajiro Agent";
+/** Transition: single 260 ms ease-out-expo driver, no springs. */
+export const POST_CHAT_DURATION_MS = 260;
+/** Row-2 fade+slide starts 40 ms in and runs 220 ms (ends with the driver). */
+export const POST_CHAT_ROW_DELAY_MS = 40;
+export const POST_CHAT_ROW_DURATION_MS = 220;
+/** Placeholder cross-fade: 120 ms out, swap, 120 ms in (240 ms total). */
+export const POST_CHAT_PH_OUT_MS = 120;
+export const POST_CHAT_PH_IN_MS = 120;
+/** Row-2 entrance travel. */
+export const POST_CHAT_ROW_SHIFT_DP = 8;
+/** 16 dp bottom offset above the safe-area / gesture inset. */
+export const POST_CHAT_BOTTOM_OFFSET = 16;
+/** Row 1: text vertical center 47 dp below the capsule top (22 dp lines). */
+export const POST_CHAT_ROW1_TOP_PAD = 36;
+/** Row 1: text left inset from the capsule's left edge. */
+export const POST_CHAT_TEXT_LEFT = 20;
+/** Row 1 bottom clearance so growing text never reaches the control row. */
+export const POST_CHAT_ROW1_BOTTOM_PAD = 46;
+/** Row 2: 46 dp tall, bottom-anchored (center 95 dp below the top). */
+export const POST_CHAT_ROW_HEIGHT = 46;
+/** Row 2 controls share one vertical center line. */
+export const POST_CHAT_PLUS_GLYPH = 28;
+export const POST_CHAT_PLUS_CENTER = 25;
+export const POST_CHAT_MIC_GLYPH = 24;
+export const POST_CHAT_MIC_CENTER_FROM_RIGHT = 85;
+export const POST_CHAT_SEND_DIAMETER = 36;
+export const POST_CHAT_SEND_CENTER_FROM_RIGHT = 28;
+
+/** Linear frame helper; the driver applies the bezier easing to progress. */
+function postChatLerp(from: number, to: number, t: number): number {
+  return from + (to - from) * t;
+}
+
+export type PostChatFrame = {
+  /** Container minHeight: measured pre height → 118. */
+  minHeight: number;
+  /** Corner radius: pre pill (preHeight/2) → 28, tied to height. */
+  radius: number;
+  /** Row-1 top padding: pre → 36 (text center lands on 47). */
+  padTop: number;
+  /** Row-1 bottom padding: pre → 46 (clears the control row). */
+  padBottom: number;
+  /** Control-row opacity 0→1 (driven by the delayed row progress). */
+  rowOpacity: number;
+  /** Control-row travel +8dp→0dp (driven by the delayed row progress). */
+  rowTranslateY: number;
+};
+
+/**
+ * One choreography frame. `progress` is the eased 0→1 driver (260 ms);
+ * `rowProgress` is the same easing delayed 40 ms and renormalized over
+ * 220 ms; `preHeight` is the measured pre-chat capsule height. Height and
+ * radius share the driver so they stay proportionate at every checkpoint.
+ */
+export function postChatFrame(
+  progress: number,
+  rowProgress: number,
+  preHeight: number,
+): PostChatFrame {
+  const t = Math.min(1, Math.max(0, progress));
+  const r = Math.min(1, Math.max(0, rowProgress));
+  const prePadTop = 8;
+  const prePadBottom = Math.max(8, preHeight - prePadTop - COMPOSER_LINE_HEIGHT);
+  return {
+    minHeight: postChatLerp(preHeight, POST_CHAT_HEIGHT, t),
+    radius: postChatLerp(preHeight / 2, POST_CHAT_RADIUS, t),
+    padTop: postChatLerp(prePadTop, POST_CHAT_ROW1_TOP_PAD, t),
+    padBottom: postChatLerp(prePadBottom, POST_CHAT_ROW1_BOTTOM_PAD, t),
+    rowOpacity: r,
+    rowTranslateY: postChatLerp(POST_CHAT_ROW_SHIFT_DP, 0, r),
+  };
+}
+
+/** Map elapsed ms onto the delayed row progress (40 ms stagger, 220 ms run). */
+export function postChatRowProgress(elapsedMs: number): number {
+  return Math.min(
+    1,
+    Math.max(0, (elapsedMs - POST_CHAT_ROW_DELAY_MS) / POST_CHAT_ROW_DURATION_MS),
+  );
+}
 export const COMPOSER_EXPAND_MIN_LINES = 5;
 export const COMPOSER_MAX_VIEWPORT_RATIO = 0.65;
 

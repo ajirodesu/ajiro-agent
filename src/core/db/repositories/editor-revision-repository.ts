@@ -38,6 +38,8 @@ export interface EditorRevisionRepository {
     path: string,
     limit?: number,
   ): Promise<EditorRevisionRecord[]>;
+  /** Every revision, oldest-first (backup use). */
+  listAll(): Promise<EditorRevisionRecord[]>;
   deleteForFile(projectUri: string, path: string): Promise<void>;
 }
 
@@ -74,6 +76,13 @@ export function createEditorRevisionRepository(
         .onConflictDoNothing();
 
       return record;
+    },
+    async listAll() {
+      const rows = await db
+        .select()
+        .from(editorFileRevisions)
+        .orderBy(editorFileRevisions.createdAt);
+      return rows.map(rowToRecord);
     },
     async listByFile(projectUri, path, limit = 100) {
       const rows = await db

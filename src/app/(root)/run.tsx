@@ -230,11 +230,20 @@ export default function RunScreen() {
             }}
           >
             {busy ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator
+                size="small"
+                color={
+                  running ? theme.destructiveForeground : theme.accentForeground
+                }
+              />
             ) : running ? (
-              <Square color="#FFFFFF" size={18} strokeWidth={2} />
+              <Square
+                color={theme.destructiveForeground}
+                size={18}
+                strokeWidth={2}
+              />
             ) : (
-              <Play color="#FFFFFF" size={20} strokeWidth={2} />
+              <Play color={theme.accentForeground} size={20} strokeWidth={2} />
             )}
           </Pressable>
           <PageCell

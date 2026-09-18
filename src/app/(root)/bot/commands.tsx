@@ -333,7 +333,12 @@ function CommandTile({
             backgroundColor: item.enabled ? theme.accent : theme.border,
           }}
         >
-          <Text className="font-sans text-xs font-bold text-white">
+          <Text
+            className="font-sans text-xs font-bold"
+            style={{
+              color: item.enabled ? theme.accentForeground : theme.textSecondary,
+            }}
+          >
             {item.enabled ? "ON" : "OFF"}
           </Text>
         </Pressable>

@@ -2,6 +2,10 @@ import bundledCatalog from "../../../catalog/mcp-servers.json";
 
 import { fetchWithTimeout } from "@/core/fetch-with-timeout";
 import type { McpServerAuthMode, McpServerTransport } from "@/core/types/app-state";
+import {
+  verifyContentSignature,
+  type PublisherTrustStore,
+} from "@/modules/updates/publisher-trust";
 
 export const MCP_CATALOG_URL =
   "https://raw.githubusercontent.com/ajirodesu/Ajiro-Agent/refs/heads/main/catalog/mcp-servers.json";
@@ -20,6 +24,8 @@ export type McpServerPreset = {
   deprecated: boolean;
   description: string;
   headerTemplate: string | null;
+  /** HTTPS icon URL (§6); null means the row falls back to an initial. */
+  icon: string | null;
   id: string;
   label: string;
   maxAppVersion: string | null;
@@ -46,6 +52,58 @@ export type McpServerCatalogResult = {
   presets: McpServerPreset[];
   source: "bundled" | "github";
 };
+
+/** Top-level catalog signature (§22): `{ keyId, value }`, Ed25519. */
+export type McpCatalogSignature = {
+  keyId: string;
+  value: string;
+} | null;
+
+export function parseMcpCatalogSignature(value: unknown): McpCatalogSignature {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const signature = record.signature;
+  if (signature === undefined || signature === null) return null;
+  if (typeof signature !== "object" || Array.isArray(signature)) return null;
+  const block = signature as Record<string, unknown>;
+  if (typeof block.keyId !== "string" || !block.keyId.trim()) return null;
+  if (typeof block.value !== "string" || !block.value.trim()) return null;
+  if (
+    block.algorithm !== undefined &&
+    block.algorithm !== null &&
+    block.algorithm !== "ed25519"
+  ) {
+    return null;
+  }
+  return { keyId: block.keyId.trim(), value: block.value.trim() };
+}
+
+/**
+ * Canonical signing payload for a catalog document. Recursive
+ * key-sorted JSON without whitespace, prefixed with a version tag; the
+ * top-level `signature` field itself is excluded. Publishers reproduce
+ * exactly this string, sign its UTF-8 bytes with Ed25519, and publish the
+ * base64 value alongside the key id.
+ */
+export function buildMcpCatalogSigningPayload(catalogJson: unknown): string {
+  return `mcp-catalog-v1:${canonicalizeJson(catalogJson, 0)}`;
+}
+
+function canonicalizeJson(value: unknown, depth: number): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalizeJson(entry, depth + 1)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => depth > 0 || key !== "signature")
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+    const body = entries
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalizeJson(entry, depth + 1)}`)
+      .join(",");
+    return `{${body}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
 
 let cachedCatalog: {
   etag: string | null;
@@ -105,6 +163,25 @@ function getOptionalString(
   return trimmed || null;
 }
 
+function getOptionalIcon(record: Record<string, unknown>): string | null {
+  const value = record.icon;
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string") {
+    throw new Error("MCP catalog field icon must be a string.");
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > 2048) {
+    throw new Error("MCP catalog field icon is too long.");
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:") return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 function getHttpsUrl(value: string, label: string) {
   let parsed: URL;
 
@@ -143,6 +220,7 @@ function parsePreset(value: unknown): McpServerPreset {
     deprecated: record.deprecated === true,
     description: getRequiredString(record, "description", 240),
     headerTemplate: getOptionalString(record, "headerTemplate", 2048),
+    icon: getOptionalIcon(record),
     id: getRequiredString(record, "id", 64),
     label: getRequiredString(record, "label", 80),
     maxAppVersion: getOptionalVersion(record, "maxAppVersion"),
@@ -270,8 +348,26 @@ export function parseMcpServerCatalog(value: unknown) {
   return presets;
 }
 
+type CatalogFetchLike = (
+  input: string,
+  init?: {
+    cache?: RequestCache;
+    headers?: Record<string, string>;
+    signal?: AbortSignal | null;
+  },
+) => Promise<{
+  headers: { get(name: string): string | null };
+  json(): Promise<unknown>;
+  ok: boolean;
+  status: number;
+}>;
+
 export async function fetchMcpServerCatalog(
   signal?: AbortSignal,
+  options: {
+    fetchImpl?: CatalogFetchLike;
+    trustStore?: PublisherTrustStore;
+  } = {},
 ): Promise<McpServerCatalogResult> {
   // Conditional refresh (§20): validators from the last fetch ride along,
   // so an unchanged catalog costs a 304 with no body instead of a download.
@@ -284,7 +380,8 @@ export async function fetchMcpServerCatalog(
     headers["If-Modified-Since"] = cachedCatalog.lastModified;
   }
   try {
-    const response = await fetchWithTimeout(MCP_CATALOG_URL, {
+    const fetchImpl = options.fetchImpl ?? fetchWithTimeout;
+    const response = await fetchImpl(MCP_CATALOG_URL, {
       cache: "no-store",
       headers,
       signal,
@@ -299,8 +396,28 @@ export async function fetchMcpServerCatalog(
       throw new Error(`GitHub catalog request failed (${response.status}).`);
     }
 
+    const body: unknown = await response.json();
+    // Catalog signature (§22): when the publisher signed and this install
+    // holds keys, an INVALID signature fails closed into the bundled
+    // fallback — the same safe path as a network failure. Unsigned or
+    // unknown-key catalogs stay installable (the ecosystem default).
+    if (options.trustStore) {
+      const signature = parseMcpCatalogSignature(body);
+      if (signature) {
+        const verdict = verifyContentSignature({
+          content: buildMcpCatalogSigningPayload(body),
+          signature,
+          trustedKeys: options.trustStore.keys(),
+        });
+        if (verdict.status === "invalid" || verdict.status === "malformed") {
+          throw new Error(
+            `MCP catalog signature validation failed (${verdict.detail}).`,
+          );
+        }
+      }
+    }
     const result: McpServerCatalogResult = {
-      presets: parseMcpServerCatalog(await response.json()),
+      presets: parseMcpServerCatalog(body),
       source: "github",
     };
     cachedCatalog = {
@@ -320,12 +437,18 @@ export async function fetchMcpServerCatalog(
   }
 }
 
-export async function fetchMcpServerCatalogCached(signal?: AbortSignal) {
+export async function fetchMcpServerCatalogCached(
+  signal?: AbortSignal,
+  options: {
+    fetchImpl?: CatalogFetchLike;
+    trustStore?: PublisherTrustStore;
+  } = {},
+) {
   if (cachedCatalog && cachedCatalog.expiresAt > Date.now()) {
     return cachedCatalog.result;
   }
 
-  const result = await fetchMcpServerCatalog(signal);
+  const result = await fetchMcpServerCatalog(signal, options);
   if (result.source === "bundled") {
     cachedCatalog = {
       etag: cachedCatalog?.etag ?? null,

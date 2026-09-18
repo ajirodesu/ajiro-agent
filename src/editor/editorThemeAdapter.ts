@@ -57,7 +57,9 @@ export function adaptAppThemeToEditorTheme(
   const accent = resolveAccent(theme, userAccent);
   const dark = theme.dark;
 
-  const background = dark ? theme.colors.surfaceContainerLowest : "#FFFFFF";
+  const background = dark
+    ? theme.colors.surfaceContainerLowest
+    : theme.colors.surface;
 
   return {
     dark,
@@ -71,9 +73,7 @@ export function adaptAppThemeToEditorTheme(
     error: theme.colors.error,
     cursor: accent,
     selection: wash(accent, dark ? 0.35 : 0.28),
-    activeLine: dark
-      ? wash("#FFFFFF", 0.05)
-      : wash("#000000", 0.045),
+    activeLine: wash(theme.colors.surface, dark ? 0.05 : 0.045),
     matchingBracket: wash(accent, 0.28),
     keyword: palette.syntaxKeyword,
     string: palette.syntaxString,

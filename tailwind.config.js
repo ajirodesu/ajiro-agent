@@ -51,10 +51,12 @@ module.exports = {
         "destructive-foreground-dark": Colors.dark.destructiveForeground,
       },
       fontFamily: {
-        sans: ["system-ui"],
+        // Loaded at startup (useBrandFonts); the system entry keeps every
+        // screen usable if loading ever fails.
+        sans: ["Geist_400Regular", "system-ui"],
         serif: ["ui-serif"],
         rounded: ["ui-rounded"],
-        mono: ["ui-monospace"],
+        mono: ["GeistMono_400Regular", "ui-monospace"],
       },
       spacing: {
         "sp-half": `${Spacing.half}px`,

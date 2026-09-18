@@ -9,6 +9,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "@/hooks/use-theme";
+import { withAlpha } from "@/components/ui/chrome-spec";
 import {
   Archive,
   Camera,
@@ -57,20 +59,40 @@ import type {
  * through the callbacks below; nothing here is a visual stub.
  */
 
-const SHEET_BG = "#212121";
-const HANDLE_COLOR = "#5a5a5e";
-const ROW_ICON_BG = "#414141";
-const OPT_CARD_BG = "#3a3a3a";
-const OPT_ICON_BG = "#464646";
-const ACCENT = "#5b93e0";
-const ACCENT_STRONG = "#3b7ee8";
-const TEXT_STRONG = "#f2f2f2";
-const TEXT_MAIN = "#F5F5F7";
-const TEXT_DIM = "#9c9c9c";
-const BADGE_BG = "#1c1c1c";
-const BADGE_TEXT = "#cfcfcf";
-const AMBER_BG = "#2b2318";
-const AMBER_TEXT = "#e0a23c";
+type SheetTheme = {
+  accent: string;
+  accentForeground: string;
+  backgroundElement: string;
+  backgroundSelected: string;
+  border: string;
+  text: string;
+  textSecondary: string;
+  warning: string;
+};
+
+/**
+ * Sheet palette derived from the active theme (light, dark, and all
+ * built-in theme extensions). Replaces the old hardcoded dark constants so
+ * theme switches re-skin the sheet immediately and consistently.
+ */
+function sheetColors(theme: SheetTheme) {
+  return {
+    SHEET_BG: theme.backgroundElement,
+    HANDLE_COLOR: theme.textSecondary,
+    ROW_ICON_BG: theme.backgroundSelected,
+    OPT_CARD_BG: theme.backgroundElement,
+    OPT_ICON_BG: theme.backgroundSelected,
+    ACCENT: theme.accent,
+    ACCENT_STRONG: theme.accent,
+    TEXT_STRONG: theme.text,
+    TEXT_MAIN: theme.text,
+    TEXT_DIM: theme.textSecondary,
+    BADGE_BG: theme.backgroundSelected,
+    BADGE_TEXT: theme.textSecondary,
+    AMBER_BG: withAlpha(theme.warning, 0.16),
+    AMBER_TEXT: theme.warning,
+  };
+}
 
 const HANDLE_ZONE_H = 26;
 const SHEET_MIN_H = 160;
@@ -126,6 +148,7 @@ export type ComposerContextSheetProps = {
 type IconType = typeof Paperclip;
 
 function SheetHandle() {
+  const { HANDLE_COLOR } = sheetColors(useTheme());
   return (
     <View
       className="items-center justify-center"
@@ -152,6 +175,8 @@ function MainRow({
   label: string;
   onPress: () => void;
 }) {
+  const theme = useTheme();
+  const { ROW_ICON_BG, TEXT_MAIN, TEXT_STRONG } = sheetColors(theme);
   return (
     <Pressable
       accessibilityRole="button"
@@ -161,7 +186,9 @@ function MainRow({
         height: 64,
         paddingHorizontal: 16,
         gap: 14,
-        backgroundColor: pressed ? "rgba(255,255,255,0.035)" : "transparent",
+        backgroundColor: pressed
+          ? withAlpha(theme.text, 0.06)
+          : "transparent",
       })}
     >
       <View
@@ -184,6 +211,8 @@ function SubHeader({
   onBack?: () => void;
   title: string;
 }) {
+  const theme = useTheme();
+  const { OPT_ICON_BG, TEXT_STRONG } = sheetColors(theme);
   return (
     <View
       className="flex-row items-center justify-center"
@@ -201,7 +230,9 @@ function SubHeader({
             top: 0,
             width: 36,
             height: 36,
-            backgroundColor: pressed ? "#525252" : OPT_ICON_BG,
+            backgroundColor: pressed
+              ? theme.backgroundSelected
+              : OPT_ICON_BG,
           })}
         >
           <ChevronLeft color={TEXT_STRONG} size={17} strokeWidth={2.4} />
@@ -215,6 +246,7 @@ function SubHeader({
 }
 
 function SelectCheck({ shown, dim }: { shown: boolean; dim?: boolean }) {
+  const { ACCENT, TEXT_DIM } = sheetColors(useTheme());
   return (
     <View style={{ width: 19, alignItems: "center" }}>
       <Check
@@ -234,6 +266,7 @@ function Badge({
   label: string;
   amber?: boolean;
 }) {
+  const { AMBER_BG, AMBER_TEXT, BADGE_BG, BADGE_TEXT } = sheetColors(useTheme());
   return (
     <View
       style={{
@@ -262,6 +295,7 @@ function Tag({
   icon: IconType;
   label: string;
 }) {
+  const { TEXT_DIM } = sheetColors(useTheme());
   return (
     <View className="flex-row items-center" style={{ gap: 5 }}>
       <Icon color={TEXT_DIM} size={13} strokeWidth={2} />
@@ -297,13 +331,16 @@ function OptCard({
   trailing?: ReactNode;
   onPress?: () => void;
 }) {
+  const theme = useTheme();
+  const { ACCENT, OPT_CARD_BG, OPT_ICON_BG, TEXT_DIM, TEXT_STRONG } =
+    sheetColors(theme);
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       className="flex-row items-center"
       style={({ pressed }) => ({
-        backgroundColor: pressed ? "#444444" : OPT_CARD_BG,
+        backgroundColor: pressed ? theme.backgroundSelected : OPT_CARD_BG,
         borderRadius: 16,
         padding: 13,
         paddingLeft: 14,
@@ -370,13 +407,15 @@ function OptFlat({
   titleAccent?: boolean;
   onPress: () => void;
 }) {
+  const theme = useTheme();
+  const { ACCENT, OPT_CARD_BG, TEXT_STRONG } = sheetColors(theme);
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       className="flex-row items-center justify-between"
       style={({ pressed }) => ({
-        backgroundColor: pressed ? "#444444" : OPT_CARD_BG,
+        backgroundColor: pressed ? theme.backgroundSelected : OPT_CARD_BG,
         borderRadius: 16,
         paddingHorizontal: 16,
         paddingVertical: 15,
@@ -409,6 +448,8 @@ function Toggle({
   value: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const theme = useTheme();
+  const { ACCENT_STRONG, BADGE_BG } = sheetColors(theme);
   return (
     <Pressable
       accessibilityRole="switch"
@@ -431,7 +472,7 @@ function Toggle({
           width: 20,
           height: 20,
           borderRadius: 10,
-          backgroundColor: "#f5f5f5",
+          backgroundColor: theme.accentForeground,
         }}
       />
     </Pressable>
@@ -439,12 +480,13 @@ function Toggle({
 }
 
 function SectionLabel({ children }: { children: string }) {
+  const { TEXT_DIM } = sheetColors(useTheme());
   return (
     <Text
       style={{
         fontWeight: "500",
         fontSize: 11.5,
-        color: "#77777a",
+        color: TEXT_DIM,
         letterSpacing: 0.2,
         paddingHorizontal: 20,
         paddingTop: 6,
@@ -485,6 +527,8 @@ const PANE_TITLES: Partial<Record<SheetPane, string>> = {
 
 export function ComposerContextSheet(props: ComposerContextSheetProps) {
   const { open, onOpenChange } = props;
+  const theme = useTheme();
+  const { SHEET_BG, TEXT_DIM, TEXT_STRONG } = sheetColors(theme);
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [rendered, setRendered] = useState(false);
@@ -962,14 +1006,14 @@ export function ComposerContextSheet(props: ComposerContextSheetProps) {
       </Animated.View>
       <View className="absolute inset-x-0 bottom-0 items-stretch">
         <Animated.View
-          style={[
+            style={[
             sheetStyle,
             {
               backgroundColor: SHEET_BG,
               borderTopLeftRadius: 26,
               borderTopRightRadius: 26,
               borderTopWidth: 1,
-              borderTopColor: "rgba(255,255,255,0.06)",
+              borderTopColor: theme.border,
               overflow: "hidden",
             },
           ]}

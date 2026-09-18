@@ -53,8 +53,6 @@ async function loadHttp() {
   return web.default;
 }
 
-type HttpClient = Awaited<ReturnType<typeof loadHttp>>;
-
 export type ChangedFileState =
   | "added"
   | "modified"
@@ -343,7 +341,7 @@ export async function unstagePaths(
 export async function unstageAll(session: ExternalFolderSession): Promise<void> {
   await withMirror(session, async (fs, _root, git) => {
     const matrix = await git.statusMatrix({ fs, dir: "/" });
-    for (const [file, head, _workdir, stage] of matrix) {
+    for (const [file, head, , stage] of matrix) {
       if (file !== "." && stage !== head) {
         await git.resetIndex({ fs, dir: "/", filepath: file });
       }

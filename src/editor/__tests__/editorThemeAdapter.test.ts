@@ -78,6 +78,6 @@ describe("editorThemeAdapter (sole editor color integration)", () => {
     const darkEditor = adaptAppThemeToEditorTheme(darkTheme, null);
     expect(darkEditor.background).toBe(darkTheme.colors.surfaceContainerLowest);
     const lightEditor = adaptAppThemeToEditorTheme(lightTheme, null);
-    expect(lightEditor.background).toBe("#FFFFFF");
+    expect(lightEditor.background).toBe(lightTheme.colors.surface);
   });
 });

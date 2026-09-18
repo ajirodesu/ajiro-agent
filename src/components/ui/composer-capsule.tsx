@@ -32,6 +32,7 @@ import Animated, {
   Easing,
   Extrapolation,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -45,8 +46,29 @@ import {
   COMPOSER_COLORS,
   COMPOSER_FONT_SIZE,
   COMPOSER_LINE_HEIGHT,
+  COMPOSER_MARGIN_RATIO,
   COMPOSER_RADIUS_MAX,
   COMPOSER_RADIUS_MIN,
+  POST_CHAT_BOTTOM_OFFSET,
+  POST_CHAT_DURATION_MS,
+  POST_CHAT_HEIGHT,
+  POST_CHAT_MIC_CENTER_FROM_RIGHT,
+  POST_CHAT_MIC_GLYPH,
+  POST_CHAT_PH_IN_MS,
+  POST_CHAT_PH_OUT_MS,
+  POST_CHAT_PLACEHOLDER,
+  POST_CHAT_PLUS_CENTER,
+  POST_CHAT_PLUS_GLYPH,
+  POST_CHAT_RADIUS,
+  POST_CHAT_ROW_DELAY_MS,
+  POST_CHAT_ROW_DURATION_MS,
+  POST_CHAT_ROW_HEIGHT,
+  POST_CHAT_ROW_SHIFT_DP,
+  POST_CHAT_ROW1_BOTTOM_PAD,
+  POST_CHAT_ROW1_TOP_PAD,
+  POST_CHAT_SEND_CENTER_FROM_RIGHT,
+  POST_CHAT_SEND_DIAMETER,
+  POST_CHAT_TEXT_LEFT,
   composerLayoutFor,
   composerTextCap,
 } from "@/modules/chat/composer-stages";
@@ -69,6 +91,12 @@ export type ComposerCapsuleProps = {
   onPlusPress: () => void;
   screenHeight: number;
   keyboardHeight: number;
+  /**
+   * Post-chat form: true once the first message is sent (driven by the
+   * screen on send-button press). The pre-chat form renders byte-identical
+   * output to before; only the post branches below are new.
+   */
+  postChat?: boolean;
   /**
    * Resolved app accent for the active send state (locked to the theme
    * primary for aqua/burnt/indigo, user accent otherwise). Defaults to the
@@ -156,6 +184,9 @@ function IconButton({
   );
 }
 
+/** Ease-out-expo: fast start, soft settle. No springs, no overshoot. */
+const POST_CHAT_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+
 export function ComposerCapsule({
   value,
   onChangeText,
@@ -171,6 +202,7 @@ export function ComposerCapsule({
   screenHeight,
   keyboardHeight,
   accentColor = COMPOSER_COLORS.send,
+  postChat = false,
 }: ComposerCapsuleProps) {
   const theme = useTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -210,6 +242,100 @@ export function ComposerCapsule({
     };
   }, []);
 
+  // Post-send transformation state. "pre" renders the untouched pre-chat
+  // form; "animating" runs the one-shot 260 ms transition; "post" renders
+  // the settled two-row form. Mounting directly in post skips animation.
+  const [phase, setPhase] = useState<"pre" | "animating" | "post">(
+    postChat ? "post" : "pre",
+  );
+  const [phPost, setPhPost] = useState(postChat);
+  const [controlsLive, setControlsLive] = useState(postChat);
+  const firedRef = useRef(postChat);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const progress = useSharedValue(postChat ? 1 : 0);
+  const rowQ = useSharedValue(postChat ? 1 : 0);
+  const inputFade = useSharedValue(1);
+  const preRowFade = useSharedValue(1);
+  const preHeightSV = useSharedValue(56);
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    if (!postChat) {
+      // New conversation: snap everything back without animation.
+      firedRef.current = false;
+      progress.value = 0;
+      rowQ.value = 0;
+      inputFade.value = 1;
+      preRowFade.value = 1;
+      setPhPost(false);
+      setControlsLive(false);
+      setPhase("pre");
+      return;
+    }
+    if (firedRef.current) {
+      if (phase !== "post") {
+        progress.value = 1;
+        rowQ.value = 1;
+        inputFade.value = 1;
+        preRowFade.value = 0;
+        setPhPost(true);
+        setControlsLive(true);
+        setPhase("post");
+      }
+      return;
+    }
+    firedRef.current = true;
+    setPhase("animating");
+    progress.value = withTiming(1, {
+      duration: POST_CHAT_DURATION_MS,
+      easing: POST_CHAT_EASING,
+    });
+    // Row 2 settles in after the capsule starts expanding (40 ms stagger).
+    timers.push(
+      setTimeout(() => {
+        rowQ.value = withTiming(1, {
+          duration: POST_CHAT_ROW_DURATION_MS,
+          easing: POST_CHAT_EASING,
+        });
+      }, POST_CHAT_ROW_DELAY_MS),
+    );
+    timers.push(setTimeout(() => setControlsLive(true), 100));
+    // Placeholder cross-fade: 120 ms out, swap, 120 ms in. The field is
+    // never disabled — opacity alone never blocks touch or focus.
+    inputFade.value = withTiming(
+      0,
+      { duration: POST_CHAT_PH_OUT_MS, easing: POST_CHAT_EASING },
+      (finished) => {
+        if (!finished) return;
+        runOnJS(setPhPost)(true);
+        inputFade.value = withTiming(1, {
+          duration: POST_CHAT_PH_IN_MS,
+          easing: POST_CHAT_EASING,
+        });
+      },
+    );
+    preRowFade.value = withTiming(0, {
+      duration: POST_CHAT_PH_OUT_MS,
+      easing: POST_CHAT_EASING,
+    });
+    // Completion lands on the settled form; the timeout is belt-and-braces
+    // in case a worklet callback is ever dropped.
+    const finish = () => setPhase("post");
+    timers.push(setTimeout(finish, POST_CHAT_DURATION_MS + 150));
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      timersRef.current = [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postChat]);
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
   const hasText = value.trim().length > 0;
   const maxTextHeight = composerTextCap(screenHeight, keyboardHeight);
   // Single-row controls occupy +/mic/send plus gaps; the text budget is
@@ -246,6 +372,59 @@ export function ComposerCapsule({
     ),
   }));
 
+  // Post-chat choreography (same math as postChatFrame in composer-stages:
+  // height and radius share the eased driver, so they stay proportionate).
+  // Width is never animated; the 16 dp post margins arrive via negative
+  // margins against the wrapper's 9.45% margins.
+  const postMarginCompensation = 16 - screenWidth * COMPOSER_MARGIN_RATIO;
+  const postContainerStyle = useAnimatedStyle(() => ({
+    minHeight: interpolate(
+      progress.value,
+      [0, 1],
+      [preHeightSV.value, POST_CHAT_HEIGHT],
+    ),
+    borderRadius: interpolate(
+      progress.value,
+      [0, 1],
+      [preHeightSV.value / 2, POST_CHAT_RADIUS],
+    ),
+    marginHorizontal: interpolate(progress.value, [0, 1], [0, postMarginCompensation]),
+    marginBottom: interpolate(progress.value, [0, 1], [0, POST_CHAT_BOTTOM_OFFSET]),
+  }));
+  const postRow1Style = useAnimatedStyle(() => ({
+    paddingTop: interpolate(
+      progress.value,
+      [0, 1],
+      [8, POST_CHAT_ROW1_TOP_PAD],
+    ),
+    paddingBottom: interpolate(
+      progress.value,
+      [0, 1],
+      [
+        Math.max(8, preHeightSV.value - 8 - COMPOSER_LINE_HEIGHT),
+        POST_CHAT_ROW1_BOTTOM_PAD,
+      ],
+    ),
+  }));
+  const preOverlayStyle = useAnimatedStyle(() => ({
+    opacity: preRowFade.value,
+  }));
+  const postRow2Style = useAnimatedStyle(() => ({
+    opacity: rowQ.value,
+    transform: [
+      {
+        translateY: interpolate(
+          rowQ.value,
+          [0, 1],
+          [POST_CHAT_ROW_SHIFT_DP, 0],
+        ),
+      },
+    ],
+  }));
+  const postInputFadeStyle = useAnimatedStyle(() => ({
+    opacity: inputFade.value,
+  }));
+
   const handleMic = () => {
     // No on-device speech engine is bundled: say so instead of faking it.
     setMicNotice(true);
@@ -256,6 +435,15 @@ export function ComposerCapsule({
   };
 
   const sendActive = hasText || loading;
+
+  // Measured pre-chat height (drives the transition start point). Updated
+  // only before the first transition; afterwards the post form owns sizing.
+  const [preHeight, setPreHeight] = useState(56);
+  const measurePreHeight = (height: number) => {
+    if (firedRef.current) return;
+    if (Math.abs(height - preHeight) >= 0.5) setPreHeight(height);
+    preHeightSV.value = height;
+  };
 
   const inputElement = (
     <TextInputWrapper
@@ -342,10 +530,10 @@ export function ComposerCapsule({
       })}
     >
       {loading ? (
-        <StopCircle color="#FFFFFF" size={20} />
+        <StopCircle color={theme.accentForeground} size={20} />
       ) : (
         <TablerArrowUp
-          color={sendActive ? "#FFFFFF" : colors.sendArrowInactive}
+          color={sendActive ? theme.accentForeground : colors.sendArrowInactive}
           size={glyphSend}
         />
       )}
@@ -364,22 +552,129 @@ export function ComposerCapsule({
     </IconButton>
   );
 
-  return (
-    <View>
-      <Animated.View
-        onLayout={(event) => {
-          setRowWidth(event.nativeEvent.layout.width);
+  // Post-chat control row (fixed dp geometry, NOT canvas-scaled): 48 dp
+  // touch targets with the + glyph (28) centered 25 dp from the left edge,
+  // the mic glyph (24) centered 85 dp from the right edge, and the 36 dp
+  // send circle centered 28 dp from the right edge — all sharing one
+  // vertical center line inside the 46 dp bottom-anchored row.
+  const postPlus = (
+    <Pressable
+      accessibilityLabel="Attachments and tools"
+      accessibilityRole="button"
+      onPress={onPlusPress}
+      className="items-center justify-center"
+      style={({ pressed }) => ({
+        backgroundColor: pressed ? colors.plusActive : "transparent",
+        borderRadius: 24,
+        height: 48,
+        width: 48,
+      })}
+    >
+      <Plus color={colors.icon} size={POST_CHAT_PLUS_GLYPH} strokeWidth={2} />
+    </Pressable>
+  );
+
+  const postMic = (
+    <Pressable
+      accessibilityLabel="Voice input"
+      accessibilityRole="button"
+      onPress={handleMic}
+      className="items-center justify-center"
+      style={({ pressed }) => ({
+        height: 48,
+        opacity: pressed ? 0.7 : 1,
+        width: 48,
+      })}
+    >
+      <Mic color={colors.icon} size={POST_CHAT_MIC_GLYPH} strokeWidth={2} />
+    </Pressable>
+  );
+
+  const postSend = (
+    <Pressable
+      accessibilityLabel={loading ? "Stop generating" : "Send message"}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: sendDisabled }}
+      disabled={sendDisabled}
+      onPress={onSendPress}
+      className="items-center justify-center"
+      style={({ pressed }) => ({
+        height: 48,
+        opacity: pressed ? 0.85 : 1,
+        width: 48,
+      })}
+    >
+      <View
+        className="items-center justify-center rounded-full"
+        style={{
+          backgroundColor: sendActive ? accentColor : colors.sendInactive,
+          height: POST_CHAT_SEND_DIAMETER,
+          width: POST_CHAT_SEND_DIAMETER,
         }}
-        style={[
-          capsuleStyle,
-          {
-            backgroundColor: colors.capsule,
-            borderColor: colors.border,
-            borderWidth: 1,
-          },
-        ]}
       >
-        {layout.singleRow ? (
+        {loading ? (
+          <StopCircle color={theme.accentForeground} size={20} />
+        ) : (
+          <TablerArrowUp
+            color={
+              sendActive ? theme.accentForeground : colors.sendArrowInactive
+            }
+            size={glyphSend}
+          />
+        )}
+      </View>
+    </Pressable>
+  );
+
+  // Post-chat input: same typography, colors, and handlers as the pre-chat
+  // input; never disabled, so it stays interactive through the transition.
+  const postInput = (
+    <TextInputWrapper
+      className="min-w-0 flex-1"
+      style={{ width: "100%" }}
+      onPaste={(payload) => {
+        onPaste?.(payload);
+      }}
+    >
+      <TextInput
+        ref={inputRef}
+        className="h-full w-full min-h-0 border-0 bg-transparent px-0 py-0 font-sans dark:bg-transparent"
+        style={{
+          color: colors.text,
+          fontSize: COMPOSER_FONT_SIZE,
+          lineHeight: COMPOSER_LINE_HEIGHT,
+          maxHeight: maxTextHeight,
+        }}
+        cursorColor={colors.cursor}
+        selectionColor={colors.selection}
+        placeholder={phPost ? POST_CHAT_PLACEHOLDER : placeholder}
+        placeholderTextColor={colors.placeholder}
+        multiline
+        onChangeText={onChangeText}
+        onContentSizeChange={(event) => {
+          const next = event.nativeEvent.contentSize;
+          setContentHeight((current) =>
+            current === next.height ? current : next.height,
+          );
+          setContentWidth((current) =>
+            current === next.width ? current : next.width,
+          );
+        }}
+        onSelectionChange={onSelectionChange}
+        returnKeyType="default"
+        scrollEnabled={contentHeight > maxTextHeight}
+        selection={selection}
+        submitBehavior="newline"
+        textAlignVertical="top"
+        value={value}
+      />
+    </TextInputWrapper>
+  );
+
+  // Pre-chat rows, rendered verbatim in the pre phase and as a fading
+  // absolute snapshot during the transition. Untouched behavior otherwise.
+  const renderPreRows = () =>
+    layout.singleRow ? (
           <View
             className="flex-row items-center"
             style={{
@@ -428,8 +723,114 @@ export function ComposerCapsule({
               {sendButton}
             </View>
           </View>
-        )}
-      </Animated.View>
+        );
+
+  return (
+    <View>
+      {phase === "pre" ? (
+        <Animated.View
+          onLayout={(event) => {
+            setRowWidth(event.nativeEvent.layout.width);
+            measurePreHeight(event.nativeEvent.layout.height);
+          }}
+          style={[
+            capsuleStyle,
+            {
+              backgroundColor: colors.capsule,
+              borderColor: colors.border,
+              borderWidth: 1,
+            },
+          ]}
+        >
+          {renderPreRows()}
+        </Animated.View>
+      ) : (
+        <Animated.View
+          onLayout={(event) => {
+            setRowWidth(event.nativeEvent.layout.width);
+          }}
+          style={[
+            postContainerStyle,
+            {
+              backgroundColor: colors.capsule,
+              borderColor: colors.border,
+              borderWidth: 1,
+              overflow: "hidden",
+            },
+          ]}
+        >
+          {phase === "animating" ? (
+            <Animated.View
+              key="pre-overlay"
+              pointerEvents="none"
+              style={[
+                preOverlayStyle,
+                {
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: preHeight,
+                  borderRadius: preHeight / 2,
+                  overflow: "hidden",
+                  backgroundColor: colors.capsule,
+                },
+              ]}
+            >
+              {renderPreRows()}
+            </Animated.View>
+          ) : null}
+          <Animated.View
+            key="post-row1"
+            style={[
+              postRow1Style,
+              { paddingHorizontal: POST_CHAT_TEXT_LEFT },
+            ]}
+          >
+            <Animated.View key="post-input" style={postInputFadeStyle}>
+              {postInput}
+            </Animated.View>
+          </Animated.View>
+          <Animated.View
+            key="post-row2"
+            pointerEvents={controlsLive || phase === "post" ? "auto" : "none"}
+            style={[
+              postRow2Style,
+              {
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: POST_CHAT_ROW_HEIGHT,
+              },
+            ]}
+          >
+            {/* Touch targets are 48 dp; glyph centers land on spec:
+                plus at 25 from the left, mic 85 and send 28 from the
+                right (57 dp center-to-center). */}
+            <View
+              className="flex-row flex-1 items-center"
+              style={{
+                paddingLeft: POST_CHAT_PLUS_CENTER - 24,
+                paddingRight: POST_CHAT_SEND_CENTER_FROM_RIGHT - 24,
+              }}
+            >
+              {postPlus}
+              <View className="flex-1" />
+              {postMic}
+              <View
+                style={{
+                  width:
+                    POST_CHAT_MIC_CENTER_FROM_RIGHT -
+                    POST_CHAT_SEND_CENTER_FROM_RIGHT -
+                    48,
+                }}
+              />
+              {postSend}
+            </View>
+          </Animated.View>
+        </Animated.View>
+      )}
 
       {micNotice ? (
         <Text className="mt-1 px-4 font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
@@ -474,7 +875,7 @@ export function ComposerCapsule({
             }}
             cursorColor={colors.cursor}
             selectionColor={colors.selection}
-            placeholder={placeholder}
+            placeholder={phPost ? POST_CHAT_PLACEHOLDER : placeholder}
             placeholderTextColor={colors.placeholder}
             multiline
             onChangeText={onChangeText}
