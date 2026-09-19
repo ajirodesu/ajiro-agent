@@ -7,8 +7,10 @@ import {
   ChevronRight,
   FileText,
   Plus,
+  Puzzle,
   RefreshCw,
   Search,
+  Store,
   X,
 } from "lucide-react-native";
 import {
@@ -169,7 +171,17 @@ const TreeRowView = memo(function TreeRowView({
       ) : null}
     </Pressable>
   );
-});
+},
+// Row callbacks intentionally ignored: they close over screen state, but
+// every mutation they perform flows through refs or fresh row data (tabs
+// via tabsRef; toggles recompute `rows`, refreshing closures). Comparing
+// only data props lets scroll/notice renders skip the whole tree.
+(previous, next) =>
+  previous.row === next.row &&
+  previous.active === next.active &&
+  previous.dirty === next.dirty &&
+  previous.expanded === next.expanded &&
+  previous.gitMark === next.gitMark);
 
 export default function FilesScreen() {
   const router = useRouter();
@@ -217,6 +229,11 @@ export default function FilesScreen() {
   const ui = project ? ide.getProjectUiState(project.id) : null;
   const expanded = useMemo(() => new Set(ui?.expanded ?? []), [ui]);
   const tabs = ui?.tabs ?? [];
+  // Fresh-read mirror: memoized tree rows can skip re-renders, so row
+  // callbacks must not close over a stale `tabs` array (a skipped row
+  // would otherwise overwrite newly opened tabs).
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
   const activePath = ui?.activePath ?? null;
   const serviceRef = useRef(createExternalFolderService());
   const bufferKey = useRef(0);
@@ -514,9 +531,10 @@ export default function FilesScreen() {
 
   const openTab = (entry: TreeEntry) => {
     if (!project) return;
-    const nextTabs = tabs.includes(entry.path)
-      ? tabs
-      : [...tabs, entry.path].slice(-12);
+    const currentTabs = tabsRef.current;
+    const nextTabs = currentTabs.includes(entry.path)
+      ? currentTabs
+      : [...currentTabs, entry.path].slice(-12);
     ide.updateProjectUiState(project.id, {
       tabs: nextTabs,
       activePath: entry.path,
@@ -872,6 +890,41 @@ export default function FilesScreen() {
         title="Files"
         subtitle={`${project.displayName}${gitBadge ? ` · ${gitBadge}` : ""}${treeTruncated ? " · list truncated" : ""}`}
         right={
+          <View className="flex-row items-center gap-sp-2">
+          <CapsuleContainer accessibilityLabel="Plugin store and installed plugins">
+            <Pressable
+              accessibilityLabel="Editor plugin store"
+              accessibilityRole="button"
+              onPress={() => {
+                router.push("/extensions?scope=workshop" as never);
+              }}
+              hitSlop={8}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: ICON_INNER,
+                height: ICON_INNER,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Store color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Installed plugins"
+              accessibilityRole="button"
+              onPress={() => {
+                router.push("/extensions?scope=workshop&view=installed" as never);
+              }}
+              hitSlop={8}
+              className="items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                width: ICON_INNER,
+                height: ICON_INNER,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Puzzle color={theme.text} size={20} strokeWidth={2} />
+            </Pressable>
+          </CapsuleContainer>
           <CapsuleContainer accessibilityLabel="File actions">
             <Pressable
               accessibilityLabel="Refresh files"
@@ -905,6 +958,7 @@ export default function FilesScreen() {
               <Plus color={theme.text} size={20} strokeWidth={2} />
             </Pressable>
           </CapsuleContainer>
+          </View>
         }
       />
       <ProjectTabsBar />
@@ -1066,7 +1120,7 @@ export default function FilesScreen() {
                     ) : null}
                     <Text
                       numberOfLines={1}
-                      className="font-mono text-xs text-foreground dark:text-foreground-dark"
+                      className="min-w-0 flex-1 font-mono text-xs text-foreground dark:text-foreground-dark"
                     >
                       {path.split("/").pop()}
                     </Text>
@@ -1431,7 +1485,7 @@ export default function FilesScreen() {
             >
               <Text
                 numberOfLines={1}
-                className="font-sans text-xs text-foreground dark:text-foreground-dark"
+                className="min-w-0 flex-1 font-sans text-xs text-foreground dark:text-foreground-dark"
               >
                 {entry.name}
               </Text>

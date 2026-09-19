@@ -8,7 +8,11 @@
  * synchronization that keeps working offline.
  */
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 import {
   Brush,
   ChevronLeft,
@@ -96,6 +100,11 @@ import {
   type RegistrySyncStatus,
 } from "@/modules/extensions";
 import { EXTENSION_TO_MODE_KEY } from "@/editor/editorLanguages";
+import {
+  entryInStoreScope,
+  isFreeEntry,
+  type PluginStoreScope,
+} from "@/modules/extensions/scopes";
 import { PERMISSION_LABELS } from "@/modules/extensions/permissions";
 import { pluginDataDir, pluginDir } from "@/modules/extensions/storage";
 
@@ -424,6 +433,33 @@ export default function ExtensionsScreen() {
   const bridge = useMemo(() => getPluginRuntimeBridge(), []);
 
   const [section, setSection] = useState<"explore" | "installed">("explore");
+  // Split stores: the sidebar opens the studio scope (themes + terminal),
+  // the file manager header capsule opens the workshop scope (editor +
+  // language + file manager). `view` selects the initial section.
+  const routeParams = useLocalSearchParams<{ scope?: string; view?: string }>();
+  const storeScope: PluginStoreScope =
+    routeParams.scope === "workshop"
+      ? "workshop"
+      : routeParams.scope === "all"
+        ? "all"
+        : "studio";
+  const [scopeOverride, setScopeOverride] = useState<PluginStoreScope | null>(
+    null,
+  );
+  const activeScope = scopeOverride ?? storeScope;
+  useEffect(() => {
+    if (routeParams.view === "installed") setSection("installed");
+    else if (routeParams.view === "explore") setSection("explore");
+    setScopeOverride(null);
+  }, [routeParams.view, routeParams.scope]);
+  // Same-route re-entry (e.g. tapping sidebar Plugins while an override
+  // is active) changes no params, so reset on focus too. Detail/drawers
+  // are in-screen state, not routes, so this never clobbers browsing.
+  useFocusEffect(
+    useCallback(() => {
+      setScopeOverride(null);
+    }, []),
+  );
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -444,8 +480,17 @@ export default function ExtensionsScreen() {
   const [uninstallTarget, setUninstallTarget] = useState<ExtensionMetadata | null>(null);
   const [rollbackAvailable, setRollbackAvailable] = useState(false);
   const [sort, setSort] = useState<CatalogSort>("name");
-  // Installed view narrowing (§28): enabled / disabled / broken / update.
+  // Installed view narrowing (A28): enabled / disabled / broken / update.
   const [stateFilter, setStateFilter] = useState<CatalogStateFilter>("all");
+  // Live custom pages for the tabbed page container: refreshed on every
+  // bridge status change so install/uninstall/enable/disable update the
+  // entry point in real time with no stale buttons.
+  const [livePages, setLivePages] = useState(() =>
+    bridge.host.listPages(),
+  );
+  useEffect(() => bridge.subscribe((status) => setLivePages(status.pages)), [
+    bridge,
+  ]);
   const [pageLimit, setPageLimit] = useState(CATALOG_PAGE_SIZE);
   const [preferences, setPreferences] = useState<ExtensionPreferences>(
     DEFAULT_EXTENSION_PREFERENCES,
@@ -878,7 +923,16 @@ export default function ExtensionsScreen() {
       setDependencyIssues([]);
       setConsent(null);
       setUrlOpen(false);
-      setNotice(`${outcome.record.id} installed. Enable it to activate.`);
+      // Permissions auto-grant on install; the notice names them so the
+      // grant is visible and revocable (disable the extension anytime).
+      const granted = outcome.record.permissions.map((grant) => grant.key);
+      setNotice(
+        outcome.record.enabled
+          ? `${outcome.record.id} installed and enabled${
+              granted.length > 0 ? ` (permissions: ${granted.join(", ")})` : ""
+            }.`
+          : `${outcome.record.id} installed. Enable it to activate.`,
+      );
       setDetailId(null);
     } catch (installError) {
       setError(
@@ -1158,25 +1212,50 @@ export default function ExtensionsScreen() {
     [theme],
   );
 
-  const categories = useMemo(() => listCategories(entries), [entries]);
-  // Search is indexed once per catalog revision, not per keystroke (§66).
-  const searchIndex = useMemo(() => buildCatalogSearchIndex(entries), [entries]);
+  // Scoped discovery: Explore lists free entries in the active store
+  // scope only. Installed is management (what you already have), never
+  // scoped or paid-gated, so nothing installed can hide from its owner.
+  const scopedEntries = useMemo(
+    () =>
+      entries.filter(
+        (entry) =>
+          isFreeEntry(entry) && entryInStoreScope(entry, activeScope),
+      ),
+    [activeScope, entries],
+  );
+  const categories = useMemo(
+    () => listCategories(section === "installed" ? entries : scopedEntries),
+    [entries, scopedEntries, section],
+  );
+  // Search is indexed once per catalog revision, not per keystroke (A66).
+  const searchIndex = useMemo(
+    () =>
+      buildCatalogSearchIndex(
+        section === "installed" ? entries : scopedEntries,
+      ),
+    [entries, scopedEntries, section],
+  );
   const matched = useMemo(
     () =>
-      filterCatalogEntries(entries, records, {
-        category,
-        channel: preferences.updateChannel,
-        installedOnly: section === "installed",
-        query,
-        searchIndex,
-        state: section === "installed" ? stateFilter : null,
-      }),
+      filterCatalogEntries(
+        section === "installed" ? entries : scopedEntries,
+        records,
+        {
+          category,
+          channel: preferences.updateChannel,
+          installedOnly: section === "installed",
+          query,
+          searchIndex,
+          state: section === "installed" ? stateFilter : null,
+        },
+      ),
     [
       category,
       entries,
       preferences.updateChannel,
       records,
       query,
+      scopedEntries,
       searchIndex,
       section,
       stateFilter,
@@ -1209,10 +1288,16 @@ export default function ExtensionsScreen() {
   const featured = useMemo(
     () =>
       section === "explore" && !query.trim() && !category
-        ? listFeaturedExtensions(entries)
+        ? listFeaturedExtensions(scopedEntries)
         : [],
-    [category, entries, query, section],
+    [category, query, scopedEntries, section],
   );
+  const scopeSubtitle =
+    activeScope === "workshop"
+      ? "Editor, languages & file tools"
+      : activeScope === "all"
+        ? "Every free extension"
+        : "Themes & terminal";
   // Sorting and paging happen here so the catalog cache stays untouched (§66).
   const ordered = useMemo(
     () => sortCatalogEntries(matchedWithServerUpdates, sort),
@@ -1328,6 +1413,46 @@ export default function ExtensionsScreen() {
               ) : null}
             </>
           ) : null}
+          {(() => {
+            // Custom page entry point (store plugins only): a plugin gets
+            // this button only while it is installed, enabled, store-sourced,
+            // and actually has a live custom page. Anything else keeps the
+            // normal management view with no tab, no attempt, no error.
+            if (!record || !detail) return null;
+            if (
+              record.source !== "registry" &&
+              record.source !== "bundled"
+            ) {
+              return null;
+            }
+            if (!record.enabled) return null;
+            const live = livePages.find(
+              (page) => page.pluginId === detail.id,
+            );
+            if (!live) return null;
+            return (
+              <>
+                <Separator />
+                <View className="flex-row items-center gap-sp-2">
+                  <Puzzle color={theme.text} size={16} strokeWidth={2} />
+                  <Text className="font-sans text-xs font-semibold text-foreground dark:text-foreground-dark">
+                    Custom page: {live.title}
+                  </Text>
+                </View>
+                <Button
+                  onPress={() => {
+                    if (!bridge.showPage(detail.id)) {
+                      setError(
+                        "That plugin's page is no longer available.",
+                      );
+                    }
+                  }}
+                >
+                  Open custom page
+                </Button>
+              </>
+            );
+          })()}
           {record?.runtimeState === "broken" ? (
             <>
               <Separator />
@@ -1715,6 +1840,7 @@ export default function ExtensionsScreen() {
             </CircleIconButton>
           }
           title="Plugins"
+          subtitle={scopeSubtitle}
           right={
             <View className="flex-row items-center gap-sp-2">
               <CircleIconButton
@@ -1745,6 +1871,46 @@ export default function ExtensionsScreen() {
         ) : null}
 
         <SectionSwitch section={section} setSection={setSection} />
+
+        {section === "explore" ? (
+          <View className="flex-row gap-sp-2">
+            {(
+              [
+                ["studio", "Themes & terminal"],
+                ["workshop", "Editor & files"],
+                ["all", "All"],
+              ] as const
+            ).map(([value, label]) => {
+              const active = activeScope === value;
+              return (
+                <Pressable
+                  key={value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`${label} plugins`}
+                  className="flex-1 items-center rounded-full py-2"
+                  onPress={() => setScopeOverride(value)}
+                  style={{
+                    backgroundColor: active
+                      ? withAlpha(theme.accent, 0.2)
+                      : theme.backgroundSelected,
+                    borderWidth: active ? 1 : 0,
+                    borderColor: theme.accent,
+                  }}
+                >
+                  <Text
+                    className="font-sans text-sm font-medium"
+                    style={{
+                      color: active ? theme.text : theme.textSecondary,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         <View className="flex-row items-center gap-sp-2">
           <Search color={theme.textSecondary} size={18} strokeWidth={2} />

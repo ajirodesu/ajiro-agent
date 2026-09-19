@@ -1,17 +1,17 @@
 /**
  * Exec tool for the on-device coding harness.
  *
- * CHOSEN APPROACH â€” option (c): a fixed allow-list of in-process JS
+ * CHOSEN APPROACH — option (c): a fixed allow-list of in-process JS
  * implementations of common checks, NOT a real shell.
  *
  * Why:
- * 1. Stock Android (no root, no Termux) exposes no exec() for apps â€”
+ * 1. Stock Android (no root, no Termux) exposes no exec() for apps —
  *    Runtime.getRuntime().exec() can only run the app's own bundled binaries,
  *    so a general shell (option a) would require shipping one or rooting.
  * 2. Termux:API (option b) adds a hard external dependency on another app and
  *    an intent round-trip per command; the app cannot assume it is installed.
- * 3. The checks that matter for a coding verify loop â€” typecheck, lint, text
- *    search, file stats, git status â€” can all be implemented in-process with
+ * 3. The checks that matter for a coding verify loop — typecheck, lint, text
+ *    search, file stats, git status — can all be implemented in-process with
  *    JS libraries (@babel/parser parse of changed files, regex grep, git via
  *    isomorphic-git). That keeps everything sandboxed inside the SAF-granted
  *    project directory, approval-gated, and identical on every device.
@@ -131,11 +131,22 @@ async function runTypecheckJs(
     (entry) => entry.kind === "file" && isCodeFile(entry.path),
   );
   const problems: string[] = [];
+  let parsed = 0;
+  let skipped = 0;
 
   for (const file of files) {
     if (timedOut.value) {
       break;
     }
+
+    // A cache MISS means unreadable (binary/denied) — it must be reported
+    // as skipped, never parsed as "" (which is vacuously valid and would
+    // print a false-clean bill of health).
+    if (!textCache.has(file.path)) {
+      skipped += 1;
+      continue;
+    }
+    parsed += 1;
 
     try {
       const content = textCache.get(file.path) ?? "";
@@ -150,12 +161,14 @@ async function runTypecheckJs(
     }
   }
 
+  const skippedNote =
+    skipped > 0 ? `, ${skipped} skipped (unreadable)` : "";
   if (problems.length === 0) {
-    return `Parsed ${files.length} JS/TS files: no syntax errors.`;
+    return `Parsed ${parsed} JS/TS files: no syntax errors${skippedNote}.`;
   }
 
   return [
-    `${problems.length} file(s) with syntax errors (of ${files.length} scanned):`,
+    `${problems.length} file(s) with syntax errors (of ${parsed} parsed${skippedNote}):`,
     ...problems.slice(0, 40),
   ].join("\n");
 }
@@ -172,11 +185,19 @@ function runLintJs(
     (entry) => entry.kind === "file" && isCodeFile(entry.path),
   );
   const problems: string[] = [];
+  let parsed = 0;
+  let skipped = 0;
 
   for (const file of files) {
     if (timedOut.value) {
       break;
     }
+
+    if (!textCache.has(file.path)) {
+      skipped += 1;
+      continue;
+    }
+    parsed += 1;
 
     const content = textCache.get(file.path) ?? "";
 
@@ -207,12 +228,14 @@ function runLintJs(
     });
   }
 
+  const skippedNote =
+    skipped > 0 ? `, ${skipped} skipped (unreadable)` : "";
   if (problems.length === 0) {
-    return `Linted ${files.length} JS/TS files: no findings.`;
+    return `Linted ${parsed} JS/TS files: no findings${skippedNote}.`;
   }
 
   return [
-    `${problems.length} finding(s) (of ${files.length} files):`,
+    `${problems.length} finding(s) (of ${parsed} parsed${skippedNote}):`,
     ...problems.slice(0, 40),
   ].join("\n");
 }
@@ -229,13 +252,22 @@ function runGrepCount(
     throw new Error("grep-count requires args.pattern (a regex string).");
   }
 
-  const regex = new RegExp(pattern, "gm");
+  let regex: RegExp;
+  try {
+    regex = new RegExp(pattern, "gm");
+  } catch {
+    throw new Error(`grep-count: invalid regex pattern ${JSON.stringify(pattern)}.`);
+  }
   const budget = { files: MAX_FILES_SCANNED };
   const files = collectFiles(session, rootPath, budget).filter(
     (entry) => entry.kind === "file",
   );
   const results: string[] = [];
   let totalMatches = 0;
+  // Bound match materialization: `.match()` on a ~1.5MB file with a
+  // degenerate pattern can allocate millions of entries. Count with a
+  // capped exec loop instead; totals above the cap are reported as-is.
+  const MAX_MATCHES_PER_FILE = 1000;
 
   for (const file of files) {
     if (timedOut.value) {
@@ -248,11 +280,25 @@ function runGrepCount(
       continue;
     }
 
-    const count = (content.match(regex) ?? []).length;
+    regex.lastIndex = 0;
+    let count = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(content)) !== null) {
+      count += 1;
+      if (count >= MAX_MATCHES_PER_FILE) {
+        break;
+      }
+      // Guard zero-length matches against an infinite loop.
+      if (match[0].length === 0) {
+        regex.lastIndex += 1;
+      }
+    }
 
     if (count > 0) {
       totalMatches += count;
-      results.push(`${file.path}: ${count}`);
+      results.push(
+        `${file.path}: ${count}${count >= MAX_MATCHES_PER_FILE ? "+" : ""}`,
+      );
     }
   }
 

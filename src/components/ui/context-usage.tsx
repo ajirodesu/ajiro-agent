@@ -11,15 +11,25 @@
 import { useEffect, useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
+  Easing,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
 import { Circle, Svg } from "react-native-svg";
-import { SquarePen } from "lucide-react-native";
+import { EllipsisVertical, SquarePen } from "lucide-react-native";
 
 import { Button } from "@/components/ui/button";
+import {
+  CAPSULE_HEIGHT,
+  CAPSULE_PADDING,
+  CAPSULE_SLOT_WIDTH,
+  CAPSULE_WIDE_WIDTH,
+  CONTAINER_BORDER,
+  ICON_CONTAINER,
+  ICON_INNER,
+} from "@/components/ui/chrome-spec";
 import {
   Drawer,
   DrawerBody,
@@ -230,22 +240,35 @@ export function ContextRingButton({
 /**
  * Usage capsule: the context ring's container. While no message has been
  * sent it is a single 48px circle holding the ring; once the conversation
- * has messages it smoothly expands to a capsule revealing a new-chat button
- * on the left of the ring. Width + reveal animate together so the
- * transition never snaps.
+ * has messages it smoothly expands to a 3-slot capsule (144x48) revealing a
+ * new-chat button on the left and a chat-options (ellipsis) button on the
+ * right of the ring. Width, slot width, and opacity animate together on one
+ * timing curve so the morph never snaps or shifts the rest of the header.
+ *
+ * Main/Chat after-chat only: pre-chat stays a plain circle, and no other
+ * page reuses this component.
  */
-const CAPSULE_COLLAPSED = 48;
-const CAPSULE_EXPANDED = 96;
-const CAPSULE_ICON = 40;
+const CAPSULE_COLLAPSED = ICON_CONTAINER;
+const CAPSULE_EXPANDED = CAPSULE_WIDE_WIDTH;
+const CAPSULE_ICON = ICON_INNER;
+/**
+ * Side slots own their own 8pt spacing (icon + gap) instead of the container
+ * using `gap`, so a 0-wide slot contributes 0 spacing. That keeps the ring
+ * dead-centre in the pre-chat circle and makes the expanded capsule land on
+ * exactly `CAPSULE_WIDE_WIDTH` (4 + 48 + 40 + 48 + 4).
+ */
+const CAPSULE_ICON_SLOT = CAPSULE_SLOT_WIDTH;
 
 export function UsageCapsule({
   expanded,
   onNewChat,
+  onOpenOptions,
   onPressRing,
   percent,
 }: {
   expanded: boolean;
   onNewChat: () => void;
+  onOpenOptions: () => void;
   onPressRing: () => void;
   percent: number | null;
 }) {
@@ -253,7 +276,10 @@ export function UsageCapsule({
   const progress = useSharedValue(expanded ? 1 : 0);
 
   useEffect(() => {
-    progress.value = withTiming(expanded ? 1 : 0, { duration: 260 });
+    progress.value = withTiming(expanded ? 1 : 0, {
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+    });
   }, [expanded, progress]);
 
   const containerStyle = useAnimatedStyle(() => ({
@@ -263,8 +289,8 @@ export function UsageCapsule({
       [CAPSULE_COLLAPSED, CAPSULE_EXPANDED],
     ),
   }));
-  const newChatStyle = useAnimatedStyle(() => ({
-    width: interpolate(progress.value, [0, 1], [0, CAPSULE_ICON]),
+  const sideButtonStyle = useAnimatedStyle(() => ({
+    width: interpolate(progress.value, [0, 1], [0, CAPSULE_ICON_SLOT]),
     opacity: progress.value,
   }));
 
@@ -274,16 +300,20 @@ export function UsageCapsule({
       style={[
         containerStyle,
         {
-          height: CAPSULE_COLLAPSED,
+          height: CAPSULE_HEIGHT,
           backgroundColor: theme.backgroundElement,
-          borderWidth: 1,
+          borderWidth: CONTAINER_BORDER,
           borderColor: theme.border,
-          paddingHorizontal: 4,
-          gap: 8,
+          paddingHorizontal: CAPSULE_PADDING,
         },
       ]}
     >
-      <Animated.View style={[{ alignItems: "center" }, newChatStyle]}>
+      <Animated.View
+        style={[
+          { flexDirection: "row", justifyContent: "flex-end", overflow: "hidden" },
+          sideButtonStyle,
+        ]}
+      >
         <Pressable
           accessibilityLabel="New chat"
           accessibilityRole="button"
@@ -317,6 +347,31 @@ export function UsageCapsule({
       >
         <ContextRing percent={percent} size={22} />
       </Pressable>
+      <Animated.View
+        style={[
+          {
+            flexDirection: "row",
+            justifyContent: "flex-start",
+            overflow: "hidden",
+          },
+          sideButtonStyle,
+        ]}
+      >
+        <Pressable
+          accessibilityHint="Opens chat options: share, pin, files, find, delete"
+          accessibilityLabel="Chat options"
+          accessibilityRole="button"
+          onPress={onOpenOptions}
+          className="items-center justify-center rounded-full"
+          style={({ pressed }) => ({
+            width: CAPSULE_ICON,
+            height: CAPSULE_ICON,
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <EllipsisVertical color={theme.text} size={20} strokeWidth={2} />
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 }

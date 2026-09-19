@@ -27,7 +27,19 @@ export type PluginBridgeOutbound =
   | { type: "defined"; hasInit: boolean; pluginId: string }
   | { type: "activated"; pluginId: string }
   | { type: "unmounted"; pluginId: string }
-  | { type: "page"; action: "hidden" | "shown"; pluginId: string; title: string }
+  | { type: "page"; action: "hidden" | "shown" | "removed"; pluginId: string; title: string }
+  /** Acode Editor Themes API: the portable `config` color map crosses the
+   * bridge (live CodeMirror extension objects cannot be serialized). */
+  | {
+      type: "editor-theme-register";
+      pluginId: string;
+      id: string;
+      caption: string;
+      dark: boolean;
+      config: Record<string, string>;
+    }
+  | { type: "editor-theme-unregister"; pluginId: string; id: string }
+  | { type: "editor-theme-apply"; pluginId: string; id: string }
   | { type: "command-register"; command: PluginCommandRegistration; pluginId: string }
   | { type: "command-remove"; name: string; pluginId: string }
   | { type: "settings-set"; key: string; pluginId: string; value: unknown }
@@ -139,6 +151,19 @@ export type PluginBridgeInbound =
   | { type: "activate-plugin"; baseUrl: string; firstInit: boolean; pluginId: string }
   | { type: "unmount-plugin"; pluginId: string }
   | { type: "hide-page" }
+  /** Show a plugin's last custom page (tab switch); no-op when it has none. */
+  | { type: "show-page"; pluginId: string }
+  /** Host → document mirror of the editor-theme registry (sync API). */
+  | {
+      type: "editor-themes-sync";
+      themes: {
+        id: string;
+        caption: string;
+        dark: boolean;
+        pluginId: string;
+        config: Record<string, string>;
+      }[];
+    }
   | { type: "response"; ok: boolean; requestId: number; result?: unknown; error?: string }
   | { type: "exec-command"; name: string; value?: unknown }
   | { type: "host-notice"; level: "error" | "info" | "success" | "warning"; text: string };

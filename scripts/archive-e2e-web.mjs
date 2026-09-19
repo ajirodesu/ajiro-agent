@@ -11,7 +11,7 @@
  * behavior of native fallbacks is covered by unit tests + contracts:check.
  */
 import { execSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -24,6 +24,11 @@ function gate(name, present, detail = "") {
     failures.push(name);
   }
 }
+
+const dist = join(root, "dist");
+// Clean first: without this, stale bundles/wasm from a previous run
+// would pass the gates even if the current export emitted nothing.
+rmSync(dist, { recursive: true, force: true });
 
 console.log("Running: npx expo export --platform web");
 try {
@@ -38,7 +43,6 @@ try {
   process.exit(1);
 }
 
-const dist = join(root, "dist");
 gate("dist/index.html", existsSync(join(dist, "index.html")));
 
 const jsDir = join(dist, "_expo", "static", "js", "web");
@@ -48,11 +52,28 @@ if (existsSync(jsDir)) {
 }
 gate("web js bundles", bundles.length > 0, `${bundles.length} file(s)`);
 
-function hasWasm(dir) {
+// index.html must actually reference an emitted bundle: existence alone
+// could still pass with a stale or truncated export.
+let htmlReferencesBundle = false;
+try {
+  const html = readFileSync(join(dist, "index.html"), "utf8");
+  htmlReferencesBundle = bundles.some((name) => {
+    const base = name.replace(/\.js$/, "");
+    return base.length > 0 && html.includes(base);
+  });
+} catch {
+  htmlReferencesBundle = false;
+}
+gate("index.html references emitted bundle", htmlReferencesBundle);
+
+function hasWasm(dir, depth = 0) {
+  if (depth > 12) {
+    return false;
+  }
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
-      if (hasWasm(full)) {
+      if (hasWasm(full, depth + 1)) {
         return true;
       }
     } else if (entry.endsWith(".wasm")) {

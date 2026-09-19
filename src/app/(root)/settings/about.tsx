@@ -37,6 +37,7 @@ import {
   HeaderShadow,
 } from "@/components/ui/chrome";
 import { useTheme } from "@/hooks/use-theme";
+import { useThemedIconSource } from "@/theme/themed-assets";
 import {
   GITHUB_LICENSE_URL,
   GITHUB_REPO_URL,
@@ -184,6 +185,7 @@ function readSystemInfo(): string {
 export default function AboutScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const logoSource = useThemedIconSource("icon");
   const [scrolled, setScrolled] = useState(false);
   const [version, setVersion] = useState(readAppVersion());
   const [system, setSystem] = useState(readSystemInfo());
@@ -242,7 +244,7 @@ export default function AboutScreen() {
               }}
             >
               <Image
-                source={require("../../../../assets/images/new-icon.png")}
+                source={logoSource}
                 style={{ width: 96, height: 96 }}
                 contentFit="contain"
               />

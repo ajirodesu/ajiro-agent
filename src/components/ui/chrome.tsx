@@ -6,8 +6,11 @@
  * `HeaderShadow` (the settings scroll-fade, theme-aware) instead of
  * hand-rolled Pressables and hardcoded hex.
  *
- * Icon containers come in two sizes only: `CircleIconButton` (48pt) and
+ * Icon containers come in two static sizes: `CircleIconButton` (48pt) and
  * `CapsuleContainer` (96x48, exactly double width for two merged icons).
+ * The Main/Chat after-chat header additionally morphs a circle into a
+ * three-slot capsule (144x48, `CAPSULE_WIDE_WIDTH`) — see `UsageCapsule` in
+ * `context-usage.tsx`, which follows the same width formula.
  * All containers share one fill, one border color, and one border width;
  * all glyphs are icon-only (20pt, stroke 2). Footer icon buttons use
  * `FOOTER_ICON_SIZE`, matching the main page composer controls.
@@ -16,7 +19,10 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View, ScrollView } from "react-native";
 
 import {
+  CAPSULE_GAP,
   CAPSULE_HEIGHT,
+  CAPSULE_PADDING,
+  CAPSULE_TITLE_PADDING,
   CAPSULE_WIDTH,
   CONTAINER_BORDER,
   HEADER_HEIGHT,
@@ -26,8 +32,14 @@ import {
 import { useTheme } from "@/hooks/use-theme";
 
 export {
+  CAPSULE_GAP,
   CAPSULE_HEIGHT,
+  CAPSULE_PADDING,
+  CAPSULE_SLOT_WIDTH,
+  CAPSULE_TITLE_PADDING,
   CAPSULE_WIDTH,
+  CAPSULE_WIDE_WIDTH,
+  capsuleWidth,
   CONTAINER_BORDER,
   FOOTER_ICON_SIZE,
   HEADER_HEIGHT,
@@ -115,11 +127,42 @@ export function CapsuleContainer({
         backgroundColor: theme.backgroundElement,
         borderWidth: CONTAINER_BORDER,
         borderColor: theme.border,
-        paddingHorizontal: 4,
-        gap: 8,
+        paddingHorizontal: CAPSULE_PADDING,
+        gap: CAPSULE_GAP,
       }}
     >
       {children}
+    </View>
+  );
+}
+
+/**
+ * Centered page-header title capsule: pill container around the title,
+ * sized by the text, centered on the full header width. Fill, border
+ * color/width, and height match the circular icon containers exactly
+ * (same tokens); only the width is dynamic. Pure layout — no measuring,
+ * no state, no re-render cost.
+ */
+export function HeaderTitleCapsule({ title }: { title: string }) {
+  const theme = useTheme();
+  return (
+    <View
+      className="items-center justify-center self-center rounded-full"
+      style={{
+        height: CAPSULE_HEIGHT,
+        maxWidth: "100%",
+        backgroundColor: theme.backgroundElement,
+        borderWidth: CONTAINER_BORDER,
+        borderColor: theme.border,
+        paddingHorizontal: CAPSULE_TITLE_PADDING,
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        className="font-sans text-lg font-semibold text-foreground dark:text-foreground-dark"
+      >
+        {title}
+      </Text>
     </View>
   );
 }
@@ -129,9 +172,21 @@ export type AppHeaderProps = {
   title?: string;
   subtitle?: string;
   right?: ReactNode;
+  /**
+   * Title treatment: `capsule` (default) wraps the title in
+   * HeaderTitleCapsule; `plain` keeps the bare centered text. The
+   * Sidebar wordmark and the Main/Chat header stay `plain`.
+   */
+  titleVariant?: "capsule" | "plain";
 };
 
-export function AppHeader({ left, title, subtitle, right }: AppHeaderProps) {
+export function AppHeader({
+  left,
+  title,
+  subtitle,
+  right,
+  titleVariant = "capsule",
+}: AppHeaderProps) {
   return (
     <View
       className="relative flex-row items-center px-sp-4"
@@ -142,11 +197,19 @@ export function AppHeader({ left, title, subtitle, right }: AppHeaderProps) {
         <View
           pointerEvents="box-none"
           className="absolute inset-x-0 items-center justify-center"
-          style={{ height: HEADER_HEIGHT }}
+          // Keep the centered title clear of the left/right controls.
+          style={{ height: HEADER_HEIGHT, paddingHorizontal: 72 }}
         >
-          <Text className="font-sans text-lg font-semibold text-foreground dark:text-foreground-dark">
-            {title}
-          </Text>
+          {titleVariant === "capsule" ? (
+            <HeaderTitleCapsule title={title} />
+          ) : (
+            <Text
+              numberOfLines={1}
+              className="font-sans text-lg font-semibold text-foreground dark:text-foreground-dark"
+            >
+              {title}
+            </Text>
+          )}
           {subtitle ? (
             <Text
               numberOfLines={1}

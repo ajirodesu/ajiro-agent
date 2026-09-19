@@ -45,12 +45,26 @@ import {
   type InstallDeps,
 } from "./installer";
 import { pluginDataDir, pluginDir } from "./storage";
+import {
+  parseAceSnippets,
+  snippetLanguagesForFile,
+} from "@/modules/intel/ace-snippets";
+import { isSafePluginPath } from "./dom/bridge-protocol";
+import {
+  clearPluginSnippets,
+  setPluginSnippets,
+  type PluginSnippetContribution,
+} from "./plugin-snippets";
 import type {
   ExtensionDiagnostic,
   ExtensionPermissionKey,
   InstalledExtensionRecord,
   PluginRuntimeState,
 } from "./models";
+
+/** Bounds so a hostile package cannot flood completions. */
+const MAX_SNIPPET_FILES_PER_PLUGIN = 64;
+const MAX_SNIPPETS_PER_PLUGIN = 2000;
 
 /**
  * Core module names plugins may require but never overwrite (§40). Ajiro
@@ -285,6 +299,48 @@ export class ExtensionRuntime {
     return this.deps.platform.readText(`${base}/${main}`);
   }
 
+  /**
+   * Snippet sync: parse the package's `.snippets` data files into the
+   * plugin snippet store so completions offer them with zero setup.
+   * Best-effort and bounded — a corrupt file is skipped, never fatal.
+   */
+  private async syncPluginSnippets(
+    record: InstalledExtensionRecord,
+  ): Promise<void> {
+    if (!this.deps) return;
+    const files = record.manifest.files;
+    if (!Array.isArray(files)) return;
+    const base = pluginDir(this.deps.paths, record.id);
+    const contributions: PluginSnippetContribution[] = [];
+    let filesRead = 0;
+    for (const file of files) {
+      if (typeof file !== "string") continue;
+      if (!file.toLowerCase().endsWith(".snippets")) continue;
+      if (!isSafePluginPath(file)) continue;
+      if (filesRead >= MAX_SNIPPET_FILES_PER_PLUGIN) break;
+      filesRead += 1;
+      let text: string | null;
+      try {
+        text = await this.deps.platform.readText(`${base}/${file}`);
+      } catch {
+        continue;
+      }
+      if (text === null) continue;
+      const languageIds = snippetLanguagesForFile(file);
+      for (const snippet of parseAceSnippets(text)) {
+        if (contributions.length >= MAX_SNIPPETS_PER_PLUGIN) break;
+        contributions.push({
+          body: snippet.body,
+          description: snippet.description,
+          id: `${record.id}:${snippet.trigger}`,
+          languageIds,
+          prefix: snippet.trigger,
+        });
+      }
+    }
+    setPluginSnippets(record.id, contributions);
+  }
+
   private pluginEntry(pluginId: string): PluginRuntimeEntry {
     let found = this.plugins.get(pluginId);
     if (!found) {
@@ -386,6 +442,15 @@ export class ExtensionRuntime {
           );
         }
       }
+      try {
+        await this.syncPluginSnippets(record);
+      } catch (error) {
+        this.log(
+          pluginId,
+          "warning",
+          `Snippet sync skipped: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       pluginEntry.state = "loaded";
       this.resolveWaiters(pluginId, null);
       await this.persistRuntimeState(pluginId, "loaded", null, { enabled: true });
@@ -481,6 +546,9 @@ export class ExtensionRuntime {
   /** Deactivate (disable/update/uninstall): unmount + cleanup (§38/§73). */
   async deactivate(pluginId: string): Promise<void> {
     const pluginEntry = this.pluginEntry(pluginId);
+    // Snippets leave with the plugin: disable/update/uninstall all funnel
+    // through here, so completions can never offer stale snippets.
+    clearPluginSnippets(pluginId);
     // Unload the entry script from the DOM document first: it owns the
     // webview-side timers, listeners, pages, and commands of this plugin.
     if (this.executionHost) {

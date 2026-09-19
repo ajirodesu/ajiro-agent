@@ -3,7 +3,7 @@
  * answer "where is X defined" without rescanning the tree every turn.
  *
  * Uses @babel/parser (already a dependency) instead of ts-morph to keep the
- * bundle small â€” the walk records file, exported symbol names, function/class
+ * bundle small — the walk records file, exported symbol names, function/class
  * declarations and top-level const bindings for JS/TS/JSX/TSX files.
  *
  * Author: AjiroDesu
@@ -153,7 +153,7 @@ export async function buildRepoMap(
         symbols.push(symbol);
       }
     } catch {
-      // unreadable/binary â€” skip
+      // unreadable/binary — skip
     }
   }
 
@@ -183,7 +183,7 @@ export function formatRepoMap(map: RepoMap) {
 
   for (const [file, fileSymbols] of [...grouped.entries()].sort()) {
     if (lines.length >= MAX_MAP_LINES) {
-      lines.push("â€¦[map truncated]");
+      lines.push("…[map truncated]");
       break;
     }
 

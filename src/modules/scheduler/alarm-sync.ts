@@ -22,16 +22,20 @@ export async function syncScheduleAlarms(
   );
 
   try {
-    await cancelAllScheduleAlarms();
-
+    // Read the desired state BEFORE touching alarms: the cancel-then-set
+    // window is the only moment zero alarms exist, so keep DB I/O out of
+    // it to shrink the kill-between-calls hole.
     const settings = await repositories.configRepository.getSettings();
 
     if (!settings.schedulingEnabled) {
+      await cancelAllScheduleAlarms();
       return;
     }
 
     const schedules = await repositories.scheduleRepository.listEnabled();
     const now = Date.now();
+
+    await cancelAllScheduleAlarms();
 
     for (const schedule of schedules) {
       if (!schedule.nextRunAt) {
@@ -40,9 +44,15 @@ export async function syncScheduleAlarms(
 
       const triggerAtMs = new Date(schedule.nextRunAt).getTime();
 
-      if (triggerAtMs > now) {
-        await setScheduleAlarm(triggerAtMs, schedule.id);
+      if (!Number.isFinite(triggerAtMs)) {
+        continue;
       }
+
+      // Past-due alarms are set, not dropped: a past trigger fires
+      // immediately and the engine tick then applies the grace/skip
+      // policy with proper accounting. Dropping would strand the
+      // schedule until the next foreground sync.
+      await setScheduleAlarm(Math.max(triggerAtMs, now), schedule.id);
     }
   } catch (error) {
     console.error("[scheduler] Failed to sync alarms:", error);

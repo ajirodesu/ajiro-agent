@@ -19,7 +19,8 @@ import {
   CodeMirrorWebView,
   type CodeMirrorWebViewRef,
 } from "@/editor/CodeMirrorWebView";
-import { adaptAppThemeToEditorTheme } from "@/editor/editorThemeAdapter";
+import { resolveEditorTheme } from "@/editor/editorThemeAdapter";
+import { usePluginEditorTheme } from "@/editor/use-plugin-editor-theme";
 import {
   countBySeverity,
   formatBuffer,
@@ -115,9 +116,15 @@ export function CodeMirrorEditor({
   const { theme: appTheme } = useAppTheme();
   const { accentColor } = useConfig();
   const theme = useTheme();
+  const pluginEditorTheme = usePluginEditorTheme();
   const editorTheme = useMemo(
-    () => adaptAppThemeToEditorTheme(appTheme, accentColor),
-    [appTheme, accentColor],
+    () =>
+      resolveEditorTheme({
+        appTheme,
+        userAccent: accentColor,
+        pluginTheme: pluginEditorTheme,
+      }),
+    [appTheme, accentColor, pluginEditorTheme],
   );
   const grammarKey = useMemo(() => grammarKeyForPath(path), [path]);
 

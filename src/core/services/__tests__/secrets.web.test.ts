@@ -29,6 +29,33 @@ describe("secrets.web SecretStore", () => {
     ).toBe(false);
   });
 
+  it("treats empty keys as absent and requires baseUrl for openai-compatible", async () => {
+    await secureSecretStore.setProviderApiKey("web-empty", "");
+    expect(
+      await secureSecretStore.hasProviderCredential(
+        provider({ id: "web-empty" }),
+      ),
+    ).toBe(false);
+
+    await secureSecretStore.setProviderApiKey("web-compat", "sk-x");
+    expect(
+      await secureSecretStore.hasProviderCredential(
+        provider({ id: "web-compat", family: "openai-compatible" }),
+      ),
+    ).toBe(false);
+    expect(
+      await secureSecretStore.hasProviderCredential(
+        provider({
+          id: "web-compat",
+          family: "openai-compatible",
+          baseUrl: "https://example.com/v1",
+        }),
+      ),
+    ).toBe(true);
+    await secureSecretStore.deleteProviderApiKey("web-empty");
+    await secureSecretStore.deleteProviderApiKey("web-compat");
+  });
+
   it("reports oauth providers as unconfigured without native plumbing", async () => {
     expect(
       await secureSecretStore.hasProviderCredential(

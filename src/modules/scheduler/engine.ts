@@ -40,6 +40,24 @@ export async function advanceSchedule(
 
   const scheduledTime = new Date(schedule.nextRunAt).getTime();
 
+  if (!Number.isFinite(scheduledTime)) {
+    // A corrupt stored date would otherwise stall the schedule forever
+    // (NaN poisons every comparison and the next-run computation below).
+    await repositories.scheduleRunRepository.create({
+      scheduleId: schedule.id,
+      status: "failed",
+      error: `Stored next run time is not a valid date: ${schedule.nextRunAt}.`,
+      startedAt: new Date(now).toISOString(),
+    });
+    await repositories.scheduleRepository.update(schedule.id, {
+      nextRunAt: null,
+    });
+    onError?.(
+      new Error(`Schedule ${schedule.id} has an invalid nextRunAt; parked.`),
+    );
+    return true;
+  }
+
   if (scheduledTime > now) {
     return false;
   }
@@ -76,7 +94,9 @@ export async function advanceSchedule(
   );
 
   await repositories.scheduleRepository.update(schedule.id, {
-    lastRunAt: fired ? nowIso() : schedule.nextRunAt,
+    // A skipped (never-fired) time is not a run: leave the previous
+    // lastRunAt alone so "last run" stays truthful.
+    ...(fired ? { lastRunAt: nowIso() } : {}),
     nextRunAt: next?.toISOString() ?? null,
   });
 

@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CAPSULE_GAP,
   CAPSULE_HEIGHT,
+  CAPSULE_PADDING,
+  CAPSULE_SLOT_WIDTH,
+  CAPSULE_TITLE_PADDING,
   CAPSULE_WIDTH,
+  CAPSULE_WIDE_WIDTH,
+  capsuleWidth,
   CONTAINER_BORDER,
   FOOTER_ICON_SIZE,
   HEADER_HEIGHT,
@@ -24,6 +30,30 @@ describe("shared chrome spec", () => {
     expect(CAPSULE_WIDTH).toBe(ICON_CONTAINER * 2);
     expect(CAPSULE_HEIGHT).toBe(ICON_CONTAINER);
     expect(FOOTER_ICON_SIZE).toBe(35);
+  });
+
+  it("keeps the title capsule on the same tokens as the icon containers", () => {
+    // The header title capsule must match the circular icon container
+    // exactly (height + border); the test pins the relationship rather
+    // than literal values so the design can evolve in one place.
+    expect(CAPSULE_HEIGHT).toBe(ICON_CONTAINER);
+    expect(typeof CAPSULE_TITLE_PADDING).toBe("number");
+    expect(CAPSULE_TITLE_PADDING).toBeGreaterThan(0);
+  });
+
+  it("sizes merged capsules from one slot formula", () => {
+    // Two slots (static header capsules) → 96; three slots (the Main/Chat
+    // after-chat capsule) → 144, i.e. one circle width per icon.
+    expect(capsuleWidth(2)).toBe(CAPSULE_WIDTH);
+    expect(capsuleWidth(3)).toBe(CAPSULE_WIDE_WIDTH);
+    expect(CAPSULE_WIDE_WIDTH).toBe(ICON_CONTAINER * 3);
+    expect(CAPSULE_SLOT_WIDTH).toBe(ICON_INNER + CAPSULE_GAP);
+    // Collapsed circle = one slot's icon plus the capsule padding either
+    // side, which is what lets a 3-slot capsule animate back to a circle.
+    expect(CAPSULE_WIDTH - CAPSULE_PADDING * 2).toBe(
+      ICON_INNER * 2 + CAPSULE_GAP,
+    );
+    expect(ICON_INNER + CAPSULE_PADDING * 2).toBe(ICON_CONTAINER);
   });
 
   it("derives shadow stops from the theme background", () => {

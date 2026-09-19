@@ -137,7 +137,9 @@ describe("dependency-aware installation", () => {
       "com.b",
       "com.c",
     ]);
-    // Installing is not activating: nothing is enabled without consent.
+    // No execution host is mounted in this rig, so zero-setup
+    // auto-enable fails back to disabled here; on device the same
+    // installs would activate immediately.
     expect(records.every((record) => record.enabled === false)).toBe(true);
   });
 
@@ -186,7 +188,7 @@ describe("dependency-aware installation", () => {
     expect(await loadInstalledRecords(rig.deps)).toEqual([]);
   });
 
-  it("reports the requirement when a dependency needs its own consent", async () => {
+  it("auto-installs the dependency closure on a single tap", async () => {
     const rig = makeRig({
       catalog: [
         metadata("com.a", [{ id: "com.b", version: null }]),
@@ -198,14 +200,14 @@ describe("dependency-aware installation", () => {
       },
     });
 
-    // No accepted permissions: the dependency asks for consent and the run
-    // stops there rather than installing anything silently.
+    // Zero-setup: tapping the root grants the whole closure — no per
+    // dependency consent round-trip, no manual steps.
     const result = await rig.manager.installWithDependencies("com.a");
-    expect(result.installed).toEqual([]);
-    expect(result.issues[0]).toMatchObject({ id: "com.b", kind: "failed" });
-    if (result.issues[0].kind === "failed") {
-      expect(result.issues[0].message).toContain("permissions");
-    }
+    expect(result.issues).toEqual([]);
+    expect(result.installed.map((record) => record.id)).toEqual([
+      "com.b",
+      "com.a",
+    ]);
   });
 });
 
@@ -445,5 +447,35 @@ describe("dynamic-update gates (revocation, native capabilities, health)", () =>
         { ...metadata("com.example.plugin"), revoked: true },
       ]),
     ).toEqual([]);
+  });
+
+  it("reconcileRevoked disables every revoked install, not just the last", async () => {
+    const rig = makeRig({
+      catalog: [metadata("com.example.one"), metadata("com.example.two")],
+      packages: {
+        "com.example.one": packageBytes("com.example.one"),
+        "com.example.two": packageBytes("com.example.two"),
+      },
+    });
+    rig.runtime.setExecutionHost(createFakeExecutionHost());
+    for (const id of ["com.example.one", "com.example.two"]) {
+      const installed = await rig.manager.install(
+        { kind: "registry", pluginId: id },
+        { acceptedPermissions: ALL_PERMISSIONS },
+      );
+      expect(installed.status).toBe("installed");
+      await rig.manager.enable(id);
+    }
+
+    const disabled = await rig.manager.reconcileRevoked([
+      { ...metadata("com.example.one"), revoked: true },
+      { ...metadata("com.example.two"), revoked: true },
+    ]);
+
+    // Regression: patching the stale pre-loop snapshot per iteration made
+    // each save overwrite the previous disable.
+    expect(disabled.sort()).toEqual(["com.example.one", "com.example.two"]);
+    const records = await rig.manager.listInstalled();
+    expect(records.every((record) => record.enabled === false)).toBe(true);
   });
 });

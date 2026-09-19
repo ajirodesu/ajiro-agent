@@ -28,6 +28,8 @@ import { countIntelDiagnostics, mergeDiagnostics, toEditorDiagnostics } from "@/
 import { createIntelEngine, type IntelEngine } from "@/modules/intel/index";
 import { applyTextEdits } from "@/modules/intel/workspace-edit";
 import { createSnippetRegistry } from "@/modules/intel/snippets";
+import { subscribeExtensionEvents } from "@/modules/extensions/events";
+import { listPluginSnippets } from "@/modules/extensions/plugin-snippets";
 import { createSyntaxFallbackService } from "@/modules/intel/syntax-service";
 import {
   createMemoryIntelSettingsStore,
@@ -177,6 +179,39 @@ export function useIntelBridge(options: IntelBridgeOptions): IntelBridge {
   } = options;
 
   const languageId = useMemo(() => intelLanguageIdForGrammar(grammarKey), [grammarKey]);
+  // Plugin snippet revision: install/enable/disable/uninstall/update
+  // re-post aux data so completions pick up plugin snippets without
+  // reopening the file.
+  const [pluginSnippetRevision, setPluginSnippetRevision] = useState(0);
+  useEffect(
+    () =>
+      subscribeExtensionEvents((event) => {
+        if (
+          event.type === "installed" ||
+          event.type === "uninstalled" ||
+          event.type === "enabled" ||
+          event.type === "disabled" ||
+          event.type === "updated" ||
+          event.type === "rolled-back"
+        ) {
+          setPluginSnippetRevision((current) => current + 1);
+        }
+      }),
+    [],
+  );
+  const pluginSnippets = useMemo(
+    () =>
+      listPluginSnippets().map((snippet) => ({
+        body: snippet.body,
+        description: snippet.description,
+        id: snippet.id,
+        languageIds: snippet.languageIds,
+        origin: "plugin" as const,
+        prefix: snippet.prefix,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pluginSnippetRevision],
+  );
   const valueRef = useRef(value);
   valueRef.current = value;
   const caretRef = useRef(caret);
@@ -365,7 +400,7 @@ export function useIntelBridge(options: IntelBridgeOptions): IntelBridge {
         inlineGhost: settings.inlineCompletionEnabled,
       },
     });
-    const registry = createSnippetRegistry();
+    const registry = createSnippetRegistry(pluginSnippets);
     postInbound({
       type: "intel:aux-data",
       symbols: auxSymbols ?? [],
@@ -380,7 +415,7 @@ export function useIntelBridge(options: IntelBridgeOptions): IntelBridge {
       aiEnabled: aiManager.isEnabled(),
       snippetsEnabled: settings.snippetCompletionEnabled,
     });
-  }, [webViewReady, intelEnabled, settings, languageId, auxPaths, auxSymbols, aiManager, postInbound]);
+  }, [webViewReady, intelEnabled, settings, languageId, auxPaths, auxSymbols, aiManager, postInbound, pluginSnippets]);
 
   // Local diagnostics through the RN-side engine (syntax fallback +
   // plugins), debounced. For TS/JS with the semantic engine active, local

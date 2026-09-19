@@ -376,6 +376,7 @@ export function AppSidebar({ persistent = false }: { persistent?: boolean }) {
               /* Fixed header — shared chrome: centered wordmark + search circle. */
               <AppHeader
                 title="Ajiro Agent"
+                titleVariant="plain"
                 right={
                   <CircleIconButton
                     accessibilityLabel="Search chats"

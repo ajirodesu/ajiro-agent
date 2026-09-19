@@ -70,6 +70,9 @@ const RUNTIME_JS = String.raw`(function () {
   var requestSeq = 0;
   var definitions = Object.create(null);
   var modules = Object.create(null);
+  /* Mirror of the host's editor-theme registry, refreshed by
+   * editor-themes-sync posts; list()/get() read this (sync API). */
+  var knownEditorThemes = [];
   var resources = Object.create(null);
   var pages = Object.create(null);
   var commands = Object.create(null);
@@ -97,7 +100,7 @@ const RUNTIME_JS = String.raw`(function () {
 
   function resource(pluginId) {
     if (!resources[pluginId]) {
-      resources[pluginId] = { listeners: [], pageIds: [], timers: [], visiblePage: null };
+      resources[pluginId] = { listeners: [], pageIds: [], timers: [], visiblePage: null, lastPage: null };
     }
     return resources[pluginId];
   }
@@ -295,6 +298,203 @@ const RUNTIME_JS = String.raw`(function () {
     return pending;
   }
 
+  /* ------------------------------------------------------------ url module */
+  /* Acode's Url utility module (docs/utilities/url): pure URL helpers with
+   * no permissions, no host calls, and no DOM access, so the implementation
+   * lives entirely document-side. Semantics follow the documented examples
+   * exactly; invalid inputs yield null (or the input for hidePassword). */
+  function parseUrlStrict(value) {
+    try {
+      return new URL(String(value));
+    } catch (e) {
+      return null;
+    }
+  }
+  function urlDirname(pathname) {
+    var cut = pathname.lastIndexOf("/");
+    if (cut <= 0) return "/";
+    return pathname.slice(0, cut);
+  }
+  var UrlModule = {
+    basename: function (url) {
+      var parsed = parseUrlStrict(url);
+      if (!parsed) return null;
+      var segments = parsed.pathname.split("/").filter(function (part) {
+        return part !== "";
+      });
+      return segments.length > 0 ? segments[segments.length - 1] : null;
+    },
+    areSame: function () {
+      var urls = Array.prototype.slice.call(arguments);
+      if (urls.length === 0) return false;
+      var first = String(urls[0]);
+      return urls.every(function (value) { return String(value) === first; });
+    },
+    extname: function (url) {
+      var base = UrlModule.basename(url);
+      if (!base) return null;
+      var dot = base.lastIndexOf(".");
+      if (dot <= 0) return null;
+      return base.slice(dot);
+    },
+    join: function () {
+      var parts = Array.prototype.slice.call(arguments).map(function (part) {
+        return String(part);
+      });
+      if (parts.length === 0) return "";
+      var out = parts[0].replace(/\/+$/, "");
+      for (var i = 1; i < parts.length; i += 1) {
+        out += "/" + parts[i].replace(/^\/+|\/+$/g, "");
+      }
+      return out;
+    },
+    safe: function (url) {
+      return String(url)
+        .split("")
+        .map(function (ch) {
+          return /[A-Za-z0-9\-_.!~*'():/]/.test(ch) ? ch : encodeURIComponent(ch);
+        })
+        .join("");
+    },
+    pathname: function (url) {
+      var parsed = parseUrlStrict(url);
+      if (!parsed) return null;
+      return urlDirname(parsed.pathname);
+    },
+    dirname: function (url) {
+      var parsed = parseUrlStrict(url);
+      if (!parsed) return null;
+      return parsed.origin + urlDirname(parsed.pathname) + "/";
+    },
+    parse: function (url) {
+      var parsed = parseUrlStrict(url);
+      if (!parsed) return null;
+      return { url: parsed.origin + parsed.pathname, query: parsed.search };
+    },
+    formate: function (urlObj) {
+      if (!urlObj || typeof urlObj !== "object") return "";
+      var protocol = String(urlObj.protocol || "");
+      var hostname = String(urlObj.hostname || "");
+      var path = String(urlObj.path || urlObj.pathname || "").replace(/^\//, "");
+      var out = protocol + "//" + hostname + "/" + path;
+      var query = urlObj.query;
+      if (query && typeof query === "object") {
+        var pairs = Object.keys(query).map(function (key) {
+          return encodeURIComponent(key) + "=" + encodeURIComponent(String(query[key]));
+        });
+        if (pairs.length > 0) out += "?" + pairs.join("&");
+      } else if (typeof query === "string" && query !== "") {
+        out += query.charAt(0) === "?" ? query : "?" + query;
+      }
+      return out;
+    },
+    getProtocol: function (url) {
+      var parsed = parseUrlStrict(url);
+      return parsed ? parsed.protocol : null;
+    },
+    hidePassword: function (url) {
+      var text = String(url);
+      return text.replace(/(\/\/[^/:@]+):[^@]*@/, "$1@");
+    },
+    decodeUrl: function (url) {
+      var parsed = parseUrlStrict(url);
+      if (!parsed) return null;
+      var query = {};
+      parsed.searchParams.forEach(function (value, key) {
+        query[key] = value;
+      });
+      return {
+        username: parsed.username,
+        password: parsed.password,
+        hostname: parsed.hostname,
+        pathname: parsed.pathname,
+        port: parsed.port === "" ? null : Number(parsed.port),
+        query: query,
+      };
+    },
+    trimSlash: function (url) {
+      return String(url).replace(/\/+$/, "");
+    },
+  };
+  modules["global::url"] = UrlModule;
+
+  /* ------------------------------------------------------- editor themes */
+  /* Acode's Editor Themes API (acode.require("editorThemes")): plugins
+   * register CodeMirror editor themes; the app lists them under Settings
+   * -> Editor Theme and applies the selected one to the code editor.
+   * getExtension content cannot cross the bridge (live CodeMirror
+   * extensions are not serializable), so the portable config color map
+   * is what the app theme is built from; builders below exist so plugin
+   * code constructing extensions does not throw. */
+  function sanitizeThemeConfig(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    var config = {};
+    Object.keys(value).forEach(function (key) {
+      if (typeof value[key] === "string") config[key] = value[key];
+    });
+    return config;
+  }
+
+  var editorThemesModule = {
+    cm: { tags: {} },
+    createTheme: function (spec) {
+      return { __editorTheme: true, spec: spec || null };
+    },
+    createHighlightStyle: function (rules) {
+      return { __highlightStyle: true, rules: rules || [] };
+    },
+    register: function (spec) {
+      if (!spec || typeof spec !== "object") {
+        throw new Error("editorThemes.register requires a spec object.");
+      }
+      var id = String(spec.id == null ? (spec.name == null ? "" : spec.name) : spec.id).trim();
+      if (!id) throw new Error("editorThemes.register requires an id.");
+      var caption = String(spec.caption == null ? (spec.label == null ? id : spec.label) : spec.caption);
+      var dark = spec.dark === true || spec.isDark === true;
+      var config = sanitizeThemeConfig(spec.config);
+      post({
+        type: "editor-theme-register",
+        pluginId: executingPluginId(),
+        id: id,
+        caption: caption,
+        dark: dark,
+        config: config,
+      });
+      return id;
+    },
+    unregister: function (id) {
+      var themeId = String(id == null ? "" : id).trim();
+      post({ type: "editor-theme-unregister", pluginId: executingPluginId(), id: themeId });
+    },
+    list: function () {
+      return knownEditorThemes.map(function (entry) {
+        return { id: entry.id, caption: entry.caption, dark: entry.dark };
+      });
+    },
+    get: function (id) {
+      var themeId = String(id == null ? "" : id).trim();
+      var found = null;
+      knownEditorThemes.forEach(function (entry) {
+        if (entry.id === themeId) found = entry;
+      });
+      return found ? { id: found.id, caption: found.caption, dark: found.dark } : null;
+    },
+    getConfig: function (id) {
+      var themeId = String(id == null ? "" : id).trim();
+      var found = null;
+      knownEditorThemes.forEach(function (entry) {
+        if (entry.id === themeId) found = entry;
+      });
+      return found ? sanitizeThemeConfig(found.config) : null;
+    },
+    apply: function (id) {
+      var themeId = String(id == null ? "" : id).trim();
+      post({ type: "editor-theme-apply", pluginId: executingPluginId(), id: themeId });
+      return themeId;
+    },
+  };
+  modules["global::editorthemes"] = editorThemesModule;
+
   /* ---------------------------------------------------------------- pages */
 
   function pageContainer() {
@@ -370,6 +570,7 @@ const RUNTIME_JS = String.raw`(function () {
       show() {
         element.style.display = "block";
         resource(pluginId).visiblePage = id;
+        resource(pluginId).lastPage = id;
         if (typeof page.onshow === "function") {
           try {
             page.onshow();
@@ -406,6 +607,11 @@ const RUNTIME_JS = String.raw`(function () {
       remove() {
         if (element.parentNode) element.parentNode.removeChild(element);
         delete pages[pluginId + "::" + id];
+        if (resource(pluginId).lastPage === id) {
+          resource(pluginId).lastPage = null;
+        }
+        // Keep the host's tab registry honest: a removed page is gone.
+        post({ type: "page", action: "removed", pluginId: pluginId, title: page.title });
       },
     };
     pages[pluginId + "::" + id] = page;
@@ -1099,6 +1305,18 @@ const RUNTIME_JS = String.raw`(function () {
     });
   }
 
+  /* Tab switch: hide everything, then re-show the plugin's last page.
+   * DOM state (form input, scroll) survives because elements are only
+   * hidden, never rebuilt — tabs persist for the session. Unknown or
+   * page-less plugins are a silent no-op. */
+  function showPluginPage(pluginId) {
+    var lastId = resource(pluginId).lastPage;
+    var page = lastId == null ? null : pages[pluginId + "::" + lastId];
+    if (!page) return;
+    hideAllPages();
+    page.show();
+  }
+
   function runCommand(name, value) {
     var found = null;
     Object.keys(commands).forEach(function (key) {
@@ -1126,6 +1344,10 @@ const RUNTIME_JS = String.raw`(function () {
       else if (message.type === "unmount-plugin") handleUnmount(message);
       else if (message.type === "response") handleResponse(message);
       else if (message.type === "hide-page") hideAllPages();
+      else if (message.type === "show-page") showPluginPage(message.pluginId);
+      else if (message.type === "editor-themes-sync") {
+        knownEditorThemes = Array.isArray(message.themes) ? message.themes : [];
+      }
       else if (message.type === "exec-command") runCommand(message.name, message.value);
     } catch (error) {
       /* runPlugin already reported load failures; everything else is here. */

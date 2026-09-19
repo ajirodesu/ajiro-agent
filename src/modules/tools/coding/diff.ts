@@ -38,6 +38,11 @@ function lcsMatrix(
  * Line-level diff with bounded context. Not a full unified diff — intentionally
  * compact so tool outputs and approval dialogs stay readable on a phone.
  */
+// The LCS table costs left.length * right.length cells; past this budget a
+// real-world file pair (e.g. 10k x 10k lines) would OOM the process.
+const MAX_DIFF_CELLS = 2_000_000;
+const MAX_FALLBACK_LINES = 200;
+
 export function computeLineDiff(
   previous: string,
   next: string,
@@ -45,6 +50,33 @@ export function computeLineDiff(
 ): DiffLine[] {
   const left = splitLines(previous);
   const right = splitLines(next);
+  if (left.length * right.length > MAX_DIFF_CELLS) {
+    // Degrade to a head-truncated whole-file replace instead of crashing.
+    return [
+      ...left
+        .slice(0, MAX_FALLBACK_LINES)
+        .map((text) => ({ kind: "remove" as const, text })),
+      ...(left.length > MAX_FALLBACK_LINES
+        ? [
+            {
+              kind: "context" as const,
+              text: `… (${left.length - MAX_FALLBACK_LINES} more removed lines omitted: file too large for line diff)`,
+            },
+          ]
+        : []),
+      ...right
+        .slice(0, MAX_FALLBACK_LINES)
+        .map((text) => ({ kind: "add" as const, text })),
+      ...(right.length > MAX_FALLBACK_LINES
+        ? [
+            {
+              kind: "context" as const,
+              text: `… (${right.length - MAX_FALLBACK_LINES} more added lines omitted: file too large for line diff)`,
+            },
+          ]
+        : []),
+    ];
+  }
   const table = lcsMatrix(left, right);
   const full: DiffLine[] = [];
 

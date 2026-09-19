@@ -5,9 +5,10 @@
  * instead of being re-implemented per screen.
  *
  * Policy encoded here:
- * - install/update never auto-activate on their own (§17); an update only
- *   re-activates when the extension was already enabled, because updating
- *   is itself an explicit user action.
+ * - fresh installs auto-activate when they request no permissions or the
+ *   user just granted them (zero-setup); updates never override the
+ *   user's enable choice, and an update only re-activates when the
+ *   extension was already enabled.
  * - updates retain the replaced version as a rollback point, which is
  *   dropped once the new version successfully activates (§32/§33).
  * - every operation returns the affected record so callers can render
@@ -27,6 +28,7 @@ import {
   type DependencyIssue,
   type DependencyPlan,
 } from "./dependencies";
+import { emitExtensionEvent } from "./events";
 import {
   discardRollbackPoint,
   hasRollbackPoint as hasRollbackPointOnDisk,
@@ -200,15 +202,18 @@ export function createExtensionManager({
 
   const manager: ExtensionPackageManager = {
     async install(source, options = {}) {
-      await records();
-      let outcome: InstallOutcome;
-      try {
-        outcome = await installPackage(deps, source, {
+      const before = await records();
+      const installOnce = async (extra?: InstallOptions) =>
+        installPackage(deps, source, {
           ...options,
+          ...extra,
           catalog: await catalogEntries(),
           provider,
           signaturePolicy: await policy(),
         });
+      let outcome: InstallOutcome;
+      try {
+        outcome = await installOnce();
       } catch (error) {
         health.record(
           "plugin",
@@ -218,9 +223,85 @@ export function createExtensionManager({
         );
         throw error;
       }
+      if (outcome.status === "needs-permissions") {
+        // Zero-setup: tapping install grants the requested capabilities —
+        // recorded in health and surfaced in the success notice, revocable
+        // anytime by disabling. Signature, revocation, and native-cap
+        // gates are unaffected (they resolve before permissions).
+        const granted = outcome.pending;
+        health.record(
+          "plugin",
+          outcome.manifest.id,
+          "permissions-auto-granted",
+          granted.join(", "),
+        );
+        try {
+          outcome = await installOnce({ acceptedPermissions: granted });
+        } catch (error) {
+          health.record(
+            "plugin",
+            source.kind === "registry" ? source.pluginId : source.kind,
+            "install-failure",
+            error instanceof Error ? error.message : String(error),
+          );
+          throw error;
+        }
+      }
       if (outcome.status === "installed") {
         health.record("plugin", outcome.record.id, "install-success");
+        // Surfaces (tab bar, records lists, snippet revisions) subscribe
+        // to these lifecycle events; the manager is their single source.
+        emitExtensionEvent({
+          pluginId: outcome.record.id,
+          type: "installed",
+        });
+        // Reconcile first: refreshStateFromRecords mirrors records into
+        // memory, so it must run BEFORE activation below — otherwise it
+        // would clobber the fresh "loaded" state back to "enabled".
         await runtime.refreshStateFromRecords();
+        // Zero-setup activation: a fresh install activates immediately —
+        // permissions auto-granted above — so its features (themes,
+        // terminal snippets, editor tools, languages, pages) work with
+        // no extra step. Updates never override the user's enable choice.
+        const installedId = outcome.record.id;
+        // Updates never override the user's enable choice — keyed by the
+        // installed record id so file/URL reinstalls count as updates too.
+        const isUpdate = before.some((record) => record.id === installedId);
+        if (!isUpdate) {
+          try {
+            const enabled = await manager.enable(outcome.record.id);
+            outcome = { record: enabled, status: "installed" };
+            health.record(
+              "plugin",
+              outcome.record.id,
+              "auto-enabled",
+              "Plugin activated on install.",
+            );
+          } catch (error) {
+            // Activation failed (e.g. broken entry script): roll back
+            // to disabled so the record never claims a running plugin
+            // that isn't, preserving whatever state activation set.
+            const rolledBack = patchRecord(
+              await records(),
+              outcome.record.id,
+              { enabled: false },
+              deps.platform.nowIso(),
+            );
+            await saveInstalledRecords(deps, rolledBack).catch(() => {});
+            // Records screens refresh off lifecycle events, not storage
+            // polls: announce the rollback so no stale "enabled" lingers.
+            emitExtensionEvent({
+              pluginId: outcome.record.id,
+              type: "disabled",
+            });
+            health.record(
+              "plugin",
+              outcome.record.id,
+              "auto-enable-failed",
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+        }
       } else if (outcome.status === "needs-app-update") {
         health.record(
           "plugin",
@@ -369,6 +450,7 @@ export function createExtensionManager({
         await discardRollbackPoint(deps, pluginId);
       }
       health.record("plugin", pluginId, "update-success");
+      emitExtensionEvent({ pluginId, type: "updated" });
       return outcome;
     },
 
@@ -376,6 +458,7 @@ export function createExtensionManager({
       await runtime.deactivate(pluginId).catch(() => {});
       await uninstallPackage(deps, pluginId);
       await runtime.refreshStateFromRecords();
+      emitExtensionEvent({ pluginId, type: "uninstalled" });
     },
 
     async rollback(pluginId) {
@@ -385,6 +468,7 @@ export function createExtensionManager({
         const record = await rollbackPackage(deps, pluginId);
         await runtime.refreshStateFromRecords();
         health.record("plugin", pluginId, "rollback");
+        emitExtensionEvent({ pluginId, type: "rolled-back" });
         return record;
       } catch (error) {
         health.record(
@@ -440,11 +524,15 @@ export function createExtensionManager({
         entries.filter((entry) => entry.revoked).map((entry) => entry.id),
       );
       const disabled: string[] = [];
+      // Accumulate onto one list: patching the stale pre-loop snapshot and
+      // saving per iteration would let each save overwrite the previous
+      // disable, leaving only the last revoked extension disabled.
+      let next = current;
       for (const record of current) {
         if (!revoked.has(record.id) || !record.enabled) continue;
         await runtime.deactivate(record.id).catch(() => {});
-        const next = patchRecord(
-          current,
+        next = patchRecord(
+          next,
           record.id,
           {
             enabled: false,
@@ -453,9 +541,11 @@ export function createExtensionManager({
           },
           deps.platform.nowIso(),
         );
-        await saveInstalledRecords(deps, next);
         health.record("plugin", record.id, "revoked", "Disabled by revocation sweep.");
         disabled.push(record.id);
+      }
+      if (disabled.length > 0) {
+        await saveInstalledRecords(deps, next);
       }
       await runtime.refreshStateFromRecords();
       return disabled;

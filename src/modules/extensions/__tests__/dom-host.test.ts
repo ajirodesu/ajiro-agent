@@ -358,6 +358,81 @@ describe("plugin DOM host session", () => {
     expect(host.hasDefinition(PLUGIN_ID)).toBe(false);
   });
 
+  it("registers, lists, applies, and unregisters editor themes", async () => {
+    const { host, sent } = await harness();
+    const spec = {
+      caption: "Chai Theme",
+      config: {
+        background: "#101418",
+        foreground: "#e6edf3",
+        keyword: "#ffb86c",
+      },
+      dark: true,
+      id: "chai_theme",
+    };
+    receive(host, { ...spec, pluginId: PLUGIN_ID, type: "editor-theme-register" });
+    expect(host.listEditorThemes()).toEqual([
+      {
+        id: "chai_theme",
+        caption: "Chai Theme",
+        dark: true,
+        pluginId: PLUGIN_ID,
+        config: spec.config,
+      },
+    ]);
+    expect(
+      sent.some((message) => message.type === "editor-themes-sync"),
+    ).toBe(true);
+
+    // Unknown ids are refused, never listed.
+    receive(host, {
+      ...spec,
+      id: "  ",
+      pluginId: PLUGIN_ID,
+      type: "editor-theme-register",
+    });
+    expect(host.listEditorThemes()).toHaveLength(1);
+
+    await host.setEditorThemeSelection("chai_theme");
+    expect(host.getEditorThemeSelection()).toBe("chai_theme");
+
+    // Only the owning plugin may remove its theme.
+    receive(host, {
+      id: "chai_theme",
+      pluginId: "com.example.other",
+      type: "editor-theme-unregister",
+    });
+    expect(host.listEditorThemes()).toHaveLength(1);
+    receive(host, {
+      id: "chai_theme",
+      pluginId: PLUGIN_ID,
+      type: "editor-theme-unregister",
+    });
+    expect(host.listEditorThemes()).toHaveLength(0);
+    // Selection falls back when its theme disappears.
+    expect(host.getEditorThemeSelection()).toBeNull();
+
+    await expect(host.setEditorThemeSelection("nope")).rejects.toThrow(
+      /Unknown editor theme/,
+    );
+  });
+
+  it("clears a plugin's editor themes on unmount", async () => {
+    const { host } = await harness();
+    receive(host, {
+      caption: "X",
+      config: { background: "#000000", foreground: "#ffffff" },
+      dark: true,
+      id: "x-theme",
+      pluginId: PLUGIN_ID,
+      type: "editor-theme-register",
+    });
+    await host.setEditorThemeSelection("x-theme");
+    await host.unmount(PLUGIN_ID);
+    expect(host.listEditorThemes()).toHaveLength(0);
+    expect(host.getEditorThemeSelection()).toBeNull();
+  });
+
   it("normalizes a missing page title instead of showing an empty header", async () => {
     const { host } = await harness();
     receive(host, {
@@ -709,12 +784,22 @@ describe("plugin runtime bridge", () => {
     // and re-activated inside it, with no second user action (§21/§73).
     expect(document.sent.some((message) => message.type === "define-plugin")).toBe(true);
     expect(document.sent.some((message) => message.type === "activate-plugin")).toBe(true);
-    expect(bridge.status()).toEqual({ page: null, ready: true });
+    expect(bridge.status()).toEqual({
+      page: null,
+      pages: [],
+      editorThemes: { themes: [], selected: null },
+      ready: true,
+    });
     expect(runtime.getState(PLUGIN_ID)).toBe("loaded");
 
     bridge.detachDocument();
     expect(runtime.hasExecutionHost()).toBe(false);
-    expect(bridge.status()).toEqual({ page: null, ready: false });
+    expect(bridge.status()).toEqual({
+      page: null,
+      pages: [],
+      editorThemes: { themes: [], selected: null },
+      ready: false,
+    });
   });
 
   it("publishes page state so the surface can show the plugin page", async () => {

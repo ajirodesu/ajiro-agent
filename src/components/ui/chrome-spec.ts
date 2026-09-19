@@ -16,9 +16,33 @@ export const ICON_GLYPH = 20;
 export const ICON_STROKE = 2;
 /** Shared container border thickness (circles, capsules, tabs). */
 export const CONTAINER_BORDER = 1;
-/** Merged capsule: exactly double the circle width. */
-export const CAPSULE_WIDTH = ICON_CONTAINER * 2;
+/** Horizontal padding inside merged capsules (one slot's worth of circle). */
+export const CAPSULE_PADDING = 4;
+/** Gap between icon slots inside a merged capsule. */
+export const CAPSULE_GAP = 8;
+/**
+ * Width of a merged capsule holding `slots` icons: padding on both ends plus
+ * every icon and the gaps between them. Keeps multi-slot capsules (2-slot
+ * header capsules, the 3-slot Main/Chat after-chat capsule) on one formula
+ * so the icon rhythm never drifts from `ICON_CONTAINER`.
+ */
+export function capsuleWidth(slots: number): number {
+  return CAPSULE_PADDING * 2 + slots * ICON_INNER + (slots - 1) * CAPSULE_GAP;
+}
+/** Merged capsule: exactly double the circle width (two icon slots). */
+export const CAPSULE_WIDTH = capsuleWidth(2);
 export const CAPSULE_HEIGHT = ICON_CONTAINER;
+/**
+ * Comfortable horizontal padding inside the centered page-header title
+ * capsule. Text-only (no icon slots), so it uses its own breathing room
+ * rather than the icon-slot padding — height and border still match the
+ * circle containers exactly.
+ */
+export const CAPSULE_TITLE_PADDING = 20;
+/** Three-slot capsule (Main/Chat after-chat): three merged icon containers. */
+export const CAPSULE_WIDE_WIDTH = capsuleWidth(3);
+/** One revealed slot inside an animated capsule (icon + its trailing gap). */
+export const CAPSULE_SLOT_WIDTH = ICON_INNER + CAPSULE_GAP;
 /** Footer icon size, matching the main page composer controls. */
 export const FOOTER_ICON_SIZE = 35;
 

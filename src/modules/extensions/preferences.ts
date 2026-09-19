@@ -35,7 +35,19 @@ export type ExtensionPreferences = {
    */
   formatters: Record<string, string>;
   /**
-   * Update channel (§44): which registry entries the Store offers.
+   * Selected plugin editor theme id (Acode's Settings → Editor Theme).
+   * Null follows the app theme; a missing/uninstalled id falls back the
+   * same way instead of breaking the editor.
+   */
+  editorTheme: string | null;
+  /**
+   * Preferred preview engine for the Run screen (plugin id of an
+   * installed preview plugin, or null for the default WebView). A
+   * missing/uninstalled id falls back the same way.
+   */
+  previewEngine: string | null;
+  /**
+   * Update channel (A44): which registry entries the Store offers.
    * Production default is stable; beta also shows stable, preview shows all.
    */
   updateChannel: UpdateChannel;
@@ -47,6 +59,8 @@ export const DEFAULT_EXTENSION_PREFERENCES: ExtensionPreferences = {
   requireSignedPackages: false,
   trustedSigningKeys: {},
   formatters: {},
+  editorTheme: null,
+  previewEngine: null,
   updateChannel: "stable",
 };
 
@@ -113,6 +127,16 @@ export function parseExtensionPreferences(
           : DEFAULT_EXTENSION_PREFERENCES.requireSignedPackages,
       trustedSigningKeys: parseTrustedKeys(parsed.trustedSigningKeys),
       formatters: parseFormatterSelections(parsed.formatters),
+      editorTheme:
+        typeof parsed.editorTheme === "string" &&
+        parsed.editorTheme.trim() !== ""
+          ? parsed.editorTheme.trim()
+          : null,
+      previewEngine:
+        typeof parsed.previewEngine === "string" &&
+        parsed.previewEngine.trim() !== ""
+          ? parsed.previewEngine.trim()
+          : null,
       updateChannel:
         parseUpdateChannel(parsed.updateChannel) ??
         DEFAULT_EXTENSION_PREFERENCES.updateChannel,

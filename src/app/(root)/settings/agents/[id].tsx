@@ -481,7 +481,7 @@ export default function SettingsAgentEditorScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={(modelRef) => updateDraft({ modelRef })}
-            placeholder="provider/model â€” empty uses the chat model"
+            placeholder="provider/model — empty uses the chat model"
             value={current.modelRef}
           />
         </View>

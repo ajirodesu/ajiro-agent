@@ -589,6 +589,171 @@ acode.setPluginInit("${PLUGIN_ID}", function () {
     expect(mono?.textContent).toContain("currentColor");
   });
 
+  it("switches custom-page tabs without rebuilding DOM state", async () => {
+    const rig = mount();
+    await rig.host.waitForReady(2_000);
+    const OTHER_ID = "com.example.other";
+    for (const [id, title] of [
+      [PLUGIN_ID, "First Page"],
+      [OTHER_ID, "Second Page"],
+    ]) {
+      await rig.host.load(id, {
+        baseUrl: `https://plugin.ajiro.invalid/${id}`,
+        grantedPermissions: [],
+        settings: {},
+        source: `acode.setPluginInit("${id}", function (baseUrl, $page) {
+          $page.show();
+          $page.settitle("${title}");
+          $page.innerHTML = "<p>body-${title}</p>";
+        });`,
+        storage: {},
+      });
+      await rig.host.activate(id, { firstInit: true });
+    }
+    await settle();
+    // Both plugins registered live custom pages.
+    expect(rig.host.listPages()).toEqual([
+      { pluginId: PLUGIN_ID, title: "First Page" },
+      { pluginId: OTHER_ID, title: "Second Page" },
+    ]);
+
+    const visibleTitles = () =>
+      [...rig.dom.window.document.querySelectorAll("[data-ajiro-page]")]
+        .filter(
+          (element) => (element as HTMLElement).style.display !== "none",
+        )
+        .map((element) => (element as HTMLElement).textContent ?? "");
+
+    // Tab switch hides the first page and shows the second; DOM nodes
+    // survive so form state and scroll persist for the session.
+    rig.host.hidePage();
+    expect(rig.host.showPage(OTHER_ID)).toBe(true);
+    await settle();
+    expect(rig.host.getPage()).toEqual({
+      pluginId: OTHER_ID,
+      title: "Second Page",
+    });
+    expect(
+      visibleTitles().some((text) => text.includes("body-Second Page")),
+    ).toBe(true);
+    expect(
+      visibleTitles().some((text) => text.includes("body-First Page")),
+    ).toBe(false);
+    // Switching back restores the first tab with its DOM state intact.
+    expect(rig.host.showPage(PLUGIN_ID)).toBe(true);
+    await settle();
+    expect(
+      visibleTitles().some((text) => text.includes("body-First Page")),
+    ).toBe(true);
+
+    expect(rig.host.showPage("com.example.missing")).toBe(false);
+
+    // Uninstalling removes the tab immediately.
+    await rig.host.unmount(OTHER_ID);
+    await settle();
+    expect(
+      rig.host.listPages().map((entry) => entry.pluginId),
+    ).toEqual([PLUGIN_ID]);
+  });
+
+  it("registers editor themes through acode.require", async () => {
+    const rig = mount();
+    await rig.host.waitForReady(2_000);
+    await rig.host.load(PLUGIN_ID, {
+      baseUrl: "https://plugin.ajiro.invalid/com.example.real",
+      grantedPermissions: [],
+      settings: {},
+      source: `acode.setPluginInit("${PLUGIN_ID}", function () {
+        var editorThemes = acode.require("editorThemes");
+        editorThemes.register({
+          id: "chai_theme",
+          caption: "Chai Theme",
+          dark: true,
+          config: { background: "#101418", foreground: "#e6edf3" },
+        });
+        editorThemes.apply("chai_theme");
+      });`,
+      storage: {},
+    });
+    await rig.host.activate(PLUGIN_ID, { firstInit: true });
+    await settle();
+    expect(rig.host.listEditorThemes()).toEqual([
+      {
+        id: "chai_theme",
+        caption: "Chai Theme",
+        dark: true,
+        pluginId: PLUGIN_ID,
+        config: { background: "#101418", foreground: "#e6edf3" },
+      },
+    ]);
+    expect(rig.host.getEditorThemeSelection()).toBe("chai_theme");
+  });
+
+  it("provides the Url utility module with documented semantics", async () => {
+    const rig = mount();
+    await rig.host.waitForReady(2_000);
+    await rig.host.load(PLUGIN_ID, {
+      baseUrl: "https://plugin.ajiro.invalid/com.example.real",
+      grantedPermissions: [],
+      settings: {},
+      source: `acode.setPluginInit("${PLUGIN_ID}", function () {
+        var Url = acode.require("Url");
+        var UrlLower = acode.require("url");
+        window.__urlResult = {
+          sameModule: Url === UrlLower,
+          basename: Url.basename("ftp://localhost/foo/bar/index.html"),
+          basenameBad: Url.basename("not a url at all !!! :::"),
+          areSame: Url.areSame("https://example.com", "https://example.com"),
+          areDifferent: Url.areSame("https://a.com", "https://b.com"),
+          extname: Url.extname("ftp://localhost/foo/bar/index.html"),
+          join: Url.join("https://example.com", "/foo", "/bar"),
+          safe: Url.safe("https://www.example.com/path/to/file.html?query=string#hash"),
+          pathname: Url.pathname("ftp://myhost.com/foo/bar/index.html"),
+          dirname: Url.dirname("ftp://localhost/foo/bar"),
+          parse: Url.parse("https://example.com/path?query=string"),
+          formate: Url.formate({ protocol: "https:", hostname: "example.com", path: "path/to/page", query: { key: "value" } }),
+          protocol: Url.getProtocol("ftp://localhost/foo/bar"),
+          hidden: Url.hidePassword("ftp://user:password@localhost/foo/bar"),
+          decoded: Url.decodeUrl("https://user:pass@host.com:8080/path?query=string"),
+          trimmed: Url.trimSlash("https://example.com/path/"),
+        };
+      });`,
+      storage: {},
+    });
+    await rig.host.activate(PLUGIN_ID, { firstInit: true });
+    await settle();
+    const result = (rig.dom.window as unknown as Record<string, unknown>)
+      .__urlResult as Record<string, unknown>;
+    expect(result.sameModule).toBe(true);
+    expect(result.basename).toBe("index.html");
+    expect(result.basenameBad).toBeNull();
+    expect(result.areSame).toBe(true);
+    expect(result.areDifferent).toBe(false);
+    expect(result.extname).toBe(".html");
+    expect(result.join).toBe("https://example.com/foo/bar");
+    expect(result.safe).toBe(
+      "https://www.example.com/path/to/file.html%3Fquery%3Dstring%23hash",
+    );
+    expect(result.pathname).toBe("/foo/bar");
+    expect(result.dirname).toBe("ftp://localhost/foo/");
+    expect(result.parse).toEqual({
+      url: "https://example.com/path",
+      query: "?query=string",
+    });
+    expect(result.formate).toBe("https://example.com/path/to/page?key=value");
+    expect(result.protocol).toBe("ftp:");
+    expect(result.hidden).toBe("ftp://user@localhost/foo/bar");
+    expect(result.decoded).toEqual({
+      username: "user",
+      password: "pass",
+      hostname: "host.com",
+      pathname: "/path",
+      port: 8080,
+      query: { query: "string" },
+    });
+    expect(result.trimmed).toBe("https://example.com/path");
+  });
+
   it("reloads cleanly when the document is replaced", async () => {
     const first = mount();
     await first.host.waitForReady(2_000);

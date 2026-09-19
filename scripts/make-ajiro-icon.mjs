@@ -1,7 +1,7 @@
 /**
  * Build `assets/file-icons/ajiro.svg` — the `.ajiro` config file icon.
  *
- * Source: `assets/images/new-splash-icon.png` (transparent app artwork).
+ * Source: `assets/images/splash-icon-aqua.png` (transparent app artwork).
  * The PNG is downscaled to 256px and embedded as base64 inside a standard
  * SVG `<image>` wrapper, so the icon renders pixel-identical at any size
  * through the existing SvgXml pipeline with zero network access.
@@ -18,7 +18,7 @@ import { deflateSync, inflateSync } from "node:zlib";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
-const SRC = join(root, "assets", "images", "new-splash-icon.png");
+const SRC = join(root, "assets", "images", "splash-icon-aqua.png");
 const OUT = join(root, "assets", "file-icons", "ajiro.svg");
 const SIZE = 256;
 

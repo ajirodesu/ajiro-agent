@@ -203,6 +203,9 @@ export function describeDynamicUpdateStatus(status: DynamicUpdateStatus): string
  * network or storage.
  */
 export type ExtensionHealthEventKind =
+  | "auto-enabled"
+  | "auto-enable-failed"
+  | "permissions-auto-granted"
   | "incompatible"
   | "install-failure"
   | "install-success"

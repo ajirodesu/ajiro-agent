@@ -25,6 +25,12 @@ import {
   type FormatterRegistration,
   type FormatterSelectionStore,
 } from "../formatters";
+import {
+  createMemoryEditorThemeSelections,
+  normalizeThemeRegistration,
+  type EditorThemeSelectionStore,
+  type PluginEditorTheme,
+} from "../editor-themes";
 import type { ExtensionPermissionKey } from "../models";
 import {
   isSafePluginPath,
@@ -116,6 +122,7 @@ export type PluginHostServices = {
 export type PluginHostEvent =
   | { type: "activated"; pluginId: string }
   | { type: "commands-changed"; pluginId: string }
+  | { type: "editor-theme-changed" }
   | { type: "error"; message: string; phase: PluginErrorPhase; pluginId: string }
   | { type: "page"; page: PluginPageState }
   | { type: "unmounted"; pluginId: string };
@@ -170,6 +177,12 @@ export class PluginDomHost {
     { reject: (error: Error) => void; resolve: (hasInit: boolean) => void }
   >();
   private page: PluginPageState = null;
+  /**
+   * Every live custom page by plugin id (tab registry). The visible page
+   * (`this.page`) is always one of these; plugins without an entry have
+   * no custom page to show.
+   */
+  private readonly pageTitles = new Map<string, string>();
   private readonly readyWaiters = new Set<ReadyWaiter>();
   private transport: PluginHostTransport | null = null;
   private ready = false;
@@ -178,13 +191,20 @@ export class PluginDomHost {
   /** Formatter mirror: the functions stay in the document, metadata here. */
   private readonly formatters = new Map<string, FormatterRegistration>();
   private formatterSelections: FormatterSelectionStore;
+  /** Editor-theme mirror: configs stay here, CodeMirror extensions in-doc. */
+  private readonly editorThemes = new Map<string, PluginEditorTheme>();
+  private editorThemeSelections: EditorThemeSelectionStore;
+  private editorThemeSelection: string | null = null;
 
   constructor(
     private readonly services: PluginHostServices,
     private readonly activationTimeoutMs: number = ACTIVATION_TIMEOUT_MS,
     selections?: FormatterSelectionStore,
+    editorThemeSelections?: EditorThemeSelectionStore,
   ) {
     this.formatterSelections = selections ?? createMemoryFormatterSelections();
+    this.editorThemeSelections =
+      editorThemeSelections ?? createMemoryEditorThemeSelections();
   }
 
   /** Formatter registrations currently known to the host (selection UI). */
@@ -195,6 +215,43 @@ export class PluginDomHost {
       formatterId: entry.formatterId,
       pluginId: entry.pluginId,
     }));
+  }
+
+  /** Editor themes registered by plugins (Settings → Editor Theme). */
+  listEditorThemes(): PluginEditorTheme[] {
+    return [...this.editorThemes.values()].map((entry) => ({
+      ...entry,
+      config: { ...entry.config },
+    }));
+  }
+
+  /** Currently selected plugin editor theme id, null follows app theme. */
+  getEditorThemeSelection(): string | null {
+    return this.editorThemeSelection;
+  }
+
+  /**
+   * Persist the editor-theme selection (user choice or a plugin's apply
+   * call for a theme that exists). Unknown ids are refused.
+   */
+  async setEditorThemeSelection(id: string | null): Promise<void> {
+    if (id !== null && !this.editorThemes.has(id)) {
+      throw new PluginHostError(`Unknown editor theme "${id}".`);
+    }
+    this.editorThemeSelection = id;
+    await this.editorThemeSelections.saveSelection(id);
+    this.emit({ type: "editor-theme-changed" });
+  }
+
+  private postEditorThemesSync(): void {
+    try {
+      this.transport?.post({
+        type: "editor-themes-sync",
+        themes: this.listEditorThemes(),
+      });
+    } catch {
+      // The document is gone; its mirror dies with it.
+    }
   }
 
   /**
@@ -209,6 +266,17 @@ export class PluginDomHost {
     this.activations = new Set();
     this.unmounting.clear();
     this.page = null;
+    this.pageTitles.clear();
+    this.editorThemes.clear();
+    // The persisted selection survives remounts; reload it so the editor
+    // keeps the user's theme across document replacements.
+    this.editorThemeSelections
+      .loadSelection()
+      .then((selection) => {
+        this.editorThemeSelection = selection;
+        this.emit({ type: "editor-theme-changed" });
+      })
+      .catch(() => {});
     this.failPending(
       new PluginHostError("The plugin runtime document was replaced."),
     );
@@ -221,6 +289,8 @@ export class PluginDomHost {
     this.activations = new Set();
     this.unmounting.clear();
     this.page = null;
+    this.pageTitles.clear();
+    this.editorThemes.clear();
     this.failPending(new PluginHostError("The plugin runtime document is not available."));
   }
 
@@ -277,6 +347,29 @@ export class PluginDomHost {
 
   getPage(): PluginPageState {
     return this.page;
+  }
+
+  /** Live custom pages for the tab bar, in first-shown order. */
+  listPages(): { pluginId: string; title: string }[] {
+    return [...this.pageTitles.entries()].map(([pluginId, title]) => ({
+      pluginId,
+      title,
+    }));
+  }
+
+  /**
+   * Switch to a plugin's custom page (tab press). Returns false when the
+   * plugin has no live page; the document confirms via a shown post, which
+   * is the single source of truth for the visible page.
+   */
+  showPage(pluginId: string): boolean {
+    if (!this.pageTitles.has(pluginId)) return false;
+    try {
+      this.transport?.post({ type: "show-page", pluginId });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   hasDefinition(pluginId: string): boolean {
@@ -441,6 +534,25 @@ export class PluginDomHost {
       new PluginHostError(`Plugin "${pluginId}" was unmounted while initializing.`),
     );
     this.pendingActivations.delete(pluginId);
+    this.pageTitles.delete(pluginId);
+    let themesChanged = false;
+    for (const [id, theme] of [...this.editorThemes.entries()]) {
+      if (theme.pluginId === pluginId) {
+        this.editorThemes.delete(id);
+        themesChanged = true;
+      }
+    }
+    if (themesChanged) {
+      if (
+        this.editorThemeSelection !== null &&
+        !this.editorThemes.has(this.editorThemeSelection)
+      ) {
+        this.editorThemeSelection = null;
+        this.editorThemeSelections.saveSelection(null).catch(() => {});
+      }
+      this.postEditorThemesSync();
+      this.emit({ type: "editor-theme-changed" });
+    }
     if (this.page?.pluginId === pluginId) {
       this.page = null;
       this.emit({ type: "page", page: null });
@@ -543,11 +655,75 @@ export class PluginDomHost {
         return;
       }
       case "page": {
-        this.page =
-          message.action === "shown"
-            ? { pluginId: message.pluginId, title: normalizePageTitle(message.title) }
-            : null;
+        // The tab registry tracks capability (has a custom page), not
+        // visibility: entries survive hide posts so tabs persist while
+        // the session is open. Only unmount/remove deletes them.
+        if (message.action === "shown") {
+          this.pageTitles.set(
+            message.pluginId,
+            normalizePageTitle(message.title),
+          );
+          this.page = {
+            pluginId: message.pluginId,
+            title: normalizePageTitle(message.title),
+          };
+        } else if (message.action === "removed") {
+          this.pageTitles.delete(message.pluginId);
+          if (this.page?.pluginId === message.pluginId) {
+            this.page = null;
+          }
+        } else if (this.page?.pluginId === message.pluginId) {
+          this.page = null;
+        }
         this.emit({ type: "page", page: this.page });
+        return;
+      }
+      case "editor-theme-register": {
+        const theme = normalizeThemeRegistration(message.pluginId, {
+          id: message.id,
+          caption: message.caption,
+          dark: message.dark,
+          config: message.config,
+        });
+        if (!theme) {
+          this.services.log(
+            message.pluginId,
+            "warning",
+            "Editor theme registration refused: it needs a non-empty id and usable background/foreground colors.",
+          );
+          return;
+        }
+        this.editorThemes.set(theme.id, theme);
+        this.postEditorThemesSync();
+        this.emit({ type: "editor-theme-changed" });
+        return;
+      }
+      case "editor-theme-unregister": {
+        const existing = this.editorThemes.get(message.id);
+        // Only the owning plugin may remove its theme.
+        if (existing && existing.pluginId === message.pluginId) {
+          this.editorThemes.delete(message.id);
+          if (this.editorThemeSelection === message.id) {
+            this.editorThemeSelection = null;
+            this.editorThemeSelections.saveSelection(null).catch(() => {});
+          }
+          this.postEditorThemesSync();
+          this.emit({ type: "editor-theme-changed" });
+        }
+        return;
+      }
+      case "editor-theme-apply": {
+        if (!this.editorThemes.has(message.id)) {
+          this.services.log(
+            message.pluginId,
+            "warning",
+            `Editor theme "${message.id}" is not registered.`,
+          );
+          return;
+        }
+        this.editorThemeSelection = message.id;
+        this.editorThemeSelections.saveSelection(message.id).catch(() => {});
+        this.emit({ type: "editor-theme-changed" });
         return;
       }
       case "command-register": {

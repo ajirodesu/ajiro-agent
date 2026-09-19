@@ -1391,7 +1391,16 @@ export async function executeClaimedAgentRun(
       : undefined;
 
     if (selectedFilesContext) {
-      appendContextToLatestUserMessage(runtimeMessages, selectedFilesContext);
+      // Never silently drop user-selected file context: histories without
+      // a user turn carry it as their own turn instead.
+      if (
+        !appendContextToLatestUserMessage(runtimeMessages, selectedFilesContext)
+      ) {
+        runtimeMessages.unshift({
+          role: "user",
+          content: selectedFilesContext,
+        });
+      }
     }
     // Project skill scope: pinned ids from project settings + live scan of
     // the project's conventional skill directories (read-only context).
@@ -2173,6 +2182,18 @@ export async function executeClaimedAgentRun(
       clearTimeout(inactivityTimeout);
     }
 
+    // A trailing persist/snapshot started before the finish would otherwise
+    // rewrite the final DB row (e.g. stamp "streaming" over "completed")
+    // or flash stale text after the run ended.
+    if (persistTimeout) {
+      clearTimeout(persistTimeout);
+      persistTimeout = null;
+    }
+    if (snapshotTimer) {
+      clearTimeout(snapshotTimer);
+      snapshotTimer = null;
+    }
+
     runRegistry.clear(run.id);
     ui.publishApprovals((current) =>
       current.filter((approval) => approval.runId !== run.id),
@@ -2280,6 +2301,12 @@ export async function executeSubagentTask(
       parentDeps.requestToolApproval(childRunRecord, request),
     retryRun: (retryRunId, delayMs) => {
       setTimeout(() => {
+        // Mirror the parent retry path: claim first so a concurrent
+        // resume (e.g. hydrate's stale-run recovery) cannot start the
+        // same run twice.
+        if (!runRegistry.claim(retryRunId)) {
+          return;
+        }
         void executeClaimedAgentRun(retryRunId, childDeps).catch(() => {});
       }, delayMs);
     },
@@ -2297,6 +2324,12 @@ export async function executeSubagentTask(
   };
 
   input.abortSignal?.addEventListener("abort", onParentAbort);
+  if (input.abortSignal?.aborted) {
+    // The parent was already cancelled before the listener attached; the
+    // event will never fire, so stop explicitly instead of orphaning the
+    // child. registerAbortController picks this up at execution start.
+    runRegistry.stopRun(childRun.id);
+  }
 
   try {
     await executeClaimedAgentRun(childRun.id, childDeps);

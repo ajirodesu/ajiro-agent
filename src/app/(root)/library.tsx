@@ -325,7 +325,10 @@ function LibraryFileRow({
           >
             {file.displayName}
           </Text>
-          <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
+          <Text
+            numberOfLines={1}
+            className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark"
+          >
             {subtitle}
           </Text>
         </View>

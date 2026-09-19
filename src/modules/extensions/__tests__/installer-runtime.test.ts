@@ -236,10 +236,57 @@ describe("extension package manager", () => {
     return { deps, files, host, manager, platform, runtime };
   }
 
+  async function setupAutoGrant() {
+    const { deps } = setup();
+    const platform = deps.platform;
+    await platform.writeBinary("file:///docs/v1.0.0.zip", packageBytes("1.0.0"));
+    const runtime = new ExtensionRuntime(deps);
+    const host = createFakeExecutionHost();
+    runtime.setExecutionHost(host);
+    const manager = createExtensionManager({ deps, runtime });
+    return { deps, host, manager, platform, runtime };
+  }
+
+  it("auto-grants permissions and auto-enables a fresh install", async () => {
+    const { host, manager } = await setupAutoGrant();
+    const outcome = await manager.install({
+      kind: "file",
+      uri: "file:///docs/v1.0.0.zip",
+    });
+    expect(outcome.status).toBe("installed");
+    if (outcome.status !== "installed") return;
+    // No consent round-trip: tapping install granted the capabilities,
+    // recorded on the record, and the plugin activated immediately.
+    expect(outcome.record.permissions.length).toBeGreaterThan(0);
+    expect(outcome.record.enabled).toBe(true);
+    expect(host.activated).toEqual(["com.example.plugin"]);
+  });
+
+  it("auto-enables a fresh consented install with no manual step", async () => {
+    const { host, manager } = await installViaManager("1.0.0");
+    const records = await manager.listInstalled();
+    expect(records[0].enabled).toBe(true);
+    expect(host.activated).toEqual(["com.example.plugin"]);
+  });
+
+  it("never auto-enables an update over a disabled plugin", async () => {
+    const { manager, platform } = await installViaManager("1.0.0");
+    await manager.disable("com.example.plugin");
+    await platform.writeBinary("file:///docs/v1.2.0.zip", packageBytes("1.2.0"));
+    const outcome = await manager.install(
+      { kind: "file", uri: "file:///docs/v1.2.0.zip" },
+      { acceptedPermissions: [...ALL_PERMISSIONS] },
+    );
+    expect(outcome.status).toBe("installed");
+    const records = await manager.listInstalled();
+    expect(records[0].version).toBe("1.2.0");
+    expect(records[0].enabled).toBe(false);
+  });
+
   it("retains the replaced version as a rollback point when asked", async () => {
     const { files, host, manager, platform, runtime } =
       await installViaManager("1.0.0");
-    await manager.enable("com.example.plugin");
+    // Fresh installs activate immediately (zero-setup); no manual enable.
     expect(runtime.getState("com.example.plugin")).toBe("loaded");
     expect(host.activated).toEqual(["com.example.plugin"]);
 
@@ -260,7 +307,7 @@ describe("extension package manager", () => {
 
   it("updates through the registry, re-activates an enabled extension, and clears the rollback point", async () => {
     const updateUrl = "https://registry.test/plugin-1.3.0.zip";
-    const { deps, host, manager, runtime } = await installViaManager("1.0.0", {
+    const { deps, host, runtime } = await installViaManager("1.0.0", {
       [updateUrl]: packageBytes("1.3.0"),
     });
     const updating = createExtensionManager({
@@ -268,7 +315,7 @@ describe("extension package manager", () => {
       provider: urlProvider(updateUrl),
       runtime,
     });
-    await manager.enable("com.example.plugin");
+    // Install already activated it once (zero-setup auto-enable).
     expect(host.activated).toHaveLength(1);
 
     const outcome = await updating.update("com.example.plugin");

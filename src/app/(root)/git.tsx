@@ -527,7 +527,10 @@ export default function GitScreen() {
                     size={15}
                     strokeWidth={2}
                   />
-                  <Text className="font-mono text-sm text-foreground dark:text-foreground-dark">
+                  <Text
+                    numberOfLines={1}
+                    className="min-w-0 flex-1 font-mono text-sm text-foreground dark:text-foreground-dark"
+                  >
                     {remote.owner}/{remote.repo}
                   </Text>
                   <Pressable
@@ -537,7 +540,7 @@ export default function GitScreen() {
                     onPress={() => {
                       void openRemoteRepo();
                     }}
-                    className="p-sp-1"
+                    className="shrink-0 p-sp-1"
                   >
                     <ExternalLink
                       color={theme.textSecondary}

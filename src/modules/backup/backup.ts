@@ -8,7 +8,7 @@
  * All logic runs against the small `BackupReader` / `BackupWriter`
  * interfaces so it unit-tests with in-memory fakes; `drizzle-store.ts`
  * adapts the real Drizzle database. Import and clear-history apply inside
- * a single transaction â€” any failure rolls back everything, so the
+ * a single transaction — any failure rolls back everything, so the
  * registry, filesystem rows, and runtime state can never disagree.
  */
 import { crc32Hex } from "./zip";
@@ -265,7 +265,7 @@ export type ParsedBackup = {
 /**
  * Validate a bundle before touching the database: manifest presence and
  * shape, supported schema version, every expected file present with a
- * matching checksum. Throws naming the failed file â€” never partially
+ * matching checksum. Throws naming the failed file — never partially
  * imports.
  */
 export function parseBackupBundle(
@@ -505,7 +505,7 @@ export async function applyBackupBundle(
 /**
  * Clear chat history: conversations, messages, agent runs, plus coding
  * checkpoints tied to deleted conversations (their conversationId is
- * NOT NULL, so they would otherwise orphan â€” there is no cascade).
+ * NOT NULL, so they would otherwise orphan — there is no cascade).
  * editorFileRevisions carry only a projectUri with no conversation link,
  * so they are project history, not chat history, and stay.
  */

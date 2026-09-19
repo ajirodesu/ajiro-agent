@@ -1,5 +1,7 @@
 import * as DocumentPicker from "expo-document-picker";
-import { File } from "expo-file-system";
+import * as Clipboard from "expo-clipboard";
+import { Directory, File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { Image } from "expo-image";
 import * as IntentLauncher from "expo-intent-launcher";
 import type { PasteEventPayload } from "expo-paste-input";
@@ -39,6 +41,7 @@ import {
   Keyboard,
   Platform,
   Pressable,
+  Share,
   Text,
   TextInput,
   ScrollView,
@@ -54,6 +57,18 @@ import { Container } from "@/components/shared/container";
 import { SkillImportDrawer } from "@/components/skills/skill-import-drawer";
 import { ComposerSkillsModal } from "@/components/skills/composer-skills-modal";
 import { ComposerModelModal } from "@/components/models/composer-model-modal";
+import {
+  buildChatShareText,
+  chatShareFileName,
+  findInChat,
+  uploadedFilesForConversation,
+  type FindMatch,
+} from "@/components/chat/chat-header-menu";
+import { ChatMenuPopup } from "@/components/chat/chat-menu-popup";
+import { DeleteChatDrawer } from "@/components/chat/delete-chat-drawer";
+import { FindInChatDrawer } from "@/components/chat/find-in-chat-drawer";
+import { UploadedFilesDrawer } from "@/components/chat/uploaded-files-drawer";
+import type { MenuAnchor } from "@/components/chat/message-menu";
 import {
   Attachment,
   AttachmentAction,
@@ -130,6 +145,11 @@ import { useIdeWorkspace } from "@/providers/ide-workspace";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
 import { detectFolderIntent } from "@/modules/chat/folder-intent";
+import {
+  isProjectBound,
+  PROJECT_LOCK_MESSAGE,
+} from "@/modules/ide/project-binding";
+import { useThemedIconSource } from "@/theme/themed-assets";
 import {
   buildCaptureFileName,
   capturePhoto,
@@ -392,6 +412,7 @@ function useSyncedComposerSelection() {
 export default function Screen() {
   const router = useRouter();
   const theme = useTheme();
+  const emptyArtSource = useThemedIconSource("icon");
   const { error, ready } = useAppState();
   const { setOpen: setSidebarOpen } = useSidebar();
 
@@ -423,7 +444,6 @@ export default function Screen() {
     approvePendingToolApproval,
     approveSessionPendingToolApproval,
     denyPendingToolApproval,
-    clearConversationFolder,
     clearWorkspaceFiles,
     compactConversation,
     deleteWorkspaceFile,
@@ -433,12 +453,15 @@ export default function Screen() {
     currentSelectedFileIds,
     currentSelectedSkillIds,
     deleteMessage,
+    deleteConversation,
     editAndResendMessage,
     messages,
     pendingToolApproval,
     pendingQuestionnaire,
     pickConversationFolder,
     sendMessage,
+    setConversationPinned,
+    conversations,
     stopSending,
     submitPendingQuestionnaire,
     dismissPendingQuestionnaire,
@@ -491,12 +514,14 @@ export default function Screen() {
     }
   }, [compactConversation]);
 
+  const visibleMessagesRef = useRef<StoredMessage[]>([]);
   // System-role messages (e.g. persisted compaction summaries) drive future
   // runs through the context pipeline but must never render as chat bubbles.
   const visibleMessages = useMemo(
     () => messages.filter((message) => message.role !== "system"),
     [messages],
   );
+  visibleMessagesRef.current = visibleMessages;
   const latestUserMessageId = useMemo(
     () =>
       [...messages].reverse().find((message) => message.role === "user")?.id ??
@@ -507,6 +532,179 @@ export default function Screen() {
   latestUserMessageIdRef.current = latestUserMessageId;
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  const activeConversationRef = useRef(currentConversation);
+  activeConversationRef.current = currentConversation;
+  const workspaceFilesRef = useRef(workspaceFiles);
+  workspaceFilesRef.current = workspaceFiles;
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [chatMenuAnchor, setChatMenuAnchor] = useState<MenuAnchor | null>(null);
+  const chatMenuTriggerRef = useRef<View>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [chatFilesDrawerOpen, setChatFilesDrawerOpen] = useState(false);
+  const [findDrawerOpen, setFindDrawerOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findMatches, setFindMatches] = useState<FindMatch[]>([]);
+  const findMatchesRef = useRef<FindMatch[]>([]);
+  findMatchesRef.current = findMatches;
+  const [findActiveIndex, setFindActiveIndex] = useState(0);
+  const [findSearched, setFindSearched] = useState(false);
+  const [findJumpMessageId, setFindJumpMessageId] = useState<string | null>(
+    null,
+  );
+  const [findJumpNonce, setFindJumpNonce] = useState(0);
+
+  const chatPinned =
+    (conversations.find((item) => item.id === currentConversation?.id)
+      ?.pinnedAt ??
+      currentConversation?.pinnedAt ??
+      null) !== null;
+  const chatUploadedFiles = useMemo(
+    () => uploadedFilesForConversation(messages, workspaceFiles),
+    [messages, workspaceFiles],
+  );
+
+  const openChatMenu = useCallback(() => {
+    const trigger = chatMenuTriggerRef.current;
+    if (!trigger) {
+      setChatMenuAnchor({
+        x: 0,
+        y: 96,
+        width: 40,
+        height: 40,
+      });
+      setChatMenuOpen(true);
+      return;
+    }
+    trigger.measureInWindow((x, y, width, height) => {
+      setChatMenuAnchor({ x, y, width, height });
+      setChatMenuOpen(true);
+    });
+  }, []);
+
+  const handleShareChat = useCallback(async () => {
+    const conversation = activeConversationRef.current;
+    const title = conversation?.title ?? "Chat";
+    const shareText = buildChatShareText({
+      title,
+      messages: messagesRef.current,
+    });
+    try {
+      // Native: export a real .md file so the OS share sheet can send it
+      // anywhere. Web/unsupported: fall through to the system share, then to
+      // the clipboard.
+      let fileSharing = false;
+      try {
+        fileSharing = await Sharing.isAvailableAsync();
+      } catch {
+        fileSharing = false;
+      }
+      if (fileSharing) {
+        const dir = new Directory(Paths.cache, "chat-exports");
+        if (!dir.exists) dir.create();
+        const file = new File(
+          dir,
+          `${chatShareFileName(title)}-${Date.now()}.md`,
+        );
+        file.write(new TextEncoder().encode(shareText));
+        await Sharing.shareAsync(file.uri, {
+          dialogTitle: title,
+          mimeType: "text/markdown",
+        });
+        return;
+      }
+      await Share.share({ title, message: shareText });
+    } catch (error) {
+      try {
+        await Clipboard.setStringAsync(shareText);
+        Alert.alert(
+          "Copied to clipboard",
+          "Sharing is unavailable — the chat text was copied instead.",
+        );
+      } catch {
+        Alert.alert(
+          "Share failed",
+          error instanceof Error ? error.message : "Could not share chat.",
+        );
+      }
+    }
+  }, []);
+
+  const handleTogglePinChat = useCallback(async () => {
+    const conversation = activeConversationRef.current;
+    if (!conversation) return;
+    const latest =
+      conversationsRef.current.find((item) => item.id === conversation.id) ??
+      conversation;
+    const pinned = (latest.pinnedAt ?? null) !== null;
+    try {
+      await setConversationPinned(conversation.id, !pinned);
+    } catch (error) {
+      Alert.alert(
+        "Pin failed",
+        error instanceof Error ? error.message : "Could not pin chat.",
+      );
+    }
+  }, [setConversationPinned]);
+
+  const handleFindSearch = useCallback((query: string) => {
+    setFindQuery(query);
+    const matches = findInChat(messagesRef.current, query);
+    setFindMatches(matches);
+    setFindActiveIndex(0);
+    setFindSearched(true);
+  }, []);
+
+  const findScrollBridgeRef = useRef<
+    ((listIndex: number) => void) | null
+  >(null);
+  const scrollToIndexRef = useRef<(listIndex: number) => void>(() => {});
+  scrollToIndexRef.current = (listIndex: number) => {
+    findScrollBridgeRef.current?.(listIndex);
+  };
+
+  const jumpToFindMatch = useCallback(
+    (index: number, options?: { close?: boolean }) => {
+      const match = findMatchesRef.current[index];
+      if (!match) return;
+      setFindActiveIndex(index);
+      setFindJumpMessageId(match.messageId);
+      setFindJumpNonce((nonce) => nonce + 1);
+      // Prev/next keep the results panel open so matches can be cycled; a
+      // direct tap/submit closes it so the highlighted message is visible.
+      if (options?.close !== false) {
+        setFindDrawerOpen(false);
+      }
+      const targetIndex = visibleMessagesRef.current.findIndex(
+        (item) => item.id === match.messageId,
+      );
+      if (targetIndex >= 0) {
+        // Wait a frame so the closing drawer/animated width don't fight the
+        // scroll, then use the bridge registered by <FindScrollBridge />.
+        requestAnimationFrame(() => {
+          scrollToIndexRef.current(targetIndex);
+        });
+      }
+    },
+    [],
+  );
+
+  const handleConfirmDeleteChat = useCallback(async () => {
+    const conversation = activeConversationRef.current;
+    setDeleteConfirmOpen(false);
+    if (!conversation) return;
+    try {
+      await deleteConversation(conversation.id);
+      await createConversation();
+      setChatMenuOpen(false);
+    } catch (error) {
+      Alert.alert(
+        "Delete failed",
+        error instanceof Error ? error.message : "Could not delete chat.",
+      );
+    }
+  }, [createConversation, deleteConversation]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<string | null>(null);
   const [editNonce, setEditNonce] = useState(0);
@@ -527,10 +725,10 @@ export default function Screen() {
     setEditNonce((current) => current + 1);
     setEditingMessageId(latestUserMessageIdRef.current);
   }, []);
-  const handleDeleteMessage = useCallback(
-    async (message: StoredMessage) => {
+  const handleDeleteMessageById = useCallback(
+    async (id: string) => {
       try {
-        await deleteMessage(message.id);
+        await deleteMessage(id);
       } catch (error) {
         Alert.alert(
           "Delete failed",
@@ -679,65 +877,35 @@ export default function Screen() {
   }, [router]);
   const renderMessage = useCallback(
     ({ item: message }: { item: StoredMessage }) => (
-      <ChatMessage
-        canEditAndResend={
-          message.id === latestUserMessageId && !currentConversationBusy
-        }
+      <MessageRow
+        busy={currentConversationBusy}
+        deleteMessage={handleDeleteMessageById}
+        editAiText={handleEditAiText}
+        editMessage={handleEditMessage}
+        highlight={message.id === findJumpMessageId}
+        highlightNonce={findJumpNonce}
+        interrupt={stopSending}
+        isLatestUser={message.id === latestUserMessageId}
         message={message}
-        onDeleteMessage={
-          message.status === "streaming" || currentConversationBusy
-            ? undefined
-            : () => {
-                handleDeleteMessage(message).catch(console.error);
-              }
-        }
-        onEditMessage={handleEditMessage}
-        onEditText={
-          message.role === "assistant" && message.content.trim()
-            ? () => {
-                handleEditAiText(message.content);
-              }
-            : undefined
-        }
-        onInterrupt={() => {
-          stopSending().catch(console.error);
-        }}
-        onOpenHistory={() => {
-          setHistoryDrawerMessageId(message.id);
-        }}
-        onRegenerate={
-          message.role === "assistant" &&
-          message.status === "completed" &&
-          !currentConversationBusy
-            ? () => {
-                handleRegenerateMessage(message).catch(console.error);
-              }
-            : undefined
-        }
-        onRetry={
-          message.status === "failed" && !currentConversationBusy
-            ? () => {
-                handleRetryMessage(message).catch(console.error);
-              }
-            : undefined
-        }
-        onSavePrompt={handleSavePrompt}
-        workspaceFiles={
-          message.metadata?.selectedFileIds?.length
-            ? workspaceFiles
-            : EMPTY_WORKSPACE_FILES
-        }
+        openHistory={setHistoryDrawerMessageId}
+        regenerate={handleRegenerateMessage}
+        retry={handleRetryMessage}
+        savePrompt={handleSavePrompt}
+        workspaceFiles={workspaceFiles}
       />
     ),
     [
       currentConversationBusy,
-      handleDeleteMessage,
+      findJumpMessageId,
+      findJumpNonce,
+      handleDeleteMessageById,
       handleEditAiText,
       handleEditMessage,
       handleRegenerateMessage,
       handleRetryMessage,
       handleSavePrompt,
       latestUserMessageId,
+      setHistoryDrawerMessageId,
       stopSending,
       workspaceFiles,
     ],
@@ -807,17 +975,20 @@ export default function Screen() {
               </CapsuleContainer>
             }
             right={
-              <UsageCapsule
-                expanded={messages.length > 0}
-                percent={contextUsage.percent}
-                onPressRing={() => {
-                  setSidebarOpen(false);
-                  setContextDrawerOpen(true);
-                }}
-                onNewChat={() => {
-                  createConversation().catch(console.error);
-                }}
-              />
+              <View ref={chatMenuTriggerRef} collapsable={false}>
+                <UsageCapsule
+                  expanded={messages.length > 0}
+                  percent={contextUsage.percent}
+                  onPressRing={() => {
+                    setSidebarOpen(false);
+                    setContextDrawerOpen(true);
+                  }}
+                  onNewChat={() => {
+                    createConversation().catch(console.error);
+                  }}
+                  onOpenOptions={openChatMenu}
+                />
+              </View>
             }
           />
 
@@ -850,7 +1021,7 @@ export default function Screen() {
                   }}
                 >
                   <Image
-                    source={require("../../../assets/images/new-icon.png")}
+                    source={emptyArtSource}
                     contentFit="contain"
                     style={{
                       width: 62,
@@ -951,6 +1122,10 @@ export default function Screen() {
               )}
             </MessageScroller>
             <ChatHeaderShadow />
+            {/* Registers the FlashList scroll-to-index bridge for
+                find-in-chat jumps; renders null. Must live inside the
+                provider — useMessageScrollerActions throws outside it. */}
+            <FindScrollBridge onRegister={findScrollBridgeRef} />
           </View>
 
             {error ? (
@@ -992,7 +1167,6 @@ export default function Screen() {
               onSend={sendMessage}
               onStop={stopSending}
               pickConversationFolder={pickConversationFolder}
-              clearConversationFolder={clearConversationFolder}
               clearWorkspaceFiles={clearWorkspaceFiles}
               deleteWorkspaceFile={deleteWorkspaceFile}
               refreshWorkspaceFiles={refreshWorkspaceFiles}
@@ -1028,6 +1202,74 @@ export default function Screen() {
               }
             />
           </MessageScrollerProvider>
+
+          <ChatMenuPopup
+            anchor={chatMenuAnchor}
+            chatTitle={currentConversation?.title ?? "New chat"}
+            onClose={() => setChatMenuOpen(false)}
+            onDeletePress={() => setDeleteConfirmOpen(true)}
+            onFilesOpen={() => setChatFilesDrawerOpen(true)}
+            onFindOpen={() => {
+              setFindQuery("");
+              setFindMatches([]);
+              setFindActiveIndex(0);
+              setFindSearched(false);
+              setFindJumpMessageId(null);
+              setFindDrawerOpen(true);
+            }}
+            onPinPress={() => {
+              handleTogglePinChat().catch(console.error);
+            }}
+            onSharePress={() => {
+              handleShareChat().catch(console.error);
+            }}
+            pinned={chatPinned}
+            visible={chatMenuOpen}
+          />
+          <DeleteChatDrawer
+            chatTitle={currentConversation?.title ?? "New chat"}
+            onCancel={() => setDeleteConfirmOpen(false)}
+            onConfirm={() => {
+              handleConfirmDeleteChat().catch(console.error);
+            }}
+            open={deleteConfirmOpen}
+          />
+          <UploadedFilesDrawer
+            chatTitle={currentConversation?.title ?? "New chat"}
+            files={chatUploadedFiles}
+            onOpenChange={setChatFilesDrawerOpen}
+            open={chatFilesDrawerOpen}
+          />
+          <FindInChatDrawer
+            activeIndex={findActiveIndex}
+            chatTitle={currentConversation?.title ?? "New chat"}
+            matches={findMatches}
+            onClear={() => handleFindSearch("")}
+            onNext={() => {
+              if (findMatches.length === 0) return;
+              jumpToFindMatch((findActiveIndex + 1) % findMatches.length, {
+                close: false,
+              });
+            }}
+            onOpenChange={(open) => {
+              setFindDrawerOpen(open);
+              if (!open) setFindSearched(false);
+            }}
+            onPrev={() => {
+              if (findMatches.length === 0) return;
+              jumpToFindMatch(
+                (findActiveIndex - 1 + findMatches.length) %
+                  findMatches.length,
+                { close: false },
+              );
+            }}
+            onQueryChange={handleFindSearch}
+            onSubmit={() => jumpToFindMatch(0)}
+            open={findDrawerOpen}
+            onJump={(index) => jumpToFindMatch(index)}
+            query={findQuery}
+            searched={findSearched}
+          />
 
           <Drawer dismissible={false} open={pendingToolApproval !== null}>
             <DrawerContent
@@ -1188,6 +1430,129 @@ function ChatHeaderShadow() {
   return <HeaderShadow visible={scrollable.start} />;
 }
 
+function FindScrollBridge({
+  onRegister,
+}: {
+  onRegister: React.MutableRefObject<((listIndex: number) => void) | null>;
+}) {
+  const { scrollToIndex } = useMessageScrollerActions();
+  useEffect(() => {
+    onRegister.current = (listIndex: number) => {
+      try {
+        scrollToIndex(listIndex);
+      } catch {
+        // FlashList throws when the index is not yet measured; the
+        // highlight still marks the match.
+      }
+    };
+    return () => {
+      onRegister.current = null;
+    };
+  }, [onRegister, scrollToIndex]);
+  return null;
+}
+
+/**
+ * Memoized message row: per-message closures are built inside (so they
+ * never break this memo), and the custom comparator only watches data
+ * that actually changes row output. Handler identities are intentionally
+ * ignored — every handler closes over refs or behaviorally-stable logic,
+ * with `busy` (a compared prop) covering the one behavioral branch.
+ * Without this, every streaming token re-rendered every visible row.
+ */
+const MessageRow = memo(
+  function MessageRow({
+    busy,
+    deleteMessage,
+    editAiText,
+    editMessage,
+    highlight,
+    highlightNonce,
+    interrupt,
+    isLatestUser,
+    message,
+    openHistory,
+    regenerate,
+    retry,
+    savePrompt,
+    workspaceFiles,
+  }: {
+    busy: boolean;
+    deleteMessage: (id: string) => Promise<void>;
+    editAiText: (content: string) => void;
+    editMessage: (content: string) => void;
+    highlight?: boolean;
+    highlightNonce?: number;
+    interrupt: () => Promise<void>;
+    isLatestUser: boolean;
+    message: StoredMessage;
+    openHistory: (id: string) => void;
+    regenerate: (message: StoredMessage) => Promise<void>;
+    retry: (message: StoredMessage) => Promise<void>;
+    savePrompt: (content: string) => void;
+    workspaceFiles: WorkspaceFile[];
+  }) {
+    return (
+      <ChatMessage
+        canEditAndResend={isLatestUser && !busy}
+        highlight={highlight}
+        highlightNonce={highlightNonce}
+        message={message}
+        onDeleteMessage={
+          message.status === "streaming" || busy
+            ? undefined
+            : () => {
+                deleteMessage(message.id).catch(console.error);
+              }
+        }
+        onEditMessage={editMessage}
+        onEditText={
+          message.role === "assistant" && message.content.trim()
+            ? () => {
+                editAiText(message.content);
+              }
+            : undefined
+        }
+        onInterrupt={() => {
+          interrupt().catch(console.error);
+        }}
+        onOpenHistory={() => {
+          openHistory(message.id);
+        }}
+        onRegenerate={
+          message.role === "assistant" &&
+          message.status === "completed" &&
+          !busy
+            ? () => {
+                regenerate(message).catch(console.error);
+              }
+            : undefined
+        }
+        onRetry={
+          message.status === "failed" && !busy
+            ? () => {
+                retry(message).catch(console.error);
+              }
+            : undefined
+        }
+        onSavePrompt={savePrompt}
+        workspaceFiles={
+          message.metadata?.selectedFileIds?.length
+            ? workspaceFiles
+            : EMPTY_WORKSPACE_FILES
+        }
+      />
+    );
+  },
+  (previous, next) =>
+    previous.message === next.message &&
+    previous.busy === next.busy &&
+    previous.highlight === next.highlight &&
+    previous.highlightNonce === next.highlightNonce &&
+    previous.isLatestUser === next.isLatestUser &&
+    previous.workspaceFiles === next.workspaceFiles,
+);
+
 const ChatInput = memo(function ChatInput({
   activeModels,
   canSend,
@@ -1208,7 +1573,6 @@ const ChatInput = memo(function ChatInput({
   onSend,
   onStop,
   pickConversationFolder,
-  clearConversationFolder,
   clearWorkspaceFiles,
   deleteWorkspaceFile,
   refreshWorkspaceFiles,
@@ -1245,7 +1609,6 @@ const ChatInput = memo(function ChatInput({
     ref: ModelRef;
   }[];
   canSend: boolean;
-  clearConversationFolder: () => Promise<void>;
   clearWorkspaceFiles: () => Promise<void>;
   deleteWorkspaceFile: (fileId: string) => Promise<void>;
   currentExternalFolderSession: ExternalFolderSession | null;
@@ -1332,6 +1695,9 @@ const ChatInput = memo(function ChatInput({
   const conversationKey = currentConversationId ?? "new";
   useEffect(() => {
     setSentOnce(false);
+    // Notices belong to the chat that raised them; never leak one (e.g. a
+    // folder error) into another conversation.
+    setFolderNotice(null);
   }, [conversationKey]);
   useEffect(() => {
     // A failed send leaves no messages and no generation behind: fall back
@@ -1462,17 +1828,24 @@ const ChatInput = memo(function ChatInput({
     refreshWorkspaceFiles().catch(console.error);
   }, [filesDrawerOpen, refreshWorkspaceFiles]);
 
-  const selectedFiles = mergedWorkspaceFiles
-    .filter((file) => selectedFileIds.includes(file.id))
-    .sort(
-      (left, right) =>
-        selectedFileIds.indexOf(left.id) - selectedFileIds.indexOf(right.id),
-    );
+  // Memoized: this runs inside ChatInput's render path, and a fresh
+  // array every keystroke would defeat the partition useMemo below.
+  const selectedFiles = useMemo(
+    () =>
+      mergedWorkspaceFiles
+        .filter((file) => selectedFileIds.includes(file.id))
+        .sort(
+          (left, right) =>
+            selectedFileIds.indexOf(left.id) -
+            selectedFileIds.indexOf(right.id),
+        ),
+    [mergedWorkspaceFiles, selectedFileIds],
+  );
   const selectedAttachmentBuckets = useMemo(
     () => partitionSelectedFiles(selectedFiles),
     [selectedFiles],
   );
-  const activeFolderLabel = currentExternalFolderSession?.displayName ?? null;
+
   const enabledSkills = skills.filter((skill) => skill.enabled);
   const selectedSkills = enabledSkills.filter((skill) =>
     selectedSkillIds.includes(skill.id),
@@ -1634,11 +2007,11 @@ const ChatInput = memo(function ChatInput({
     setBusyAction("folder");
 
     try {
-      const session = await pickConversationFolder();
+      await pickConversationFolder();
 
       setFolderDrawerOpen(false);
       setPendingFolderSend(null);
-      setFolderNotice(`Using ${session.displayName} for this chat.`);
+      setFolderNotice(null);
       setPrompt("");
       KeyboardController.dismiss();
       composerRef.current?.blur();
@@ -1899,9 +2272,15 @@ const ChatInput = memo(function ChatInput({
           disabled: !supportsTools,
           id: "select-folder",
           icon: <FolderOpen color={theme.text} size={16} />,
-          label: activeFolderLabel ? "Switch folder" : "Select folder",
+          label: "Select folder",
           onPress: () => {
             clearTriggerText();
+            // Bound chats cannot switch: the item is hidden once bound,
+            // and the provider refuses as a second line of defense.
+            if (isProjectBound(currentExternalFolderSession)) {
+              setFolderNotice(PROJECT_LOCK_MESSAGE);
+              return;
+            }
             if (Platform.OS !== "android") {
               setFolderNotice(
                 "Picked-folder access is Android-only right now.",
@@ -1911,8 +2290,8 @@ const ChatInput = memo(function ChatInput({
 
             setBusyAction("folder");
             pickConversationFolder()
-              .then((session) => {
-                setFolderNotice(`Using ${session.displayName} for this chat.`);
+              .then(() => {
+                setFolderNotice(null);
               })
               .catch((error) => {
                 if (!isFolderPickerCancellation(error)) {
@@ -1928,31 +2307,19 @@ const ChatInput = memo(function ChatInput({
               });
           },
           subtitle: supportsTools
-            ? (activeFolderLabel ?? "Use an external folder for this chat")
+            ? "Use an external folder for this chat"
             : "Requires a tool-capable model",
-          visible: Platform.OS === "android",
-        },
-        {
-          id: "use-workspace",
-          icon: <X color={theme.text} size={16} />,
-          label: "Use workspace",
-          onPress: () => {
-            clearTriggerText();
-            clearConversationFolder()
-              .then(() => {
-                setFolderNotice("Switched back to the workspace.");
-              })
-              .catch(console.error);
-          },
-          subtitle: "Stop using the external folder",
-          visible: currentExternalFolderSession !== null,
+          // Hidden once bound: switching projects requires a new chat.
+          // ("Use workspace" was removed for the same reason — unbinding
+          // is switching.)
+          visible:
+            Platform.OS === "android" &&
+            !isProjectBound(currentExternalFolderSession),
         },
       ]
         .filter((item) => item.visible)
         .map(({ visible: _visible, ...item }) => item),
     [
-      activeFolderLabel,
-      clearConversationFolder,
       currentExternalFolderSession,
       pickConversationFolder,
       supportsTools,
@@ -2116,29 +2483,6 @@ const ChatInput = memo(function ChatInput({
   return (
     <Animated.View className="relative" style={[composerWidthStyle]}>
       <View className="gap-sp-3">
-        {activeFolderLabel ? (
-          <View className="self-start rounded-full border border-border bg-card px-sp-3 py-2 dark:border-border-dark dark:bg-card-dark">
-            <View className="flex-row items-center gap-sp-2">
-              <FolderOpen color={theme.textSecondary} size={14} />
-              <Text className="font-sans text-xs text-foreground dark:text-foreground-dark">
-                {activeFolderLabel}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  clearConversationFolder()
-                    .then(() => {
-                      setFolderNotice("Switched back to the workspace.");
-                    })
-                    .catch(console.error);
-                }}
-              >
-                <X color={theme.textSecondary} size={14} />
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-
         {folderNotice ? (
           <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
             {folderNotice}
@@ -2265,6 +2609,11 @@ const ChatInput = memo(function ChatInput({
           setFilesDrawerOpen(true);
         }}
         onOpenProject={() => {
+          // Locked once bound: a different project needs a new chat.
+          if (isProjectBound(currentExternalFolderSession)) {
+            setFolderNotice(PROJECT_LOCK_MESSAGE);
+            return;
+          }
           setBusyAction("folder");
           pickConversationFolder()
             .then(async (session) => {
@@ -2279,7 +2628,7 @@ const ChatInput = memo(function ChatInput({
               } catch {
                 // workspace registration is best-effort here
               }
-              setFolderNotice(`Using ${session.displayName} for this chat.`);
+              setFolderNotice(null);
             })
             .catch((error) => {
               if (!isFolderPickerCancellation(error)) {

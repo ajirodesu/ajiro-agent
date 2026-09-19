@@ -1,6 +1,6 @@
 /**
  * Inline tool-call trace: renders each tool execution as a compact card with
- * an icon, human-readable summary, and a state indicator (pending â†’ spinner â†’
+ * an icon, human-readable summary, and a state indicator (pending → spinner →
  * check / cross). Cards stack in execution order; the detail body is
  * collapsible once the step is finished. Failed transient errors surface a
  * Retry action when a handler is provided.

@@ -8,15 +8,19 @@ import {
   getMcpHeaderValuesKey,
   getMcpOAuthTokensKey,
   getProviderApiKeyKey,
-  isRecord,
   normalizeExpiresAt,
   parseHeaderValues,
+  parseMcpOAuthSession,
 } from "@/core/services/secrets-shared";
-import type {
+import type { SecretStore } from "@/core/services/secrets";
+import type { ProviderConfig } from "@/core/types/app-state";
+
+// Re-exported so type consumers resolve identically on both platforms.
+export type {
   McpOAuthSession,
+  McpOAuthTokens,
   SecretStore,
 } from "@/core/services/secrets";
-import type { ProviderConfig } from "@/core/types/app-state";
 
 const memory = new Map<string, string>();
 
@@ -31,17 +35,12 @@ function warnOnce() {
   }
 }
 
-async function readSession(serverId: string): Promise<McpOAuthSession | null> {
-  const raw = memory.get(getMcpOAuthTokensKey(serverId)) ?? null;
-  if (!raw) {
-    return null;
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isRecord(parsed) ? (parsed as McpOAuthSession) : null;
-  } catch {
-    return null;
-  }
+async function readSession(serverId: string) {
+  // Shared parser: web reads sessions (including legacy shapes) exactly
+  // like native does.
+  return parseMcpOAuthSession(
+    memory.get(getMcpOAuthTokensKey(serverId)) ?? null,
+  );
 }
 
 export const secureSecretStore: SecretStore = {
@@ -70,24 +69,16 @@ export const secureSecretStore: SecretStore = {
   async getMcpOAuthTokens(serverId: string) {
     warnOnce();
     const session = await readSession(serverId);
-    const accessToken =
-      session?.tokens && typeof session.tokens.access_token === "string"
-        ? session.tokens.access_token
-        : null;
-    if (!accessToken) {
+
+    if (!session?.tokens?.access_token) {
       return null;
     }
+
     return {
-      accessToken,
-      expiresAt: normalizeExpiresAt(session?.expiresAt),
-      refreshToken:
-        typeof session?.tokens?.refresh_token === "string"
-          ? (session.tokens.refresh_token as string)
-          : null,
-      tokenType:
-        typeof session?.tokens?.token_type === "string"
-          ? (session.tokens.token_type as string)
-          : null,
+      accessToken: session.tokens.access_token,
+      expiresAt: session.expiresAt ?? null,
+      refreshToken: session.tokens.refresh_token ?? null,
+      tokenType: session.tokens.token_type ?? null,
     };
   },
   async getProviderApiKey(providerId) {
@@ -102,12 +93,23 @@ export const secureSecretStore: SecretStore = {
     if (provider.authType === "none") {
       return true;
     }
-    // OAuth token refresh needs native browser/session plumbing; API keys
-    // work in-memory for the session.
+    // OAuth token refresh needs native browser/session plumbing, so
+    // OAuth providers stay unconfigured in preview (deliberate).
     if (provider.authType === "oauth") {
       return false;
     }
-    return memory.has(getProviderApiKeyKey(provider.id));
+
+    const apiKey = memory.get(getProviderApiKeyKey(provider.id));
+
+    if (!apiKey) {
+      return false;
+    }
+
+    if (provider.family === "openai-compatible") {
+      return Boolean(provider.baseUrl?.trim());
+    }
+
+    return true;
   },
   async setProviderApiKey(providerId, apiKey) {
     warnOnce();

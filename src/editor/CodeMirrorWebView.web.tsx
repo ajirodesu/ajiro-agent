@@ -16,6 +16,12 @@ import type {
   CodeMirrorWebViewRef,
 } from "@/editor/CodeMirrorWebView";
 
+// Re-exported so type consumers resolve identically on both platforms.
+export type {
+  CodeMirrorWebViewProps,
+  CodeMirrorWebViewRef,
+} from "@/editor/CodeMirrorWebView";
+
 export function CodeMirrorWebView({
   initialDoc,
   ref,

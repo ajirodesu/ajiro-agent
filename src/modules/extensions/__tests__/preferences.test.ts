@@ -104,8 +104,10 @@ describe("reading and writing preferences", () => {
     const loaded = await prefs.load();
     expect(loaded).toEqual({
       allowPluginInstallRequests: true,
+      editorTheme: null,
       formatters: {},
       notifyOnDiscovery: false,
+      previewEngine: null,
       requireSignedPackages: true,
       trustedSigningKeys: { "ajiros.publisher": "AAAA" },
       updateChannel: "stable",

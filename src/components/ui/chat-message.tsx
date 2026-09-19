@@ -71,8 +71,36 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { refractor } from "refractor";
+import bash from "refractor/bash";
+import c from "refractor/c";
+import cpp from "refractor/cpp";
+import csharp from "refractor/csharp";
+import css from "refractor/css";
+import dart from "refractor/dart";
+import diff from "refractor/diff";
+import go from "refractor/go";
+import ini from "refractor/ini";
+import java from "refractor/java";
+import javascript from "refractor/javascript";
+import json from "refractor/json";
 import jsx from "refractor/jsx";
+import kotlin from "refractor/kotlin";
+import lua from "refractor/lua";
+import markdown from "refractor/markdown";
+import markup from "refractor/markup";
+import perl from "refractor/perl";
+import php from "refractor/php";
+import python from "refractor/python";
+import r from "refractor/r";
+import ruby from "refractor/ruby";
+import rust from "refractor/rust";
+import scala from "refractor/scala";
+import sql from "refractor/sql";
+import swift from "refractor/swift";
+import toml from "refractor/toml";
 import tsx from "refractor/tsx";
+import typescript from "refractor/typescript";
+import yaml from "refractor/yaml";
 
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -115,6 +143,26 @@ import { Asset } from "expo-media-library";
 
 refractor.register(jsx);
 refractor.register(tsx);
+// Fenced-code highlighting beyond TSX: common languages highlight
+// natively, unknown fences still fall back to plaintext downstream.
+for (const syntax of [
+  bash, c, cpp, csharp, css, dart, diff, go, ini, java, javascript,
+  json, kotlin, lua, markdown, markup, perl, php, python, r, ruby,
+  rust, scala, sql, swift, toml, typescript, yaml,
+]) {
+  refractor.register(syntax);
+}
+refractor.alias({
+  bash: ["sh", "shell", "zsh"],
+  cpp: ["c++", "h", "hpp"],
+  csharp: ["cs"],
+  javascript: ["js"],
+  markdown: ["md"],
+  python: ["py"],
+  ruby: ["rb"],
+  typescript: ["ts"],
+  yaml: ["yml"],
+});
 
 const MARKDOWN_PARSER = MarkdownIt({
   breaks: true,
@@ -182,6 +230,8 @@ MARKDOWN_PARSER.core.ruler.after(
 
 type ChatMessageProps = {
   canEditAndResend?: boolean;
+  highlight?: boolean;
+  highlightNonce?: number;
   message: StoredMessage;
   onDeleteMessage?: () => void;
   onEditMessage?: (content: string) => void;
@@ -880,6 +930,8 @@ function SpinningLoader({ color, size }: { color: string; size: number }) {
 
 export const ChatMessage = memo(function ChatMessage({
   canEditAndResend = false,
+  highlight = false,
+  highlightNonce = 0,
   message,
   onDeleteMessage,
   onEditMessage,
@@ -938,6 +990,26 @@ export const ChatMessage = memo(function ChatMessage({
   } | null>(null);
   const [selecting, setSelecting] = useRecyclingState(false, [message.id]);
   const bubblePressRef = useRef<View>(null);
+  const findFlash = useReducedMotion() ? 0 : 1;
+  const findPulse = useSharedValue(0);
+  const findDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!highlight) return;
+    findPulse.value = 0;
+    findPulse.value = withTiming(findFlash, { duration: 350 });
+    if (findDismissTimer.current) clearTimeout(findDismissTimer.current);
+    findDismissTimer.current = setTimeout(() => {
+      findPulse.value = withTiming(0, { duration: 600 });
+    }, 2400);
+    return () => {
+      if (findDismissTimer.current) clearTimeout(findDismissTimer.current);
+    };
+    // highlightNonce re-triggers the pulse when jumping to the same message.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlight, highlightNonce]);
+  const findHighlightStyle = useAnimatedStyle(() => ({
+    opacity: highlight ? 0.28 * findPulse.value + 0.06 : 0,
+  }));
   const isAssistant = message.role === "assistant";
   const isUser = message.role === "user";
   const align = isUser ? "end" : "start";
@@ -1324,15 +1396,16 @@ export const ChatMessage = memo(function ChatMessage({
         ) : null}
 
         {isAssistant || message.content ? (
-          <Bubble
-            align={align}
-            className={cn("max-w-full", isAssistant && "w-full")}
-            variant={variant}
-          >
-            <BubbleContent
-              className={fileHeaderConnected ? "rounded-tr-none" : undefined}
-              style={isUser ? { backgroundColor: theme.accent } : undefined}
+          <View className="relative max-w-full">
+            <Bubble
+              align={align}
+              className={cn("max-w-full", isAssistant && "w-full")}
+              variant={variant}
             >
+              <BubbleContent
+                className={fileHeaderConnected ? "rounded-tr-none" : undefined}
+                style={isUser ? { backgroundColor: theme.accent } : undefined}
+              >
               {isAssistant ? (
                 <View className="gap-sp-3">
                   {reasoningLabel ? (
@@ -1568,7 +1641,22 @@ export const ChatMessage = memo(function ChatMessage({
                 </>
               )}
             </BubbleContent>
-          </Bubble>
+            </Bubble>
+            {highlight ? (
+              <Animated.View
+                pointerEvents="none"
+                className="absolute -inset-1 rounded-2xl"
+                style={[
+                  findHighlightStyle,
+                  {
+                    borderWidth: 2,
+                    borderColor: theme.accent,
+                    backgroundColor: theme.accent,
+                  },
+                ]}
+              />
+            ) : null}
+          </View>
         ) : null}
 
         {isAssistant &&

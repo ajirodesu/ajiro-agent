@@ -14,6 +14,8 @@ import {
   type BackupTableName,
   type CollectedBackup,
 } from "@/modules/backup/backup";
+import { applyThemedAppIcon } from "@/modules/app-icon/themed-app-icon";
+import { requireProjectUnbound } from "@/modules/ide/project-binding";
 import { drizzleBackupStore } from "@/modules/backup/drizzle-store";
 import { createDrizzleDb } from "@/core/db/repositories/shared";
 import { colorScheme } from "nativewind";
@@ -570,15 +572,34 @@ type AppStateProviderProps = {
 };
 
 function ThemePreferenceController({
+    ready,
     themeId,
 }: {
+    ready: boolean;
     themeId: AppThemeId;
 }) {
     const systemColorScheme = useSystemColorScheme();
+    const systemScheme =
+        systemColorScheme === "dark" || systemColorScheme === "light"
+            ? systemColorScheme
+            : null;
+
+    useEffect(() => {
+        // Launcher icon follows the theme (Android activity-aliases; no-op
+        // elsewhere). Gated on hydration: before the stored theme loads the
+        // snapshot still holds the default (aqua), so applying early would
+        // briefly enable the wrong alias on every launch for non-default
+        // users. Runs once ready, so a restored theme re-applies its icon
+        // after process death. Never throws.
+        if (!ready) {
+            return;
+        }
+        applyThemedAppIcon(themeId, systemScheme).catch(() => { });
+    }, [ready, themeId, systemScheme]);
 
     useEffect(() => {
         // New built-ins are deliberately dark and never follow the device
-        // (§26). Legacy ids keep the exact previous behavior below.
+        // (A 26). Legacy ids keep the exact previous behavior below.
         if (
             themeId === "aqua" ||
             themeId === "burnt" ||
@@ -713,6 +734,12 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         );
 
         setPendingQuestionnaires((current) => [...current, questionnaire]);
+        // Same synchronous ref mirror as approvals: close the frame-gap
+        // where an answer submitted before the next render would miss.
+        pendingQuestionnairesRef.current = [
+            ...pendingQuestionnairesRef.current,
+            questionnaire,
+        ];
 
         setBackgroundAgentNotificationState("waiting_approval").catch(() => { });
 
@@ -750,7 +777,11 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         run: AgentRun,
         request: PendingToolApprovalRequest,
     ) {
-        if (snapshotRef.current.settings.toolApprovalMode !== "ask") {
+        // Only "auto" skips the prompt: the tool wrapper already filters
+        // allow-listed tools before calling here, so "allowList" must fall
+        // through and ask for everything else (a !== "ask" check would
+        // auto-approve non-allowlisted tools and defeat the allow-list).
+        if (snapshotRef.current.settings.toolApprovalMode === "auto") {
             return "approve" satisfies import("@/modules/runtime/run-manager").ToolApprovalDecision;
         }
 
@@ -765,6 +796,13 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
         );
 
         setPendingToolApprovals((current) => [...current, approval]);
+        // Mirror into the ref synchronously: the render assignment below
+        // only runs on the next frame, and a notification-tap decision in
+        // between would otherwise miss the approval.
+        pendingToolApprovalsRef.current = [
+            ...pendingToolApprovalsRef.current,
+            approval,
+        ];
 
         if (appStateRef.current === "active") {
             if (
@@ -2831,7 +2869,9 @@ Your output must be:
         setSnapshot((current) => ({
             ...current,
             conversations: upsertConversation(current.conversations, saved),
-            currentConversation: conversation,
+            // Use the DB row (not the local pre-save object) so the
+            // selected conversation can never disagree with the list.
+            currentConversation: saved,
             currentSelectedFileIds: [],
             currentSelectedMcpServerIds: null,
             currentSelectedSkillIds: [],
@@ -3205,6 +3245,10 @@ Your output must be:
             throw new Error("No active conversation available.");
         }
 
+        // Permanent per-chat binding: a conversation that already has a
+        // project keeps it for life; switching requires a new chat.
+        requireProjectUnbound(currentConversation.externalFolderSession);
+
         if (Platform.OS !== "android") {
             throw new Error(
                 "Picked-folder agent access is Android-only right now. Use workspace files on this platform.",
@@ -3245,6 +3289,10 @@ Your output must be:
             return;
         }
 
+        // Unbinding is switching: forbidden on a bound chat (no UI path
+        // reaches here; this is defense in depth).
+        requireProjectUnbound(currentConversation.externalFolderSession);
+
         await repositoriesRef.current.conversationRepository.updateMetadata(
             currentConversation.id,
             {
@@ -3277,6 +3325,8 @@ Your output must be:
             if (!currentConversation) {
                 throw new Error("No active conversation available.");
             }
+
+            requireProjectUnbound(currentConversation.externalFolderSession);
 
             await repositoriesRef.current.conversationRepository.updateMetadata(
                 currentConversation.id,
@@ -3780,8 +3830,8 @@ Your output must be:
                 createExecutionTimelineEvent({
                     createdAt: timestamp,
                     detail: model
-                        ? `${model.providerLabel} Ãƒâ€šÃ‚· ${model.label}`
-                        : `${run.providerId} Ãƒâ€šÃ‚· ${run.modelId}`,
+                        ? `${model.providerLabel} · ${model.label}`
+                        : `${run.providerId} · ${run.modelId}`,
                     kind: "run",
                     status: "pending",
                     title: "Run queued",
@@ -3953,7 +4003,15 @@ Your output must be:
                                 runId: targetRun.id,
                             },
                             role: "assistant",
-                            sequence: Number.MAX_SAFE_INTEGER,
+                            // Keep the row's real sequence: a synthesized
+                            // MAX_SAFE_INTEGER would sort after every later
+                            // turn until the next hydrate corrected it.
+                            sequence:
+                                current.messages.find(
+                                    (message) =>
+                                        message.id ===
+                                        targetRun.assistantMessageId,
+                                )?.sequence ?? Number.MAX_SAFE_INTEGER,
                             status: "failed",
                             updatedAt: new Date().toISOString(),
                         },
@@ -4173,7 +4231,7 @@ Your output must be:
             appliedSkillIds,
             executionTimeline: [
                 createExecutionTimelineEvent({
-                    detail: `${model.providerLabel} Ãƒâ€šÃ‚· ${model.label}`,
+                    detail: `${model.providerLabel} · ${model.label}`,
                     kind: "run",
                     status: "pending",
                     title: "Run queued",
@@ -4336,7 +4394,7 @@ Your output must be:
                 appliedSkillIds,
                 executionTimeline: [
                     createExecutionTimelineEvent({
-                        detail: `${model.providerLabel} Ãƒâ€šÃ‚· ${model.label}`,
+                        detail: `${model.providerLabel} · ${model.label}`,
                         kind: "run",
                         status: "pending",
                         title: "Run queued",
@@ -4574,7 +4632,10 @@ Your output must be:
                 workspaceFiles: snapshot.workspaceFiles,
             }}
         >
-                <ThemePreferenceController themeId={snapshot.settings.themeId} />
+                <ThemePreferenceController
+                    ready={ready}
+                    themeId={snapshot.settings.themeId}
+                />
             {children}
         </AppStateContext.Provider>
     );

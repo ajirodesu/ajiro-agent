@@ -3,12 +3,12 @@
  * provider. The UI never touches registry response shapes — everything is
  * normalized into ExtensionMetadata here.
  *
- * Acode registry endpoints follow the current Acode source
- * (src/lib/config.js → API_BASE = https://acode.app/api; installPlugin.js →
- * `plugin/all`, `plugin/<id>`, `plugin/download/<id>?device=&package=&version=`)
- * [OPEN-SOURCE, MIT]. The provider is tolerant: it accepts both bare
- * arrays and enveloped `{plugins|data|items: [...]}` responses, and maps
- * snake_case/camelCase metadata spellings.
+ * Acode registry endpoints (verified live 2026-09-19): the legacy
+ * `plugin/all` listing path 404s, so listing uses `plugin?page=&limit=`
+ * (bare array pages); `plugin/<id>` detail and `plugin/download/<id>`
+ * keep working. [OPEN-SOURCE, MIT]. The provider is tolerant: it accepts
+ * both bare arrays and enveloped `{plugins|data|items: [...]}` responses,
+ * and maps snake_case/camelCase metadata spellings.
  *
  * When the registry is unreachable the bundled seed catalog keeps the
  * store usable offline (prompt §25/§58) — never erasing a valid cache.
@@ -189,7 +189,15 @@ export function normalizeRegistryEntry(value: unknown): ExtensionMetadata | null
           : null,
     minVersionName: firstString(value, ["minVersionName", "min_version_name"]),
     name,
-    price: typeof value.price === "number" ? value.price : 0,
+    // The registry sends paid prices as numeric strings ("1.00"): accept
+    // those too, or paid plugins normalize to free and leak into stores.
+    price:
+      typeof value.price === "number"
+        ? value.price
+        : typeof value.price === "string" && value.price.trim() !== "" &&
+            Number.isFinite(Number(value.price))
+          ? Number(value.price)
+          : 0,
     readme: firstString(value, ["readme", "readmeUrl", "readme_url"]),
     repository: firstString(value, ["repository", "repo", "sourceUrl", "source_url"]),
     revoked: value.revoked === true,
@@ -263,7 +271,7 @@ export class AcodeRegistryProvider implements RegistryProvider {
     const seen = new Set<string>();
     for (let page = 1; page <= MAX_REGISTRY_PAGES; page += 1) {
       const response = await this.fetchJson(
-        this.url(`plugin/all?page=${page}&limit=${limit}`),
+        this.url(`plugin?page=${page}&limit=${limit}`),
         {
           headers: {
             Accept: "application/json",

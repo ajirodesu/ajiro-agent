@@ -118,7 +118,7 @@ export function upsertWorkspaceFiles(
 export function appendContextToLatestUserMessage(
   messages: ModelMessage[],
   context: string,
-) {
+): boolean {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
 
@@ -133,8 +133,9 @@ export function appendContextToLatestUserMessage(
           ? [message.content, context].filter(Boolean).join("\n\n")
           : [...message.content, { type: "text", text: context }],
     } as ModelMessage;
-    return;
+    return true;
   }
+  return false;
 }
 
 export function resolveFileContextSource(input: {

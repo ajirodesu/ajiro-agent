@@ -51,8 +51,118 @@ import { NativeViewUnavailable } from "@/components/ui/native-unavailable";
 import { useProjectRun, type RunPhase } from "@/hooks/use-project-run";
 import { useTheme } from "@/hooks/use-theme";
 import { useIdeWorkspace } from "@/providers/ide-workspace";
+import {
+  getCatalogSnapshot,
+  getExtensionStore,
+  getPluginRuntimeBridge,
+  subscribeExtensionEvents,
+  type InstalledExtensionRecord,
+  type PluginPageTab,
+} from "@/modules/extensions";
+import { pluginScopes } from "@/modules/extensions/scopes";
 
 type RunPage = "console" | "webview";
+
+/**
+ * Preview engines: the default WebView plus every installed + enabled
+ * store plugin with a live custom page in the webview scope. The choice
+ * persists in extension preferences; a missing engine falls back to the
+ * default. Selecting a plugin engine opens its custom page (the shared
+ * tabbed container), which is the plugin's preview surface.
+ */
+export type PreviewEngine =
+  | { kind: "default" }
+  | { kind: "plugin"; pluginId: string; title: string };
+
+function usePreviewEngines(): {
+  engines: PreviewEngine[];
+  selected: string | null;
+  select: (pluginId: string | null) => void;
+} {
+  const bridge = getPluginRuntimeBridge();
+  const [pages, setPages] = useState<PluginPageTab[]>(() =>
+    bridge.status().pages,
+  );
+  const [records, setRecords] = useState<InstalledExtensionRecord[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => bridge.subscribe((status) => setPages(status.pages)), [
+    bridge,
+  ]);
+  useEffect(() => {
+    let cancelled = false;
+    const refreshRecords = () => {
+      getExtensionStore()
+        .manager.listInstalled()
+        .then((next) => {
+          if (!cancelled) setRecords(next);
+        })
+        .catch(() => {});
+    };
+    const refreshSelection = () => {
+      getExtensionStore()
+        .preferences.load()
+        .then((preferences) => {
+          if (!cancelled) setSelected(preferences.previewEngine);
+        })
+        .catch(() => {});
+    };
+    refreshRecords();
+    refreshSelection();
+    return subscribeExtensionEvents((event) => {
+      if (
+        event.type === "installed" ||
+        event.type === "uninstalled" ||
+        event.type === "enabled" ||
+        event.type === "disabled" ||
+        event.type === "updated" ||
+        event.type === "rolled-back"
+      ) {
+        refreshRecords();
+        refreshSelection();
+      }
+    });
+  }, []);
+
+  const engines: PreviewEngine[] = (() => {
+    const byId = new Map(records.map((record) => [record.id, record]));
+    const catalogById = new Map(
+      getCatalogSnapshot().entries.map((entry) => [entry.id, entry]),
+    );
+    const list: PreviewEngine[] = [{ kind: "default" }];
+    for (const page of pages) {
+      const record = byId.get(page.pluginId);
+      if (
+        !record?.enabled ||
+        (record.source !== "registry" && record.source !== "bundled")
+      ) {
+        continue;
+      }
+      const entry = catalogById.get(page.pluginId);
+      if (entry && !pluginScopes(entry).includes("webview")) continue;
+      list.push({ kind: "plugin", pluginId: page.pluginId, title: page.title });
+    }
+    return list;
+  })();
+
+  return {
+    engines,
+    selected:
+      selected &&
+      engines.some(
+        (engine) => engine.kind === "plugin" && engine.pluginId === selected,
+      )
+        ? selected
+        : null,
+    select: (pluginId: string | null) => {
+      setSelected(pluginId);
+      getExtensionStore()
+        .preferences.save({ previewEngine: pluginId })
+        .catch(() => {});
+      if (pluginId) bridge.showPage(pluginId);
+    },
+  };
+}
 
 const PHASE_LABELS: Record<RunPhase, string> = {
   idle: "Idle",
@@ -401,6 +511,7 @@ function WebviewPage({
   shareUrl: string | null;
 }) {
   const theme = useTheme();
+  const { engines, selected, select } = usePreviewEngines();
   if (!running || !liveUrl) {
     return (
       <View className="min-h-0 flex-1 items-center justify-center gap-sp-2 px-sp-6">
@@ -423,6 +534,72 @@ function WebviewPage({
   }
   return (
     <View className="min-h-0 flex-1 gap-sp-1">
+      {engines.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerClassName="gap-sp-1 px-sp-1"
+          accessibilityRole="tablist"
+          accessibilityLabel="Preview engine"
+        >
+          <Pressable
+            key="__default__"
+            accessibilityRole="tab"
+            accessibilityState={{ selected: selected === null }}
+            accessibilityLabel="Default preview engine"
+            onPress={() => select(null)}
+            className="rounded-full border px-sp-3 py-sp-1"
+            style={{
+              backgroundColor:
+                selected === null
+                  ? withAlpha(theme.accent, 0.16)
+                  : "transparent",
+              borderColor:
+                selected === null ? theme.accent : theme.border,
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              className="font-sans text-xs text-foreground dark:text-foreground-dark"
+              style={selected === null ? { fontWeight: "700" } : undefined}
+            >
+              Default
+            </Text>
+          </Pressable>
+          {engines
+            .filter(
+              (engine): engine is Extract<PreviewEngine, { kind: "plugin" }> =>
+                engine.kind === "plugin",
+            )
+            .map((engine) => {
+              const active = selected === engine.pluginId;
+              return (
+                <Pressable
+                  key={engine.pluginId}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`${engine.title} preview engine`}
+                  onPress={() => select(engine.pluginId)}
+                  className="rounded-full border px-sp-3 py-sp-1"
+                  style={{
+                    backgroundColor: active
+                      ? withAlpha(theme.accent, 0.16)
+                      : "transparent",
+                    borderColor: active ? theme.accent : theme.border,
+                  }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    className="font-sans text-xs text-foreground dark:text-foreground-dark"
+                    style={active ? { fontWeight: "700" } : undefined}
+                  >
+                    {engine.title}
+                  </Text>
+                </Pressable>
+              );
+            })}
+        </ScrollView>
+      ) : null}
       <View className="flex-row items-center gap-sp-2 rounded-ui border border-border bg-card px-sp-2 py-sp-2 dark:border-border-dark dark:bg-card-dark">
         <Link2 color={theme.textSecondary} size={16} strokeWidth={2} />
         <View className="min-w-0 flex-1">

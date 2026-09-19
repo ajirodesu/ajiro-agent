@@ -62,7 +62,7 @@ describe("launch splash", () => {
   });
 
   it("ships a transparent splash mark for the theme overlay", () => {
-    const path = join(root, "assets", "images", "new-splash-icon.png");
+    const path = join(root, "assets", "images", "splash-icon-aqua.png");
     expect(existsSync(path)).toBe(true);
     const info = pngInfo(path);
     expect(info.colorType).toBe(6);

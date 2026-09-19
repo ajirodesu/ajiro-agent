@@ -399,13 +399,20 @@ export async function installPackage(
   const stamp = now.replace(/[^0-9]/g, "");
   const attemptStaging = stagingDir(deps.paths, `${sanitizePluginId(manifest.id)}-${stamp}`);
   await platform.makeDirectory(attemptStaging);
-  for (const [name, data] of pkg.files) {
-    const target = `${attemptStaging}/${name}`;
-    const lastSlash = target.lastIndexOf("/");
-    if (lastSlash > attemptStaging.length + 1) {
-      await platform.makeDirectory(target.slice(0, lastSlash));
+  try {
+    for (const [name, data] of pkg.files) {
+      const target = `${attemptStaging}/${name}`;
+      const lastSlash = target.lastIndexOf("/");
+      if (lastSlash > attemptStaging.length + 1) {
+        await platform.makeDirectory(target.slice(0, lastSlash));
+      }
+      await platform.writeBinary(target, data);
     }
-    await platform.writeBinary(target, data);
+  } catch (error) {
+    // A failed stage must not leave a stale directory behind: the next
+    // attempt reuses the same stamp-based path and would collide with it.
+    await platform.deleteEntry(attemptStaging, "directory").catch(() => {});
+    throw error;
   }
 
   // 9. Atomic replace with backup + rollback (§32).
@@ -452,7 +459,17 @@ export async function installPackage(
     await platform.moveEntry(attemptStaging, destination, "directory");
   } catch (error) {
     if (hadPrevious) {
-      await platform.moveEntry(backupPath, destination, "directory");
+      try {
+        await platform.moveEntry(backupPath, destination, "directory");
+      } catch (restoreError) {
+        // Both the swap and the restore failed: the previous version may
+        // only survive under the backup path. Surface both failures so the
+        // user can recover instead of silently losing the plugin.
+        await saveInstalledRecords(deps, records).catch(() => {});
+        throw new Error(
+          `Install swap failed and rollback restore also failed (backup kept at ${backupPath}): ${restoreError instanceof Error ? restoreError.message : String(restoreError)} (original: ${error instanceof Error ? error.message : String(error)})`,
+        );
+      }
     }
     // The swap failed, so the previous record is the true state again.
     await saveInstalledRecords(deps, records).catch(() => {});

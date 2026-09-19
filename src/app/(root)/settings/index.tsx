@@ -52,6 +52,11 @@ import { useAppTheme } from "@/hooks/use-app-theme";
 import { useConfig } from "@/hooks/use-config";
 import { useTheme } from "@/hooks/use-theme";
 import {
+  usePluginEditorTheme,
+  usePluginEditorThemes,
+  useSetPluginEditorTheme,
+} from "@/editor/use-plugin-editor-theme";
+import {
   ACCENT_CHOICES,
   BUILT_IN_THEMES,
   LEGACY_DEFAULT_ACCENT,
@@ -680,6 +685,7 @@ export default function SettingsScreen() {
                       accentColor={BUILT_IN_THEMES[value].colors.primary}
                     />
                   ))}
+                  <EditorThemePicker />
                 </DrawerBody>
               </DrawerContent>
             </Drawer>
@@ -913,6 +919,70 @@ function DrawerOptionRow({
         <Check color={accentColor ?? theme.text} size={18} />
       ) : null}
     </Pressable>
+  );
+}
+
+/**
+ * Plugin editor themes (Acode Settings → Editor Theme): installed theme
+ * plugins register here automatically; picking one applies it to the code
+ * editor immediately, "Match app theme" clears back to the app-derived
+ * theme. Empty when no theme plugin is installed — no stub rows.
+ */
+function EditorThemePicker() {
+  const pluginThemes = usePluginEditorThemes();
+  const selectedTheme = usePluginEditorTheme();
+  const setPluginEditorTheme = useSetPluginEditorTheme();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (pluginThemes.length === 0) {
+    return null;
+  }
+
+  const select = (id: string | null) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setPluginEditorTheme(id)
+      .catch((selectError: unknown) => {
+        setError(
+          selectError instanceof Error
+            ? selectError.message
+            : "Could not apply the editor theme.",
+        );
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  return (
+    <>
+      <Text className="font-sans text-xs font-semibold text-muted-foreground dark:text-muted-foreground-dark">
+        Editor theme (plugin)
+      </Text>
+      <DrawerOptionRow
+        key="__app__"
+        label="Match app theme"
+        onPress={() => select(null)}
+        selected={selectedTheme === null}
+        subtitle="Use the active app theme in the code editor"
+      />
+      {pluginThemes.map((item) => (
+        <DrawerOptionRow
+          key={item.id}
+          label={item.caption}
+          onPress={() => select(item.id)}
+          selected={selectedTheme?.id === item.id}
+          subtitle={`${item.pluginId} · ${item.dark ? "dark" : "light"}`}
+        />
+      ))}
+      {error ? (
+        <Text className="font-sans text-xs text-destructive dark:text-destructive-dark">
+          {error}
+        </Text>
+      ) : null}
+    </>
   );
 }
 

@@ -25,7 +25,26 @@ export type CreateScheduledRunResult = {
   userMessage: StoredMessage;
 };
 
-export async function createScheduledRun(
+/**
+ * In-process dispatch mutex: sequence allocation is MAX+1 plus separate
+ * inserts with no transaction, so two overlapping dispatches would mint
+ * identical sequences. Headless alarm tasks and foreground resume share
+ * this module instance, so a promise-chain gate serializes them.
+ */
+let dispatchTail: Promise<unknown> = Promise.resolve();
+
+export function createScheduledRun(
+  repositories: Repositories,
+  schedule: Schedule,
+): Promise<CreateScheduledRunResult> {
+  const next = dispatchTail.then(() =>
+    createScheduledRunInner(repositories, schedule),
+  );
+  dispatchTail = next.catch(() => {});
+  return next;
+}
+
+async function createScheduledRunInner(
   repositories: Repositories,
   schedule: Schedule,
 ): Promise<CreateScheduledRunResult> {

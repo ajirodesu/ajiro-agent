@@ -1,0 +1,6308 @@
+{
+  "generatedAt": "2026-09-19T07:12:09.089Z",
+  "paidExcluded": 38,
+  "total": 257,
+  "verdicts": [
+    {
+      "id": "acaw.my.id",
+      "version": "1.1.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"sideButton\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.additional.langmodes",
+      "version": "1.1.8",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"@codemirror/autocomplete\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.api_tester.ghostman",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.api.client",
+      "version": "1.0.4",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"sideButton\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.cli.plugin",
+      "version": "0.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"openfolder\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.code.runner",
+      "version": "1.6.1",
+      "scopes": [
+        "terminal",
+        "language"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.console.cleaner",
+      "version": "1.0.0",
+      "scopes": [
+        "terminal",
+        "language"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.cpp.client",
+      "version": "1.0.5",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.cpp.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.csharp.client",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.csharp.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.dart.client",
+      "version": "1.0.3",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.dart.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.db.visualizer",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.devx.env",
+      "version": "4.0.13",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"editorLanguages\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.devx.prismax",
+      "version": "1.2.01",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"editorLanguages\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.distro.manager",
+      "version": "1.0.1",
+      "scopes": [
+        "terminal"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.dockerfile.client",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.dockerfile.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.elm.client",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.elm.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.font.viewer",
+      "version": "1.0.0",
+      "scopes": [
+        "webview"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.fonticons",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.go.client",
+      "version": "1.0.3",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.go.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.godot.codemirror.simple",
+      "version": "1.3.6",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fsOperation\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.haskell.client",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.haskell.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.icon.react",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.iconpack",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.java.client",
+      "version": "1.0.4",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.java.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.lua.client",
+      "version": "1.0.2",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.lua.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.material.icons.advanced",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.path.linker",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.php.client",
+      "version": "1.0.2",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.php.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.acelivepreview",
+      "version": "1.0.3",
+      "scopes": [
+        "webview"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Plugin \"acode.plugin.acelivepreview\" registered no init callback; entry scripts must call acode.setPluginInit.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.acopilot",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.ai.sidebar",
+      "version": "2.1.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "ReadableStream is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.anote",
+      "version": "2.1.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.anycdn",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.cdn.manager",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.plugin.cdn.manager')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.chatgpt",
+      "version": "2.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.colorpalette",
+      "version": "1.0.7",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.github",
+      "version": "2.0.0",
+      "scopes": [
+        "filemanager"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.gradient",
+      "version": "1.2.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.json_visualizer",
+      "version": "1.1.1",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.kimbie",
+      "version": "1.0.0",
+      "scopes": [
+        "theme",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"themes\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.lesscompiler",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.localhostpreview",
+      "version": "1.0.6",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.loremipsum",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.lovelauncher",
+      "version": "1.0.1",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"openFolder\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.material_icons",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.mini_leet",
+      "version": "0.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"sidebarApps\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.oceandark",
+      "version": "1.0.0",
+      "scopes": [
+        "theme",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"themes\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.oceanligh",
+      "version": "1.0.0",
+      "scopes": [
+        "theme",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"themes\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.package.adder",
+      "version": "1.0.5",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.phpspa",
+      "version": "1.1.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.pinchtozoom",
+      "version": "2.2.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.pixel_icons",
+      "version": "0.0.4",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"helpers\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.prettier",
+      "version": "2.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.ptmono",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.python",
+      "version": "1.1.4",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.python2",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.react.snippet",
+      "version": "1.5.3",
+      "scopes": [
+        "snippets"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.repechul.godot.colors.editor.theme",
+      "version": "2.0.0",
+      "scopes": [
+        "theme",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.repechul.godot.editortheme",
+      "version": "0.1.0",
+      "scopes": [
+        "theme",
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.repechul.godot.gdscript.support.dx",
+      "version": "0.9.2",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.repechul.multilang.togglecomments",
+      "version": "1.0.1",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.rest.client",
+      "version": "1.2.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"openfolder\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.restapi",
+      "version": "1.1.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.selectcdn",
+      "version": "1.3.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 2,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.smali",
+      "version": "2.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.smartprojectgenerator",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"sidebarApps\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.snippets",
+      "version": "2.0.0",
+      "scopes": [
+        "snippets"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 2000
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.tab",
+      "version": "1.1.00",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": false,
+      "activatedOk": false,
+      "hasEntry": false,
+      "compatibility": "unknown",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": null,
+      "error": "Manifest field \"files\" must be an array of strings."
+    },
+    {
+      "id": "acode.plugin.typst",
+      "version": "1.0.2",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Uint8Array.fromBase64 is not a function",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.urus.foundation",
+      "version": "0.3.0",
+      "scopes": [
+        "language",
+        "editor",
+        "snippets"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.version.control.gitpro",
+      "version": "2.9.2",
+      "scopes": [
+        "filemanager"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"actionStack\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.vitest_snippets",
+      "version": "1.0.0",
+      "scopes": [
+        "snippets"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"editorLanguages\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.plugin.volumncursor",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.plugin.webpreviewpip",
+      "version": "2.0.1",
+      "scopes": [
+        "language",
+        "webview"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 7,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.prisma.highlight",
+      "version": "2.0.13",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"editorLanguages\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.prisma.support",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"@lezer/lr\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.python.client",
+      "version": "1.0.4",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"acode-language-client\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.python.fmt",
+      "version": "0.1.3",
+      "scopes": [
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.python.fmt')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.rakha.gradient.generator",
+      "version": "1.2.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Plugin \"acode.rakha.gradient.generator\" registered no init callback; entry scripts must call acode.setPluginInit.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.ruby.client",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.ruby.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.runner.plugin",
+      "version": "1.0.5",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.rust.client",
+      "version": "1.0.2",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.rust.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.sdk.plugin",
+      "version": "1.0.5",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.sql.client",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.sql.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.svelte.client",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"acode-language-client\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.tailwind.languageservice",
+      "version": "0.1.0",
+      "scopes": [
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.terminal",
+      "version": "1.0.3",
+      "scopes": [
+        "terminal"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fsoperation\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.terraform.client",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.terraform.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.todo.highlighter",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "acode.typescript.client",
+      "version": "1.0.3",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"acode-language-client\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.vue.client",
+      "version": "1.0.4",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"acode-language-client\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "acode.yaml.client",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'acode.yaml.client')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "ajr.minecraft_lang.mode",
+      "version": "1.0.1",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"@codemirror/language\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "almukaafih.zipfs",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fs\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "aocde.clone.repo",
+      "version": "2.1.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "app.acode.csv",
+      "version": "1.0.1",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "axpo.dev",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.acode.ayumirage",
+      "version": "1.1.2",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.acodex",
+      "version": "3.4.0",
+      "scopes": [
+        "terminal"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.bs.intellisense",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.git.dust",
+      "version": "1.0.0",
+      "scopes": [
+        "theme",
+        "filemanager"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.markdown",
+      "version": "1.0.6",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.mint",
+      "version": "1.0.0",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.path.intellize",
+      "version": "1.2.0",
+      "scopes": [
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.phpprettifier",
+      "version": "1.0.3",
+      "scopes": [
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.react.snippets",
+      "version": "1.1.2",
+      "scopes": [
+        "snippets"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "bajrangcoder.sweet",
+      "version": "1.1.2",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "blackbox.ai",
+      "version": "3.1.6",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "this environment is missing the following Web Fetch API type: Request is not defined. Add one of these imports before your first `import … from 'openai'`:\n- `import 'openai/shims/node'` (if you're running on Node)\n- `import 'openai/shims/web'` (otherwise)\n",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "blade.formatter.zafar",
+      "version": "1.0.0",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 1,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "chat",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Plugin \"chat\" registered no init callback; entry scripts must call acode.setPluginInit.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "code.metrics",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'code.metrics')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "codewithchai.theme.draculax",
+      "version": "1.0.1",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.a3.antigravity",
+      "version": "1.0.1",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.acode.community",
+      "version": "3.5.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.acode.gradientplayground",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.acode.sqliteviewer",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.acode.svelteformatter",
+      "version": "1.5.1",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 1,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.alis219.sqlite.viewer",
+      "version": "1.0.5",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.alpha10.quickiconlibrariesv1",
+      "version": "1.0.0",
+      "scopes": [
+        "language",
+        "webview"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.alpha10.quickjsrunner",
+      "version": "1.0.0",
+      "scopes": [
+        "terminal",
+        "language"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.alpha10.quicksnippetgenerator",
+      "version": "1.2.0",
+      "scopes": [
+        "snippets"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.arfoxcode.runner_python_node",
+      "version": "0.5.2",
+      "scopes": [
+        "terminal",
+        "language"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 4,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.ashwin.jssnippets",
+      "version": "1.2.0",
+      "scopes": [
+        "language",
+        "editor",
+        "snippets"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.asyncpranav.acodepets",
+      "version": "2.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.asyncpranav.bettercomments",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.byteforge88.cherryblossom.theme",
+      "version": "1.0.0",
+      "scopes": [
+        "theme",
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"themes\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "com.cr4sh3ur.claude",
+      "version": "1.1.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'com.cr4sh3ur.claude')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "com.degrace.apitester",
+      "version": "1.1.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.degrace.loop",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.degrace.rose.v2",
+      "version": "2.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 2,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.deltalabs.dxagent",
+      "version": "1.19.4",
+      "scopes": [
+        "terminal",
+        "webview"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.fikriwardana.aichat",
+      "version": "1.0.0",
+      "scopes": [
+        "terminal"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.heyitsaadin.ai_agent",
+      "version": "0.6.4",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.kaka.cssvarautocomplete",
+      "version": "1.0.1",
+      "scopes": [
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.kaka.hsl_snippet",
+      "version": "2.0.0",
+      "scopes": [
+        "language",
+        "snippets"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.kaka.hsl_snippet_lgc",
+      "version": "1.0.2",
+      "scopes": [
+        "language",
+        "snippets"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.kaka.responsiveliveserver",
+      "version": "1.0.0",
+      "scopes": [
+        "webview"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.mesanjeet.acode.chaitheme",
+      "version": "1.2.0",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.mesanjeet.acode.deepoceanglass",
+      "version": "1.2.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.mesanjeet.acode.midnightmatcha",
+      "version": "1.2.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.neonheart711.candyneon",
+      "version": "1.0.1",
+      "scopes": [
+        "theme",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"themeBuilder\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "com.relay.apiclient",
+      "version": "1.1.02",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.repechul.acode.keyboard.disabler.plugin",
+      "version": "1.0.2",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'com.repechul.acode.keyboard.disabler.plugin')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "com.rightfix.acodeopencode",
+      "version": "1.1.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.rightfix.acodetmux",
+      "version": "1.0.1",
+      "scopes": [
+        "terminal"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.rightfix.ngrok",
+      "version": "1.1.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.rsj_ronilson.bluloco.theme",
+      "version": "1.0.0",
+      "scopes": [
+        "theme",
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "com.rsj.ronilson.csspeek",
+      "version": "1.0.0",
+      "scopes": [
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": false,
+      "compatibility": "unknown",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.ssh.manager",
+      "version": "1.5.3",
+      "scopes": [
+        "terminal",
+        "filemanager",
+        "webview"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.techsetuapps.instantweb.livepreviewer",
+      "version": "1.4.3",
+      "scopes": [
+        "language",
+        "webview"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.terminal.snippets",
+      "version": "0.9.14",
+      "scopes": [
+        "terminal",
+        "editor",
+        "snippets"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.victozee.opencode",
+      "version": "0.2.2",
+      "scopes": [
+        "terminal"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "com.ytgandroid.smali.runner",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": false,
+      "compatibility": "unknown",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "coswat.code.commenter",
+      "version": "1.0.9",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "coswat.theme.breeze",
+      "version": "1.0.0",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "cubarabara.responsive",
+      "version": "2.2.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "customcss",
+      "version": "1.0.1",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "customjs",
+      "version": "1.0.1",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "dconco.google_sans_code_fonts",
+      "version": "0.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "dev.rugved.githubmanager",
+      "version": "1.2.4",
+      "scopes": [
+        "filemanager"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "dikidjatar.plugin.github",
+      "version": "1.0.0",
+      "scopes": [
+        "filemanager"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"DialogBox\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "documentsviewer",
+      "version": "1.0.12",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"editorMnager\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "env.mode",
+      "version": "1.1.01",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"@lezer/lr\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "fanorisky.pawn.kit",
+      "version": "1.0.6",
+      "scopes": [
+        "language",
+        "editor",
+        "snippets"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "fulminyx.plugin.userdb",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "github",
+      "version": "1.4.0",
+      "scopes": [
+        "filemanager"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": false,
+      "compatibility": "unknown",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "github.next.monaspace",
+      "version": "1.0.0",
+      "scopes": [
+        "filemanager"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "hallofcodes.rutex.coding_agent",
+      "version": "0.0.9",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "iconbrowser",
+      "version": "0.1.0",
+      "scopes": [
+        "webview"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "icons.vscode",
+      "version": "1.0.02",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"acemodes\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "io.foxbiz.acode_academy",
+      "version": "1.2.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Automatic publicPath is not supported in this browser",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "jobians.lsp.client",
+      "version": "1.1.1",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"multiPrompt\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "kc.aadin.smoothcursor",
+      "version": "2.1.0",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "kuro.filenameonly",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "kuro.sidebutton.fix",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "live_auto_pre",
+      "version": "1.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "acode.plugin is not a function",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "lumen.breadcrumbs",
+      "version": "2.8.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"@codemirror/language\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "lumen.github_monaspace_fonts",
+      "version": "1.0.2",
+      "scopes": [
+        "filemanager"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "mayank.plugin.vs_theme",
+      "version": "1.0.0",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "mermaid_preview",
+      "version": "1.0.0",
+      "scopes": [
+        "language",
+        "webview"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "my.icons",
+      "version": "2.0.4",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"helpers\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "neonheart711.theme",
+      "version": "1.0.1",
+      "scopes": [
+        "theme",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "neonheart711.theme.v2",
+      "version": "2.0.2",
+      "scopes": [
+        "theme",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "null.plugin.iframe",
+      "version": "1.1.6",
+      "scopes": [
+        "webview"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of null (reading 'src')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "oapi.viewer",
+      "version": "1.2.6",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 1,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "pink.boo.theme",
+      "version": "1.0.02",
+      "scopes": [
+        "theme"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "plugin.acodecm6.minimap",
+      "version": "1.0.1",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "plugin.codicon.font",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "plugin.overpass.mono",
+      "version": "1.0.3",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "projects.x2.com",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"projects\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "rk.adoc",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "sebastianjnuwu.acode.eruda",
+      "version": "1.0.7",
+      "scopes": [
+        "terminal",
+        "webview"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "sebastianjnuwu.material.icons",
+      "version": "1.2.4",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"helpers\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "sebastianjnuwu.theme.vscode",
+      "version": "1.1.7",
+      "scopes": [
+        "theme",
+        "editor"
+      ],
+      "stores": [
+        "studio",
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"themes\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "simple.python.runner",
+      "version": "1.0.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "soteenstudio.plugin.lightvm",
+      "version": "0.1.0",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "ssh.remote.fs",
+      "version": "0.3.1",
+      "scopes": [
+        "filemanager"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fsOperation\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "su_hat_sudo_font",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "sync",
+      "version": "1.0.3",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fsOperation\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "terser",
+      "version": "1.0.0",
+      "scopes": [
+        "language",
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "thunder.plugin.csv_to_table.free",
+      "version": "1.3.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fsOperation\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "thunder.plugin.terminal.quick_button",
+      "version": "1.2.0",
+      "scopes": [
+        "terminal"
+      ],
+      "stores": [
+        "studio",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"sideButton\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "thunder.starter.bolt",
+      "version": "1.2.3",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fs\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "twistedfish.emoji_picker",
+      "version": "1.3.0",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "ug.pierre.icons",
+      "version": "1.0.1",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"helpers\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "webfonts",
+      "version": "1.0.2",
+      "scopes": [
+        "editor"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "editorManager is not defined",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "x.always.welcome.page",
+      "version": "0.0.5",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'x.always.welcome.page')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "x.better.appslauncher",
+      "version": "0.1.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"sidebarApps\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "x.better.filebroswer",
+      "version": "0.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'x.better.filebroswer')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "x.better.ui",
+      "version": "1.12.5",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fs\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "x.friend",
+      "version": "0.1.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "Cannot read properties of undefined (reading 'x.friend')",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "x.profile",
+      "version": "0.0.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"Page\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "x.treesitter",
+      "version": "1.0.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "compatible",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fs\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "x.util.o.u.t.f",
+      "version": "0.2.6",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": true,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": false,
+      "activationError": null,
+      "error": null
+    },
+    {
+      "id": "x.wakatime",
+      "version": "2.1.0",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "unsupported",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"fs\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "xiex.my.id_api_ai",
+      "version": "3.2.2",
+      "scopes": [
+        "other"
+      ],
+      "stores": [
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": true,
+      "manifestOk": true,
+      "installedOk": true,
+      "activatedOk": false,
+      "hasEntry": true,
+      "compatibility": "partial",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": "The module \"sideButton\" is not available to this plugin: it is either a capability the user did not grant or a core module Ajiro does not provide.",
+      "error": "entry script did not reach loaded state in harness"
+    },
+    {
+      "id": "ych.csv2json",
+      "version": "1.0.1",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": false,
+      "manifestOk": false,
+      "installedOk": false,
+      "activatedOk": false,
+      "hasEntry": false,
+      "compatibility": "unknown",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": null,
+      "error": "Unsafe archive entry: \"src\\csv2json.js\" (backslash path)."
+    },
+    {
+      "id": "ych.json2code",
+      "version": "1.0.2",
+      "scopes": [
+        "language"
+      ],
+      "stores": [
+        "workshop",
+        "all"
+      ],
+      "downloadOk": true,
+      "downloadUnavailable": false,
+      "zipOk": false,
+      "manifestOk": false,
+      "installedOk": false,
+      "activatedOk": false,
+      "hasEntry": false,
+      "compatibility": "unknown",
+      "features": {
+        "commands": 0,
+        "formatters": 0,
+        "pages": 0,
+        "snippets": 0
+      },
+      "paidExcluded": false,
+      "requiresDevice": true,
+      "activationError": null,
+      "error": "Unsafe archive entry: \"assets\\screen-record.gif\" (backslash path)."
+    }
+  ]
+}

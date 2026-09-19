@@ -28,6 +28,10 @@
  */
 import { emitExtensionEvent } from "../events";
 import type { FormatterSelectionStore } from "../formatters";
+import type {
+  EditorThemeSelectionStore,
+  PluginEditorTheme,
+} from "../editor-themes";
 import {
   createPluginCommandRegistry,
   type PluginCommandRegistry,
@@ -49,8 +53,23 @@ import {
   type PluginHostTransport,
 } from "./plugin-host";
 
+export type PluginPageTab = {
+  pluginId: string;
+  title: string;
+};
+
+export type PluginEditorThemeStatus = {
+  themes: PluginEditorTheme[];
+  /** Selected theme id; null follows the app theme. */
+  selected: string | null;
+};
+
 export type PluginRuntimeStatus = {
   page: PluginPageState;
+  /** Live custom pages for the tab bar, in first-shown order. */
+  pages: PluginPageTab[];
+  /** Registered plugin editor themes + the user selection. */
+  editorThemes: PluginEditorThemeStatus;
   /** True once the mounted document has installed its runtime. */
   ready: boolean;
 };
@@ -121,6 +140,11 @@ export type PluginRuntimeBridge = {
   hasExecutableExtensions(): Promise<boolean>;
   hidePage(): void;
   host: PluginDomHost;
+  /**
+   * Switch to a plugin's custom page (tab press). False when the plugin
+   * has no live page; the document confirms via status update.
+   */
+  showPage(pluginId: string): boolean;
   listDiagnostics(pluginId?: string): Promise<ExtensionDiagnostic[]>;
   runCommand(name: string, value?: unknown): boolean;
   setInstallRequestHandler(handler: PluginInstallRequestHandler | null): void;
@@ -135,6 +159,8 @@ export function createPluginRuntimeBridge(input: {
   diagnostics?: DiagnosticRecorder;
   /** Per-language formatter selections (persisted by the caller). */
   formatterSelections?: FormatterSelectionStore;
+  /** Plugin editor-theme selection (persisted by the caller). */
+  editorThemeSelections?: EditorThemeSelectionStore;
   /** OS whose `bindKey` entry applies; defaults to the “win” map (§45). */
   os?: string;
   runtime: ExtensionRuntime;
@@ -234,7 +260,12 @@ export function createPluginRuntimeBridge(input: {
     diagnostics,
   });
 
-  const host = new PluginDomHost(services, undefined, input.formatterSelections);
+  const host = new PluginDomHost(
+    services,
+    undefined,
+    input.formatterSelections,
+    input.editorThemeSelections,
+  );
   invokeCommand = (name) => {
     host.runCommand(name);
   };
@@ -247,6 +278,11 @@ export function createPluginRuntimeBridge(input: {
 
   const status = (): PluginRuntimeStatus => ({
     page: host.getPage(),
+    pages: host.listPages(),
+    editorThemes: {
+      themes: host.listEditorThemes(),
+      selected: host.getEditorThemeSelection(),
+    },
     ready: ready && host.isReady(),
   });
 
@@ -341,6 +377,12 @@ export function createPluginRuntimeBridge(input: {
     hidePage() {
       host.hidePage();
       emitStatus();
+    },
+
+    showPage(pluginId: string) {
+      const shown = host.showPage(pluginId);
+      if (shown) emitStatus();
+      return shown;
     },
 
     host,

@@ -7,7 +7,7 @@ import type {
 } from "@/modules/runtime/drivers/types";
 import { createStreamSmoother } from "@/modules/runtime/stream-smoother";
 
-/** No text deltas for this long â†’ treat the provider stream as stalled. */
+/** No text deltas for this long → treat the provider stream as stalled. */
 export const STREAM_STALL_TIMEOUT_MS = 60_000;
 
 /**

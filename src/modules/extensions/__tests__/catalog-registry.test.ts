@@ -19,7 +19,11 @@ import {
 } from "../compatibility";
 import { parsePluginManifest } from "../manifest";
 import type { ExtensionMetadata, InstalledExtensionRecord } from "../models";
-import { AcodeRegistryProvider, SeededRegistryProvider } from "../registry";
+import {
+  AcodeRegistryProvider,
+  normalizeRegistryEntry,
+  SeededRegistryProvider,
+} from "../registry";
 
 function metadata(overrides: Partial<ExtensionMetadata>): ExtensionMetadata {
   const base: ExtensionMetadata = {
@@ -100,6 +104,32 @@ function providerReturning(entries: ExtensionMetadata[], status = 200) {
     status,
   }));
 }
+
+describe("registry entry normalization", () => {
+  function raw(overrides: Record<string, unknown> = {}) {
+    return {
+      author: "Tester",
+      id: "com.example.paid",
+      keywords: [],
+      name: "Paid",
+      price: "1.00",
+      version: "1.0.0",
+      ...overrides,
+    };
+  }
+
+  it("coerces string prices so paid plugins never normalize to free", () => {
+    // Live registry sends paid prices as numeric strings; dropping them
+    // would list paid plugins in the free-only stores.
+    expect(normalizeRegistryEntry(raw())?.price).toBe(1);
+    expect(normalizeRegistryEntry(raw({ price: 2.5 }))?.price).toBe(2.5);
+    expect(normalizeRegistryEntry(raw({ price: 0 }))?.price).toBe(0);
+    expect(normalizeRegistryEntry(raw({ price: "free" }))?.price).toBe(0);
+    expect(normalizeRegistryEntry(raw({ price: undefined }))?.price).toBe(
+      0,
+    );
+  });
+});
 
 describe("catalog diff engine", () => {
   it("detects added / updated / removed / version-updated", () => {

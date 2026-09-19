@@ -4,7 +4,7 @@
     "slug": "ajiro-agent",
     "version": "1.1.5",
     "orientation": "portrait",
-    "icon": "./assets/images/new-icon.png",
+    "icon": "./assets/images/icon-aqua.png",
     "scheme": "ajiro-agent",
     "userInterfaceStyle": "automatic",
     "owner": "ajirodesu",
@@ -14,7 +14,7 @@
       "web"
     ],
     "ios": {
-      "icon": "./assets/images/new-icon.png",
+      "icon": "./assets/images/icon-aqua.png",
       "bundleIdentifier": "com.ajirohq.ajiroagent",
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -41,8 +41,8 @@
       ],
       "adaptiveIcon": {
         "backgroundColor": "#000000",
-        "foregroundImage": "./assets/images/new-icon.png",
-        "monochromeImage": "./assets/images/new-icon.png"
+        "foregroundImage": "./assets/images/icon-aqua.png",
+        "monochromeImage": "./assets/images/icon-aqua.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.ajirohq.ajiroagent"
@@ -82,7 +82,8 @@
       "expo-sharing",
       "expo-asset",
       "expo-video",
-      "expo-audio"
+      "expo-audio",
+      "./plugins/with-themed-app-icon"
     ],
     "experiments": {
       "typedRoutes": true,

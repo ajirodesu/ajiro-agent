@@ -55,6 +55,7 @@ import {
   SPLASH_FADE_OUT_MS,
   SPLASH_MARK_WIDTH_FRACTION,
 } from "@/launch/splash";
+import { useThemedIconSource } from "@/theme/themed-assets";
 import "./global.css";
 
 SplashScreen.preventAutoHideAsync();
@@ -308,6 +309,8 @@ function SplashScreenController({ ready }: { ready: boolean }) {
 
 function ThemedSplashOverlay() {
   const theme = useTheme();
+  const { ready } = useAppState();
+  const splashSource = useThemedIconSource("splash");
   const { width } = useWindowDimensions();
   const opacity = useRef(new Animated.Value(1)).current;
   const [gone, setGone] = useState(false);
@@ -336,14 +339,19 @@ function ThemedSplashOverlay() {
       ]}
     >
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <Image
-          source={require("../../assets/images/new-splash-icon.png")}
-          style={{
-            width: width * SPLASH_MARK_WIDTH_FRACTION,
-            aspectRatio: 1,
-          }}
-          contentFit="contain"
-        />
+        {/* The mark waits for hydrated settings: showing the default
+            artwork before the stored theme loads would flash the wrong
+            theme's icon on every launch for non-default users. */}
+        {ready ? (
+          <Image
+            source={splashSource}
+            style={{
+              width: width * SPLASH_MARK_WIDTH_FRACTION,
+              aspectRatio: 1,
+            }}
+            contentFit="contain"
+          />
+        ) : null}
       </View>
     </Animated.View>
   );

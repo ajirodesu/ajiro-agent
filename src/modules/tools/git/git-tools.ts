@@ -4,7 +4,7 @@
  * A native git binary is not available on stock Android, so these tools use
  * isomorphic-git running over a persistent local mirror of the SAF-granted
  * project directory (see saf-fs.ts). Remote operations (PRs, issues, review
- * threads) are intentionally NOT here â€” those belong to the GitHub MCP server;
+ * threads) are intentionally NOT here — those belong to the GitHub MCP server;
  * these tools only touch the local working copy.
  *
  * Author: AjiroDesu
@@ -137,7 +137,7 @@ export function createGitTools(params: GitToolFactoryParams) {
               summary.modified.length === 0 &&
               summary.deleted.length === 0
             ) {
-              return "Working tree clean â€” no local changes.";
+              return "Working tree clean — no local changes.";
             }
 
             return [
@@ -164,9 +164,13 @@ export function createGitTools(params: GitToolFactoryParams) {
           const session = params.session;
           return withRepo(session, async (fs, dir, git) => {
             const matrix = await git.statusMatrix({ fs, dir });
+            // Deleted files (present in HEAD, absent from workdir) diff
+            // as all-removed; without the third clause they vanish.
             const changed = matrix.filter(
               ([file, head, workdir]) =>
-                (head === 0 && workdir === 2) || (head !== 0 && workdir === 2),
+                (head === 0 && workdir === 2) ||
+                (head !== 0 && workdir === 2) ||
+                (head !== 0 && workdir === 0),
             );
             const targets = input.path
               ? changed.filter(([file]) => file === input.path)
@@ -223,7 +227,10 @@ export function createGitTools(params: GitToolFactoryParams) {
               for (const [file, head, workdir] of matrix) {
                 if (workdir === 0 && head !== 0) {
                   await git.remove({ fs, dir, filepath: file });
-                } else if (workdir !== 0 || head === 0) {
+                } else if (workdir === 2) {
+                  // Stage only workdir-changed files (new or modified):
+                  // re-adding every unchanged file rewrites the whole
+                  // index on large repos for no effect.
                   await git.add({ fs, dir, filepath: file });
                 }
               }

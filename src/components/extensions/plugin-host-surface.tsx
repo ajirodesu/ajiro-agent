@@ -19,7 +19,7 @@
  */
 import { TriangleAlert, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { WebView } from "react-native-webview";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { useTheme } from "@/hooks/use-theme";
+import { withAlpha } from "@/components/ui/chrome-spec";
 import {
   getExtensionStore,
   getPluginRuntimeBridge,
@@ -40,6 +41,7 @@ import {
   serializePluginBridgeInbound,
   subscribeExtensionEvents,
   type ExtensionPermissionKey,
+  type InstalledExtensionRecord,
   type PluginBridgeInbound,
   type PluginNotification,
 } from "@/modules/extensions";
@@ -134,6 +136,75 @@ export function PluginHostSurface() {
   }, [bridge]);
 
   useEffect(() => bridge.subscribe(setStatus), [bridge]);
+
+  /* -------------------------------------------------- custom-page tabs */
+  const [records, setRecords] = useState<InstalledExtensionRecord[]>([]);
+  const [tabError, setTabError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => {
+      getExtensionStore()
+        .manager.listInstalled()
+        .then((next) => {
+          if (!cancelled) setRecords(next);
+        })
+        .catch(() => {});
+    };
+    refresh();
+    const unsubscribe = subscribeExtensionEvents((event) => {
+      if (
+        event.type === "installed" ||
+        event.type === "uninstalled" ||
+        event.type === "enabled" ||
+        event.type === "disabled" ||
+        event.type === "updated" ||
+        event.type === "rolled-back"
+      ) {
+        refresh();
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  // Tabs: installed + enabled Plugins Store plugins with a live custom
+  // page. Plugin code never runs to compute this — it is a pure filter
+  // over bridge + store state, so install/uninstall/enable/disable
+  // update the bar in real time with no stale tabs.
+  const tabs = useMemo(() => {
+    const byId = new Map(records.map((record) => [record.id, record]));
+    return status.pages
+      .filter((page) => {
+        const record = byId.get(page.pluginId);
+        return (
+          record?.enabled === true &&
+          (record.source === "registry" || record.source === "bundled")
+        );
+      })
+      .sort((left, right) => left.title.localeCompare(right.title));
+  }, [records, status.pages]);
+
+  const activeTabId = status.page?.pluginId ?? null;
+
+  const switchTab = useCallback(
+    (pluginId: string) => {
+      setTabError(null);
+      if (pluginId === activeTabId) return;
+      // A missing/failed page fails inside its own tab only: the bar and
+      // the other tabs are untouched.
+      if (!bridge.showPage(pluginId)) {
+        setTabError("That plugin's page is no longer available.");
+      }
+    },
+    [activeTabId, bridge],
+  );
+
+  useEffect(() => {
+    if (activeTabId) setTabError(null);
+  }, [activeTabId]);
 
   useEffect(() => {
     bridge.setUiHandler(pluginUi.handler);
@@ -266,24 +337,70 @@ export function PluginHostSurface() {
       >
         {pageVisible ? (
           <View
-            className="flex-row items-center gap-sp-2 border-b border-border bg-card px-sp-3 py-sp-2 dark:border-border-dark dark:bg-card-dark"
+            className="border-b border-border bg-card dark:border-border-dark dark:bg-card-dark"
             style={{ paddingTop: 34 }}
           >
-            <Text
-              className="min-w-0 flex-1 font-sans text-sm font-semibold text-foreground dark:text-foreground-dark"
-              numberOfLines={1}
-            >
-              {status.page?.title ?? "Plugin"}
-            </Text>
-            <Pressable
-              accessibilityLabel="Close plugin page"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => bridge.hidePage()}
-              style={({ pressed }) => (pressed ? { opacity: 0.72 } : null)}
-            >
-              <X color={theme.text} size={18} />
-            </Pressable>
+            <View className="flex-row items-center gap-sp-2 px-sp-3 py-sp-2">
+              <Text
+                className="min-w-0 flex-1 font-sans text-sm font-semibold text-foreground dark:text-foreground-dark"
+                numberOfLines={1}
+              >
+                {status.page?.title ?? "Plugin"}
+              </Text>
+              <Pressable
+                accessibilityLabel="Close plugin page"
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => bridge.hidePage()}
+                style={({ pressed }) => (pressed ? { opacity: 0.72 } : null)}
+              >
+                <X color={theme.text} size={18} />
+              </Pressable>
+            </View>
+            {tabs.length > 1 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerClassName="gap-sp-1 px-sp-3 pb-sp-2"
+                accessibilityRole="tablist"
+                accessibilityLabel="Plugin pages"
+              >
+                {tabs.map((tab) => {
+                  const active = tab.pluginId === activeTabId;
+                  return (
+                    <Pressable
+                      key={tab.pluginId}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`${tab.title} page`}
+                      onPress={() => switchTab(tab.pluginId)}
+                      className="rounded-full border px-sp-3 py-sp-1"
+                      style={{
+                        backgroundColor: active
+                          ? withAlpha(theme.accent, 0.16)
+                          : "transparent",
+                        borderColor: active
+                          ? theme.accent
+                          : theme.border,
+                      }}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        className="font-sans text-xs text-foreground dark:text-foreground-dark"
+                        style={active ? { fontWeight: "700" } : undefined}
+                      >
+                        {tab.title}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+            {tabError ? (
+              <Text className="px-sp-3 pb-sp-2 font-sans text-xs text-destructive dark:text-destructive-dark">
+                {tabError}
+              </Text>
+            ) : null}
           </View>
         ) : null}
         <WebView
@@ -369,8 +486,8 @@ export function PluginHostSurface() {
               </>
             ) : (
               <Text className="font-sans text-xs text-muted-foreground dark:text-muted-foreground-dark">
-                The package is downloaded, validated, and installed disabled. It
-                will not run until you enable it yourself.
+                The package is downloaded, validated, installed, then
+                activated automatically.
               </Text>
             )}
             {installError ? (

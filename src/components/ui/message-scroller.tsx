@@ -61,6 +61,7 @@ type MessageScrollerContextValue = {
     contentHeight: number,
   ) => void;
   scrollToEnd: () => void;
+  scrollToIndex: (index: number, animated?: boolean) => void;
   scrollToStart: () => void;
   scrollable: ScrollState;
 };
@@ -74,6 +75,7 @@ const MessageScrollerActionsContext = createContext<{
   onListLayout: MessageScrollerContextValue["onListLayout"];
   onListScroll: MessageScrollerContextValue["onListScroll"];
   scrollToEnd: MessageScrollerContextValue["scrollToEnd"];
+  scrollToIndex: MessageScrollerContextValue["scrollToIndex"];
   scrollToStart: MessageScrollerContextValue["scrollToStart"];
 } | null>(null);
 
@@ -182,6 +184,13 @@ export function MessageScrollerProvider({
     listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
+  const scrollToIndex = useCallback(
+    (index: number, animated = true) => {
+      listRef.current?.scrollToIndex({ animated, index, viewPosition: 0.15 });
+    },
+    [],
+  );
+
   const scrollToStart = useCallback(() => {
     listRef.current?.scrollToOffset({ animated: true, offset: 0 });
   }, []);
@@ -215,6 +224,7 @@ export function MessageScrollerProvider({
       onListLayout,
       onListScroll,
       scrollToEnd,
+      scrollToIndex,
       scrollToStart,
       scrollable,
     }),
@@ -223,6 +233,7 @@ export function MessageScrollerProvider({
       onListLayout,
       onListScroll,
       scrollToEnd,
+      scrollToIndex,
       scrollToStart,
       scrollable,
     ],
@@ -235,9 +246,10 @@ export function MessageScrollerProvider({
       onListLayout,
       onListScroll,
       scrollToEnd,
+      scrollToIndex,
       scrollToStart,
     }),
-    [onListContentSizeChange, onListLayout, onListScroll, scrollToEnd, scrollToStart],
+    [onListContentSizeChange, onListLayout, onListScroll, scrollToEnd, scrollToIndex, scrollToStart],
   );
 
   return (
@@ -415,20 +427,24 @@ export const MessageScrollerButton = forwardRef<
 MessageScrollerButton.displayName = "MessageScrollerButton";
 
 export function useMessageScroller() {
-  const { scrollToEnd, scrollToStart, scrollable } = useMessageScrollerContext();
+  const { scrollToEnd, scrollToIndex, scrollToStart, scrollable } =
+    useMessageScrollerContext();
 
   return {
     scrollToEnd,
+    scrollToIndex,
     scrollToStart,
     scrollable,
   };
 }
 
 export function useMessageScrollerActions() {
-  const { scrollToEnd, scrollToStart } = useMessageScrollerActionsContext();
+  const { scrollToEnd, scrollToIndex, scrollToStart } =
+    useMessageScrollerActionsContext();
 
   return {
     scrollToEnd,
+    scrollToIndex,
     scrollToStart,
   };
 }

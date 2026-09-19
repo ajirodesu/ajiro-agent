@@ -31,6 +31,22 @@ function valueExports(relativePath: string): string[] {
   )) {
     names.add(match[1]);
   }
+  for (const match of text.matchAll(
+    /^export\s+(?:interface|type)\s+([A-Za-z0-9_]+)/gm,
+  )) {
+    names.add(match[1]);
+  }
+  for (const match of text.matchAll(/^export\s+(?:type\s+)?\{([^}]*)\}/gm)) {
+    for (const part of match[1].split(",")) {
+      const name = part.trim().split(/\s+as\s+/).pop()?.trim() ?? "";
+      if (/^[A-Za-z0-9_]+$/.test(name)) {
+        names.add(name);
+      }
+    }
+  }
+  if (/^export\s+default[ \n{]/m.test(text)) {
+    names.add("default");
+  }
   return [...names].sort();
 }
 
