@@ -1,0 +1,12 @@
+[
+{
+  "directory": "/app/app/.cxx/Debug/33685nn3/arm64-v8a",
+  "command": "/opt/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/opt/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dpty_bridge_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -o CMakeFiles/pty_bridge.dir/app/modules/terminal-pty/android/src/main/cpp/pty_bridge.cpp.o -c /app/modules/terminal-pty/android/src/main/cpp/pty_bridge.cpp",
+  "file": "/app/modules/terminal-pty/android/src/main/cpp/pty_bridge.cpp"
+},
+{
+  "directory": "/app/app/.cxx/Debug/33685nn3/arm64-v8a",
+  "command": "/opt/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++ --target=aarch64-none-linux-android26 --sysroot=/opt/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/sysroot -Dpty_bridge_EXPORTS -g -DANDROID -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security   -fno-limit-debug-info  -fPIC -o CMakeFiles/pty_bridge.dir/app/modules/terminal-pty/android/src/main/cpp/pty_session.cpp.o -c /app/modules/terminal-pty/android/src/main/cpp/pty_session.cpp",
+  "file": "/app/modules/terminal-pty/android/src/main/cpp/pty_session.cpp"
+}
+]
