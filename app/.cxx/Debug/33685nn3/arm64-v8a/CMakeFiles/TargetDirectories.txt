@@ -1,0 +1,3 @@
+/app/app/.cxx/Debug/33685nn3/arm64-v8a/CMakeFiles/pty_bridge.dir
+/app/app/.cxx/Debug/33685nn3/arm64-v8a/CMakeFiles/edit_cache.dir
+/app/app/.cxx/Debug/33685nn3/arm64-v8a/CMakeFiles/rebuild_cache.dir
